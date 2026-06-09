@@ -1,0 +1,201 @@
+import { Database } from 'better-sqlite3';
+import { Chunk, Layer, ChunkStats } from './types.js';
+
+export interface ScoredChunk extends Chunk {
+  score: number;
+}
+
+export interface SearchOpts {
+  layer?: Layer;
+  limit?: number;
+}
+
+export class ChunksRepo {
+  constructor(private db: Database) {}
+
+  public upsert(chunk: Chunk): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO chunks (
+        id, source_file, layer, workspace_name, section_title, section_depth,
+        content, summary, keywords, hash, importance, token_count,
+        file_type, language, symbol_name, symbol_kind,
+        created_at, updated_at
+      ) VALUES (
+        @id, @sourceFile, @layer, @workspaceName, @sectionTitle, @sectionDepth,
+        @content, @summary, @keywords, @hash, @importance, @tokenCount,
+        @fileType, @language, @symbolName, @symbolKind,
+        @createdAt, @updatedAt
+      ) ON CONFLICT(id) DO UPDATE SET
+        source_file = excluded.source_file,
+        layer = excluded.layer,
+        workspace_name = excluded.workspace_name,
+        section_title = excluded.section_title,
+        section_depth = excluded.section_depth,
+        content = excluded.content,
+        summary = excluded.summary,
+        keywords = excluded.keywords,
+        hash = excluded.hash,
+        importance = excluded.importance,
+        token_count = excluded.token_count,
+        file_type = excluded.file_type,
+        language = excluded.language,
+        symbol_name = excluded.symbol_name,
+        symbol_kind = excluded.symbol_kind,
+        updated_at = excluded.updated_at
+    `);
+    stmt.run({
+      ...chunk,
+      fileType: chunk.fileType || null,
+      language: chunk.language || null,
+      symbolName: chunk.symbolName || null,
+      symbolKind: chunk.symbolKind || null,
+    });
+  }
+
+  public bulkUpsert(chunks: Chunk[]): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO chunks (
+        id, source_file, layer, workspace_name, section_title, section_depth,
+        content, summary, keywords, hash, importance, token_count,
+        file_type, language, symbol_name, symbol_kind,
+        created_at, updated_at
+      ) VALUES (
+        @id, @sourceFile, @layer, @workspaceName, @sectionTitle, @sectionDepth,
+        @content, @summary, @keywords, @hash, @importance, @tokenCount,
+        @fileType, @language, @symbolName, @symbolKind,
+        @createdAt, @updatedAt
+      ) ON CONFLICT(id) DO UPDATE SET
+        source_file = excluded.source_file,
+        layer = excluded.layer,
+        workspace_name = excluded.workspace_name,
+        section_title = excluded.section_title,
+        section_depth = excluded.section_depth,
+        content = excluded.content,
+        summary = excluded.summary,
+        keywords = excluded.keywords,
+        hash = excluded.hash,
+        importance = excluded.importance,
+        token_count = excluded.token_count,
+        file_type = excluded.file_type,
+        language = excluded.language,
+        symbol_name = excluded.symbol_name,
+        symbol_kind = excluded.symbol_kind,
+        updated_at = excluded.updated_at
+    `);
+    const transaction = this.db.transaction((items: Chunk[]) => {
+      for (const item of items) {
+        stmt.run({
+          ...item,
+          fileType: item.fileType || null,
+          language: item.language || null,
+          symbolName: item.symbolName || null,
+          symbolKind: item.symbolKind || null,
+        });
+      }
+    });
+    transaction(chunks);
+  }
+
+  public deleteBySource(sourceFile: string): void {
+    const stmt = this.db.prepare('DELETE FROM chunks WHERE source_file = ?');
+    stmt.run(sourceFile);
+  }
+
+  public findByLayer(layer: Layer, limit: number = 100): Chunk[] {
+    const stmt = this.db.prepare('SELECT * FROM chunks WHERE layer = ? LIMIT ?');
+    return (stmt.all(layer, limit) as any[]).map(r => this.mapRow(r)) as Chunk[];
+  }
+
+  public searchFTS(query: string, opts?: SearchOpts): ScoredChunk[] {
+    let sql = `
+      SELECT c.*, bm25(chunks_fts, 10.0, 1.0, 5.0, 8.0) AS score
+      FROM chunks_fts
+      JOIN chunks c ON chunks_fts.rowid = c.rowid
+      WHERE chunks_fts MATCH ?
+    `;
+    const params: any[] = [query];
+    
+    if (opts?.layer) {
+      sql += ` AND c.layer = ?`;
+      params.push(opts.layer);
+    }
+    
+    sql += ` ORDER BY score LIMIT ?`;
+    params.push(opts?.limit ?? 30);
+    
+    const stmt = this.db.prepare(sql);
+    const rows = stmt.all(...params) as any[];
+    return rows.map(r => this.mapRow(r)) as ScoredChunk[];
+  }
+
+  public findByKeyword(keyword: string): Chunk[] {
+    const sql = `
+      SELECT c.*, bm25(chunks_fts, 10.0, 1.0, 5.0, 8.0) AS score
+      FROM chunks_fts
+      JOIN chunks c ON chunks_fts.rowid = c.rowid
+      WHERE keywords MATCH ?
+      ORDER BY score LIMIT 20
+    `;
+    const stmt = this.db.prepare(sql);
+    const rows = stmt.all(`"${keyword.replace(/"/g, '""')}"`) as any[];
+    return rows.map(r => this.mapRow(r)) as Chunk[];
+  }
+
+  public findByTitleMatch(concept: string): Chunk[] {
+    const stmt = this.db.prepare(`SELECT * FROM chunks WHERE section_title LIKE ? LIMIT 20`);
+    return (stmt.all(`%${concept}%`) as any[]).map(r => this.mapRow(r)) as Chunk[];
+  }
+
+  public findBySymbolName(name: string): Chunk[] {
+    const stmt = this.db.prepare('SELECT * FROM chunks WHERE symbol_name = ?');
+    return (stmt.all(name) as any[]).map(r => this.mapRow(r)) as Chunk[];
+  }
+
+  public getByIds(ids: string[]): Chunk[] {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => '?').join(',');
+    const stmt = this.db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`);
+    return (stmt.all(...ids) as any[]).map(r => this.mapRow(r)) as Chunk[];
+  }
+
+  public getStats(): ChunkStats {
+    const totalRow = this.db.prepare('SELECT COUNT(*) as c, SUM(token_count) as t FROM chunks').get() as any;
+    const layersRow = this.db.prepare('SELECT layer, COUNT(*) as c FROM chunks GROUP BY layer').all() as any[];
+    
+    const stats: ChunkStats = {
+      totalChunks: totalRow.c || 0,
+      totalTokens: totalRow.t || 0,
+      byLayer: { global: 0, workspace: 0, repo: 0, session: 0 }
+    };
+    
+    for (const r of layersRow) {
+      stats.byLayer[r.layer as Layer] = r.c;
+    }
+    
+    return stats;
+  }
+
+  private mapRow(row: any): any {
+    return {
+      id: row.id,
+      sourceFile: row.source_file,
+      layer: row.layer,
+      workspaceName: row.workspace_name,
+      sectionTitle: row.section_title,
+      sectionDepth: row.section_depth,
+      content: row.content,
+      summary: row.summary,
+      keywords: row.keywords,
+      hash: row.hash,
+      importance: row.importance,
+      tokenCount: row.token_count,
+      fileType: row.file_type,
+      language: row.language,
+      symbolName: row.symbol_name,
+      symbolKind: row.symbol_kind,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      score: row.score !== undefined ? Math.abs(row.score) : undefined
+    };
+  }
+}
