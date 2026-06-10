@@ -1,10 +1,25 @@
 import { RelationshipsRepo } from '../storage/relationships-repo.js';
+import { STOPWORDS } from '../../utils/stopwords.js';
 
 export interface ExpandedEntity {
   entity: string;
   relationshipType: string;
   depth: number;
   score: number;
+}
+
+// Minimum weight to traverse an edge (low-weight = noise)
+const MIN_EDGE_WEIGHT = 1.2;
+// If a node has more connections than this, it's a hub (e.g., "license") — skip it
+const MAX_CONNECTIONS_THRESHOLD = 30;
+// Minimum entity length to consider
+const MIN_ENTITY_LENGTH = 3;
+
+function isQualityEntity(entity: string): boolean {
+  if (entity.length < MIN_ENTITY_LENGTH) return false;
+  if (/^\d+$/.test(entity)) return false;                  // pure number
+  if (STOPWORDS.has(entity.toLowerCase())) return false;    // natural language word
+  return true;
 }
 
 export class GraphExpander {
@@ -19,8 +34,11 @@ export class GraphExpander {
     const queue: { entity: string; depth: number; weight: number }[] = [];
     const results: ExpandedEntity[] = [];
 
+    // Only seed with quality entities
     for (const seed of seeds) {
-      queue.push({ entity: seed, depth: 0, weight: 1.0 });
+      if (isQualityEntity(seed)) {
+        queue.push({ entity: seed, depth: 0, weight: 1.0 });
+      }
     }
 
     while (queue.length > 0 && results.length < maxNodes) {
@@ -42,9 +60,18 @@ export class GraphExpander {
 
       for (const repo of this.relsRepos) {
         const directNeighbors = repo.findRelated(current.entity);
+
+        // Hub detection: if this entity has too many connections, it's noise
+        if (directNeighbors.length > MAX_CONNECTIONS_THRESHOLD) {
+          continue;
+        }
+
         for (const rel of directNeighbors) {
+          // Weight threshold: only traverse meaningful edges
+          if (rel.weight < MIN_EDGE_WEIGHT) continue;
+
           const neighbor = rel.source === current.entity ? rel.target : rel.source;
-          if (!visited.has(neighbor)) {
+          if (!visited.has(neighbor) && isQualityEntity(neighbor)) {
             queue.push({ 
               entity: neighbor, 
               depth: current.depth + 1, 
@@ -64,3 +91,4 @@ export class GraphExpander {
     return results;
   }
 }
+
