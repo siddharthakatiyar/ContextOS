@@ -35,12 +35,12 @@ async function getParser(langName: string): Promise<any> {
   }
 
   if (!parserInitPromise) {
-    parserInitPromise = TreeSitter.Parser.init();
+    parserInitPromise = TreeSitter.init();
   }
   await parserInitPromise;
   
   if (!parserInstance) {
-    parserInstance = new TreeSitter.Parser();
+    parserInstance = new TreeSitter();
   }
 
   if (!languageCache.has(langName)) {
