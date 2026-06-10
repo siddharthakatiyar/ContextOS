@@ -41,7 +41,7 @@
     "glob": "^13.0.6",
     "ora": "^9.4.0",
     "tree-sitter-wasms": "^0.1.13",
-    "web-tree-sitter": "^0.26.9",
+    "web-tree-sitter": "^0.22.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {
