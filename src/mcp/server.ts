@@ -11,10 +11,21 @@ import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 
+let version = '0.3.0';
+try {
+  version = require("../../package.json").version;
+} catch {
+  try {
+    version = require("../../../package.json").version;
+  } catch {
+    // fallback
+  }
+}
+
 export async function startMcpServer(dbs: DB[]) {
   const server = new McpServer({
     name: "contextos",
-    version: require("../../package.json").version,
+    version: version,
   });
 
   registerGetContextTool(server, dbs);
