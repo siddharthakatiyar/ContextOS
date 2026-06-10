@@ -33,8 +33,24 @@ export const initCommand = new Command('init')
     const { loadConfig } = await import('../../config/index.js');
     const config = loadConfig();
 
-    // Deep ignore list for V1
-    const ignore = config.ignorePatterns || ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**'];
+    // SAFETY: These patterns are always excluded, regardless of user config
+    const SAFETY_IGNORE = [
+      '**/node_modules/**',
+      '**/.git/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/.next/**',
+      '**/coverage/**',
+      '**/__pycache__/**',
+      '**/target/**',
+      '**/*.min.js',
+      '**/*.min.css',
+      '**/*.map',
+      '**/*.lock',
+      '**/vendor/**',
+    ];
+    const userIgnore = config.ignorePatterns || [];
+    const ignore = [...new Set([...SAFETY_IGNORE, ...userIgnore])];
     
     const startTime = Date.now();
     let totalProcessed = 0;
@@ -65,6 +81,12 @@ export const initCommand = new Command('init')
     
     for (const file of allRepoFiles) {
       try {
+        // Skip files larger than 100KB (usually generated/minified)
+        const fileStat = fs.statSync(file);
+        if (fileStat.size > 100 * 1024) {
+          bar.increment({ chunks: totalChunks, rels: totalRels });
+          continue;
+        }
         const stats = await indexer.indexFile(file, 'repo');
         if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
           totalProcessed++;

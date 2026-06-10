@@ -32,13 +32,20 @@ export const defaultConfig: ContextOSConfig = {
     '**/*.ini'
   ],
   ignorePatterns: [
+    // SAFETY: critical exclusions — never remove
     'node_modules/**',
     '.git/**',
     'dist/**',
     'build/**',
+    '.next/**',
+    'coverage/**',
+    '__pycache__/**',
+    'target/**',
     'vendor/**',
     '*.min.js',
-    '*.lock'
+    '*.min.css',
+    '*.map',
+    '*.lock',
   ],
   maxChunkTokens: 1500,
   

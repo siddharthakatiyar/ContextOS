@@ -11,6 +11,7 @@ import { importCommand } from '../src/cli/commands/import.js';
 import { analyticsCommand } from '../src/cli/commands/analytics.js';
 import { statusCommand } from '../src/cli/commands/status.js';
 import { reindexCommand } from '../src/cli/commands/reindex.js';
+import { cleanCommand } from '../src/cli/commands/clean.js';
 
 import fs from 'fs';
 import path from 'path';
@@ -39,5 +40,6 @@ program.addCommand(importCommand);
 program.addCommand(analyticsCommand);
 program.addCommand(statusCommand);
 program.addCommand(reindexCommand);
+program.addCommand(cleanCommand);
 
 program.parse(process.argv);
