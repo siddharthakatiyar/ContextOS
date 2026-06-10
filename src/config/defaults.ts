@@ -1,10 +1,10 @@
 import path from 'path';
-import { getContextOSHome } from '../core/storage/database.js';
+import os from 'os';
 import { ContextOSConfig } from './types.js';
 
 export const defaultConfig: ContextOSConfig = {
   dbPath: path.join(process.cwd(), '.contextos', 'index.db'),
-  globalContextDir: path.join(getContextOSHome(), 'global'),
+  globalContextDir: path.join(os.homedir(), '.contextos', 'global'),
   
   indexablePatterns: [
     '**/*.md',

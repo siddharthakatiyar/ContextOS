@@ -5,6 +5,8 @@ import { glob } from 'glob';
 import { DB, getContextOSHome } from '../../core/storage/database.js';
 import { Indexer } from '../../core/indexer/index.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
+import cliProgress from 'cli-progress';
+import chalk from 'chalk';
 
 export const initCommand = new Command('init')
   .description('Initialize ContextOS in the current repository')
@@ -36,30 +38,63 @@ export const initCommand = new Command('init')
     
     const startTime = Date.now();
     let totalProcessed = 0;
+    let totalChunks = 0;
+    let totalRels = 0;
     
     // Index repo layer
-    console.log('Indexing repo context...');
+    console.log(chalk.blue.bold('\nIndexing repo context...'));
     const allRepoFiles = new Set<string>();
     for (const pattern of config.indexablePatterns) {
       const files = await glob(pattern, { cwd, ignore, absolute: true, nodir: true });
       for (const f of files) allRepoFiles.add(f);
     }
     
+    // Index global layer
+    const globalFiles = await glob('**/*.md', { cwd: globalContextDir, absolute: true, nodir: true });
+    
+    const totalFilesCount = allRepoFiles.size + globalFiles.length;
+    
+    const bar = new cliProgress.SingleBar({
+      format: 'Indexing [{bar}] {percentage}% | {value}/{total} files | {chunks} chunks | {rels} relationships',
+      barCompleteChar: '\u2588',
+      barIncompleteChar: '\u2591',
+      hideCursor: true
+    });
+    
+    bar.start(totalFilesCount, 0, { chunks: 0, rels: 0 });
+    
     for (const file of allRepoFiles) {
-      const stats = await indexer.indexFile(file, 'repo');
-      if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) totalProcessed++;
+      try {
+        const stats = await indexer.indexFile(file, 'repo');
+        if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
+          totalProcessed++;
+          totalChunks += stats.chunksCreated;
+          totalRels += stats.relationshipsFound;
+        }
+      } catch (e) {
+        // Silently skip failed parses for the progress bar
+      }
+      bar.increment({ chunks: totalChunks, rels: totalRels });
     }
 
-    // Index global layer
-    console.log('Indexing global context...');
-    const globalFiles = await glob('**/*.md', { cwd: globalContextDir, absolute: true, nodir: true });
     for (const file of globalFiles) {
-      const stats = await indexer.indexFile(file, 'global');
-      if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) totalProcessed++;
+      try {
+        const stats = await indexer.indexFile(file, 'global');
+        if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
+          totalProcessed++;
+          totalChunks += stats.chunksCreated;
+          totalRels += stats.relationshipsFound;
+        }
+      } catch (e) {}
+      bar.increment({ chunks: totalChunks, rels: totalRels });
     }
+
+    bar.stop();
 
     const elapsedMs = Date.now() - startTime;
-    console.log(`Indexed ${totalProcessed} changed files (out of ${allRepoFiles.size + globalFiles.length} total files) in ${(elapsedMs/1000).toFixed(1)}s.`);
+    console.log(chalk.green.bold(`\n\u2714 Initialization complete in ${(elapsedMs/1000).toFixed(1)}s`));
+    console.log(`Indexed ${totalProcessed} changed files (out of ${totalFilesCount} total files).`);
+    console.log(`Generated ${totalChunks} knowledge chunks and ${totalRels} semantic relationships.\n`);
 
     // Generate cursor config if .cursor exists
     if (fs.existsSync(path.join(cwd, '.cursor'))) {

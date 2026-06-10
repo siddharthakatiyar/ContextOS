@@ -2,7 +2,6 @@ import { createRequire } from 'module';
 import { ParsedCodeDocument, CodeSymbol } from './types.js';
 
 const require = createRequire(import.meta.url);
-const Parser = require('web-tree-sitter');
 
 const LANGUAGE_EXT_MAP: Record<string, string> = {
   '.ts': 'typescript',
@@ -23,6 +22,7 @@ const LANGUAGE_EXT_MAP: Record<string, string> = {
   '.hpp': 'cpp'
 };
 
+let TreeSitter: any = null;
 let parserInstance: any = null;
 let parserInitPromise: Promise<void> | null = null;
 const languageCache = new Map<string, any>();
@@ -30,19 +30,23 @@ const languageCache = new Map<string, any>();
 async function getParser(langName: string): Promise<any> {
   if (langName === 'unknown') return null;
 
+  if (!TreeSitter) {
+    TreeSitter = require('web-tree-sitter');
+  }
+
   if (!parserInitPromise) {
-    parserInitPromise = Parser.init();
+    parserInitPromise = TreeSitter.Parser.init();
   }
   await parserInitPromise;
   
   if (!parserInstance) {
-    parserInstance = new Parser();
+    parserInstance = new TreeSitter.Parser();
   }
 
   if (!languageCache.has(langName)) {
     try {
       const wasmPath = require.resolve(`tree-sitter-wasms/out/tree-sitter-${langName}.wasm`);
-      const lang = await Parser.Language.load(wasmPath);
+      const lang = await TreeSitter.Language.load(wasmPath);
       languageCache.set(langName, lang);
     } catch (e) {
       console.error(`Failed to load tree-sitter language: ${langName}`, e);

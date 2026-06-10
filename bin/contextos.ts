@@ -9,14 +9,25 @@ import { watchCommand } from '../src/cli/commands/watch.js';
 import { exportCommand } from '../src/cli/commands/export.js';
 import { importCommand } from '../src/cli/commands/import.js';
 import { analyticsCommand } from '../src/cli/commands/analytics.js';
+import { statusCommand } from '../src/cli/commands/status.js';
+import { reindexCommand } from '../src/cli/commands/reindex.js';
 
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+let pkgPath = path.join(__dirname, '../package.json');
+if (!fs.existsSync(pkgPath)) {
+  pkgPath = path.join(__dirname, '../../package.json');
+}
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
 program
   .name('contextos')
   .description('Intelligent context routing for AI coding assistants')
-  .version(require('../../package.json').version);
+  .version(pkg.version);
 
 program.addCommand(initCommand);
 program.addCommand(serveCommand);
@@ -26,5 +37,7 @@ program.addCommand(watchCommand);
 program.addCommand(exportCommand);
 program.addCommand(importCommand);
 program.addCommand(analyticsCommand);
+program.addCommand(statusCommand);
+program.addCommand(reindexCommand);
 
 program.parse(process.argv);

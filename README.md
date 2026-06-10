@@ -5,7 +5,7 @@ ContextOS is an intelligent context engine designed for AI coding assistants. It
 ## Features
 
 - **Multi-Layer Architecture:** Organizes context into `global`, `workspace`, `repo`, and `session` layers to ensure separation of concerns.
-- **Intelligent Indexing:** Regex-based parsers extract semantic symbols (`function`, `class`, `interface`) from code, and sections from markdown.
+- **Intelligent Indexing:** Tree-Sitter based parsers perfectly extract semantic symbols (`function`, `class`, `interface`) from code, and regex-based parsers extract sections from markdown.
 - **Graph Expansion:** Automatically discovers dependencies and related symbols to fetch missing context the AI hasn't explicitly asked for.
 - **Smart Scoring:** Uses BM25 keyword matching combined with heuristic importance scores (e.g., `README.md` and `package.json` get boosted).
 - **Session Memory:** Remembers past user queries and AI context to maintain continuity.
@@ -64,7 +64,7 @@ contextos import graph.json
 ContextOS is designed to act as the "brain" for your AI coding assistants (like Cursor, Claude Code, or anything supporting MCP). Instead of relying on traditional file-level inclusion or naive string searching, ContextOS operates at the semantic level.
 
 ### 🧠 Core Capabilities
-1. **Intelligent Chunking:** Parses code down to the AST level (functions, classes) and Markdown to the heading level.
+1. **Intelligent Chunking:** Uses **Tree-Sitter** to parse code down to the precise AST level (functions, classes) and Markdown to the heading level.
 2. **Graph Expansion:** If the AI asks for a specific function, ContextOS dynamically pulls in the dependencies, types, and imports that the function relies on via graph traversal.
 3. **Sandbox Execution:** ContextOS provides the AI with a `ctx_execute` tool, allowing the AI to safely test build scripts or commands inside an isolated environment before writing permanent code.
 4. **Heuristic Scoring:** Understands that a `package.json` or `engineering.md` is inherently more important context than a minified build file, routing the most crucial knowledge to the AI first.
