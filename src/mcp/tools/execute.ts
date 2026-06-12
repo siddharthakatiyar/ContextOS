@@ -25,7 +25,11 @@ export function registerExecuteTool(server: McpServer) {
           };
         }
 
-        if (command.includes('cd ') || command.includes('&') || command.includes('|') || command.includes(';')) {
+        // Security: block actual shell operators in the command structure
+        // We need to allow & | ; inside quoted node -e "..." arguments
+        // Strip all single-quoted and double-quoted strings, then check the remainder
+        const stripped = command.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
+        if (stripped.includes('cd ') || /[&|;]/.test(stripped) || stripped.includes('`')) {
           return {
             content: [{ type: "text", text: "Command chaining and directory changes are not allowed for security reasons." }],
             isError: true,
