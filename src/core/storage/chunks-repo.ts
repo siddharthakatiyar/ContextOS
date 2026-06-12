@@ -133,7 +133,7 @@ export class ChunksRepo {
       SELECT c.*, bm25(chunks_fts, 10.0, 1.0, 5.0, 8.0) AS score
       FROM chunks_fts
       JOIN chunks c ON chunks_fts.rowid = c.rowid
-      WHERE keywords MATCH ?
+      WHERE chunks_fts MATCH 'keywords:' || ?
       ORDER BY score LIMIT 20
     `;
     const stmt = this.db.prepare(sql);
