@@ -69,6 +69,8 @@ export class KeywordMatcher {
       runFTS('"error" OR "bug" OR "exception" OR "fix"', 5.0);
     } else if (intent.intentType === 'implement') {
       runFTS('"api" OR "interface" OR "spec" OR "implement"', 5.0);
+    } else if (intent.intentType === 'pr') {
+      runFTS('"pr" OR "pull request" OR "rules" OR "guidelines"', 5.0);
     }
 
     return Array.from(results.values());

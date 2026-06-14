@@ -47,5 +47,6 @@ function classifyIntentType(prompt: string): string {
   if (/\b(refactor|clean|improve|optimize)\b/.test(p)) return 'refactor';
   if (/\b(deploy|release|ship|merge)\b/.test(p)) return 'deploy';
   if (/\b(test|spec|coverage)\b/.test(p)) return 'test';
+  if (/\b(pr|pull request|review)\b/.test(p)) return 'pr';
   return 'general';
 }

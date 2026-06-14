@@ -108,7 +108,7 @@ export class ChunksRepo {
 
   public searchFTS(query: string, opts?: SearchOpts): ScoredChunk[] {
     let sql = `
-      SELECT c.*, bm25(chunks_fts, 10.0, 1.0, 5.0, 8.0) AS score
+      SELECT c.*, bm25(chunks_fts, 10.0, 1.0, 20.0, 8.0) AS score
       FROM chunks_fts
       JOIN chunks c ON chunks_fts.rowid = c.rowid
       WHERE chunks_fts MATCH ?
@@ -130,7 +130,7 @@ export class ChunksRepo {
 
   public findByKeyword(keyword: string): Chunk[] {
     const sql = `
-      SELECT c.*, bm25(chunks_fts, 10.0, 1.0, 5.0, 8.0) AS score
+      SELECT c.*, bm25(chunks_fts, 10.0, 1.0, 20.0, 8.0) AS score
       FROM chunks_fts
       JOIN chunks c ON chunks_fts.rowid = c.rowid
       WHERE chunks_fts MATCH 'keywords:' || ?

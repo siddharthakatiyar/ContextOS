@@ -8,13 +8,17 @@ export function parseMarkdown(filePath: string, rawContent: string): ParsedDocum
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
   if (frontmatterMatch) {
     try {
-      // Basic YAML parsing for frontmatter (avoiding heavy yaml dep for now)
+      // Basic YAML parsing for frontmatter
       frontmatter = {};
       const lines = frontmatterMatch[1].split('\n');
       for (const line of lines) {
         const [key, ...values] = line.split(':');
         if (key && values.length > 0) {
-          frontmatter[key.trim()] = values.join(':').trim();
+          let val: any = values.join(':').trim();
+          if (val.startsWith('[') && val.endsWith(']')) {
+            try { val = JSON.parse(val.replace(/'/g, '"')); } catch (e) {}
+          }
+          frontmatter[key.trim()] = val;
         }
       }
     } catch (e) {
