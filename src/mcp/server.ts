@@ -6,6 +6,8 @@ import { registerIndexFilesTool } from "./tools/index-files.js";
 import { registerGetStatusTool } from "./tools/get-status.js";
 import { registerGetGraphTools } from "./tools/get-graph.js";
 import { registerExecuteTool } from "./tools/execute.js";
+import { registerListTopicsTool } from "./tools/list-topics.js";
+import { registerReadTopicTool } from "./tools/read-topic.js";
 import { DB } from "../core/storage/database.js";
 import { createRequire } from "module";
 
@@ -34,6 +36,8 @@ export async function startMcpServer(dbs: DB[]) {
   registerGetStatusTool(server, dbs[0]);
   registerGetGraphTools(server, dbs[0]);
   registerExecuteTool(server);
+  registerListTopicsTool(server, dbs[0]);
+  registerReadTopicTool(server, dbs[0]);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

@@ -33,7 +33,7 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
           for (const para of paragraphs) {
             const pTokens = estimateTokens(para);
             if (currentTokens + pTokens > maxTokens && currentChunkContent.trim().length > 0) {
-              chunks.push(createChunk(currentChunkContent.trim(), titleContext, section.depth, doc.filePath, options));
+              chunks.push(createChunk(currentChunkContent.trim(), titleContext, section.depth, doc.filePath, options, doc.frontmatter));
               currentChunkContent = para + '\n\n';
               currentTokens = pTokens;
             } else {
@@ -42,10 +42,10 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
             }
           }
           if (currentChunkContent.trim().length > 0) {
-            chunks.push(createChunk(currentChunkContent.trim(), titleContext, section.depth, doc.filePath, options));
+            chunks.push(createChunk(currentChunkContent.trim(), titleContext, section.depth, doc.filePath, options, doc.frontmatter));
           }
         } else {
-          chunks.push(createChunk(section.content, titleContext, section.depth, doc.filePath, options));
+          chunks.push(createChunk(section.content, titleContext, section.depth, doc.filePath, options, doc.frontmatter));
         }
       }
 
@@ -59,8 +59,20 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
   return chunks;
 }
 
-function createChunk(content: string, titleContext: string, depth: number, filePath: string, options: ChunkCreationOptions): Chunk {
+function createChunk(content: string, titleContext: string, depth: number, filePath: string, options: ChunkCreationOptions, frontmatter?: Record<string, unknown>): Chunk {
   const keywords = extractKeywords(content, titleContext);
+  
+  if (frontmatter) {
+    const customKeys = Array.isArray(frontmatter.triggers) ? frontmatter.triggers 
+      : (typeof frontmatter.triggers === 'string' ? frontmatter.triggers.split(',') : []);
+    const customKws = Array.isArray(frontmatter.keywords) ? frontmatter.keywords 
+      : (typeof frontmatter.keywords === 'string' ? frontmatter.keywords.split(',') : []);
+    
+    for (const k of [...customKeys, ...customKws]) {
+      if (typeof k === 'string') keywords.push(k.trim().toLowerCase());
+    }
+  }
+
   const contentHashVal = hashContent(content);
   const idStr = `${filePath}:${titleContext}:${contentHashVal}`;
   const id = crypto.createHash('md5').update(idStr).digest('hex');
