@@ -47,12 +47,15 @@ export class KeywordMatcher {
       runFTS(ftsQuery, 0);
     }
 
-    // Strategy 2: Direct keyword match on code identifiers
+    // Strategy 2: Direct match on code identifiers
     for (const identifier of intent.identifiers) {
+      // 1. Explicit keyword match
       for (const repo of this.chunksRepos) {
         const keywordHits = repo.findByKeyword(identifier);
-        addOrUpdate(keywordHits, 5.0); // Boost identifier matches
+        addOrUpdate(keywordHits, 10.0);
       }
+      // 2. Full text exact search with massive boost to prioritize exact function/variable matches
+      runFTS(`"${identifier.replace(/"/g, '""')}"`, 30.0);
     }
 
     // Strategy 3: Section title exact match (unigrams only)

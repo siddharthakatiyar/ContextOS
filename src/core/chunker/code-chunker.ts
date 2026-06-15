@@ -55,7 +55,9 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
 
 function createCodeChunk(symbol: CodeSymbol, titleContext: string, filePath: string, language: string, options: ChunkCreationOptions): Chunk {
   const keywords = extractKeywords(symbol.body, titleContext);
-  // Add symbol name itself as a keyword
+  // Add full symbol name itself as a keyword
+  if (symbol.name.length > 2) keywords.push(symbol.name.toLowerCase());
+  // And also its parts
   keywords.push(...symbol.name.split(/(?=[A-Z])|_|-|\./).map(s => s.toLowerCase()).filter(s => s.length > 2));
   
   const contentHashVal = hashContent(symbol.body);
