@@ -9,6 +9,8 @@ import { registerExecuteTool } from "./tools/execute.js";
 import { registerListTopicsTool } from "./tools/list-topics.js";
 import { registerReadTopicTool } from "./tools/read-topic.js";
 import { DB } from "../core/storage/database.js";
+import { startWatcher } from "../core/watcher/index.js";
+import { checkForUpdates } from "../core/updater/index.js";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -42,6 +44,12 @@ export async function startMcpServer(dbs: DB[]) {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   
+  // Start background file watcher for automatic indexing
+  startWatcher(dbs[0]);
+  
+  // Check for auto-updates in the background
+  checkForUpdates();
+  
   // Note: All logging must be to stderr for MCP servers using stdio transport
-  process.stderr.write(`ContextOS MCP Server started.\n`);
+  process.stderr.write(`ContextOS MCP Server started with auto-indexing enabled.\n`);
 }
