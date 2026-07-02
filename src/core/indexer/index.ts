@@ -52,6 +52,16 @@ export class Indexer {
     const content = fs.readFileSync(filePath, 'utf8');
     const hash = hashContent(content);
 
+    // Skip binary files (SQLite databases, images, etc.) by checking for null bytes
+    if (content.indexOf('\0') !== -1) {
+      return {
+        filesProcessed: 0,
+        chunksCreated: 0,
+        relationshipsFound: 0,
+        durationMs: Date.now() - startTime
+      };
+    }
+
     // Check if changed
     if (!this.filesRepo.isChanged(filePath, hash)) {
       return {
