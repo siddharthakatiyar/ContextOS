@@ -20,6 +20,7 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
     ],
     persistent: true,
     ignoreInitial: true,
+    ignorePermissionErrors: true,
   });
 
   watcher
@@ -47,6 +48,9 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
       } catch (e: any) {
         // silently ignore
       }
+    })
+    .on('error', (error) => {
+      // Silently ignore all watcher errors (like UNKNOWN or EPERM for sockets/protected files) to prevent the server from crashing
     });
 
   return watcher;
