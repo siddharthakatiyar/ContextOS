@@ -140,5 +140,38 @@ export const initCommand = new Command('init')
       console.log(`Updated Cursor MCP configuration at ${configPath}`);
     }
 
+    // Generate Claude Code (and generic) MCP config (.mcp.json)
+    const claudeConfigPath = path.join(cwd, '.mcp.json');
+    let claudeConfig: any = {};
+    if (fs.existsSync(claudeConfigPath)) {
+      try {
+        claudeConfig = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'));
+      } catch (e) {
+        // ignore parse errors
+      }
+    }
+    const generated = generateCursorConfig({ projectRoot: cwd });
+    claudeConfig.mcpServers = {
+      ...claudeConfig.mcpServers,
+      ...generated.mcpServers
+    };
+    fs.writeFileSync(claudeConfigPath, JSON.stringify(claudeConfig, null, 2));
+    console.log(`Updated Claude Code MCP configuration at ${claudeConfigPath}`);
+
+    // Generate Codex CLI config if .codex exists
+    if (fs.existsSync(path.join(cwd, '.codex'))) {
+      const codexConfigPath = path.join(cwd, '.codex', 'config.toml');
+      let codexConfig = '';
+      if (fs.existsSync(codexConfigPath)) {
+        codexConfig = fs.readFileSync(codexConfigPath, 'utf8');
+      }
+      if (!codexConfig.includes('[mcp_servers.contextos]')) {
+        codexConfig += `\n\n[mcp_servers.contextos]\ncommand = "npx"\nargs = ["-y", "@siddharthakatiyar/contextos", "serve"]\n`;
+        codexConfig += `[mcp_servers.contextos.env]\nCONTEXTOS_REPO_ROOT = "${cwd}"\nCONTEXTOS_WORKSPACE = ""\n`;
+        fs.writeFileSync(codexConfigPath, codexConfig.trim() + '\n');
+        console.log(`Updated Codex CLI configuration at ${codexConfigPath}`);
+      }
+    }
+
     console.log('ContextOS initialization complete. You can now use the agent!');
   });
