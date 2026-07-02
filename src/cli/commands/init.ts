@@ -140,6 +140,30 @@ export const initCommand = new Command('init')
       console.log(`Updated Cursor MCP configuration at ${configPath}`);
     }
 
+    // Generate Antigravity config if .agents exists
+    if (fs.existsSync(path.join(cwd, '.agents'))) {
+      const configPath = path.join(cwd, '.agents', 'mcp_config.json');
+      let config: any = {};
+      
+      if (fs.existsSync(configPath)) {
+        try {
+          config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        } catch (e) {}
+      }
+      
+      const generated = generateCursorConfig({
+        projectRoot: cwd
+      });
+      
+      config.mcpServers = {
+        ...config.mcpServers,
+        ...generated.mcpServers
+      };
+      
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      console.log(`Updated Antigravity MCP configuration at ${configPath}`);
+    }
+
     // Generate Claude Code (and generic) MCP config (.mcp.json)
     const claudeConfigPath = path.join(cwd, '.mcp.json');
     let claudeConfig: any = {};
