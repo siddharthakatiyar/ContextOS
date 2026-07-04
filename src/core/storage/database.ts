@@ -44,38 +44,98 @@ export class DB {
   }
 
   /**
-   * Resolves all databases in the hierarchy from startDir up to root,
-   * plus the global database. Returns an array of DB instances.
+   * Close the database connection and release all file descriptors.
+   */
+  public close(): void {
+    try {
+      if (this.db.open) {
+        this.db.close();
+      }
+    } catch {
+      // ignore close errors
+    }
+  }
+
+  /**
+   * Resolves databases for the current project.
+   * Only opens the LOCAL project DB + the GLOBAL DB (max 2 connections).
+   * 
+   * Previously this walked from CWD all the way to filesystem root,
+   * opening every .contextos/index.db it found. That caused excessive
+   * file descriptor usage when multiple processes were running.
    */
   public static resolveDatabases(startDir: string = process.cwd()): DB[] {
     const dbs: DB[] = [];
-    const config = loadConfig();
     
-    // Find up to root
-    let currentDir = startDir;
-    while (true) {
-      const maybeDb = path.join(currentDir, '.contextos', 'index.db');
-      if (fs.existsSync(maybeDb)) {
-        dbs.push(new DB(maybeDb));
-      }
-      const parentDir = path.dirname(currentDir);
-      if (parentDir === currentDir) break; // reached root
-      currentDir = parentDir;
+    // 1. Open the local project DB (CWD)
+    const localDbPath = path.join(startDir, '.contextos', 'index.db');
+    if (fs.existsSync(localDbPath)) {
+      dbs.push(new DB(localDbPath));
+    } else {
+      // No local DB exists yet — create one
+      dbs.push(new DB(localDbPath));
     }
 
-    // Add global db if it's not already in the list
+    // 2. Add global DB if it exists and is different from local
     const globalDbPath = path.join(getContextOSHome(), 'index.db');
-    if (fs.existsSync(globalDbPath)) {
-      if (!dbs.some(db => db.db.name === globalDbPath)) {
-        dbs.push(new DB(globalDbPath));
-      }
-    } else {
-      // If no local DBs and no global DB, just initialize the local one
-      if (dbs.length === 0) {
-        dbs.push(new DB());
-      }
+    if (fs.existsSync(globalDbPath) && globalDbPath !== localDbPath) {
+      dbs.push(new DB(globalDbPath));
     }
 
     return dbs;
   }
 }
+
+/**
+ * Acquire a PID lockfile for the given project directory.
+ * Returns true if we acquired the lock (no other server is running).
+ * Returns false if another server process is already alive for this project.
+ */
+export function acquireServerLock(projectDir: string): boolean {
+  const lockPath = path.join(projectDir, '.contextos', 'server.pid');
+  const lockDir = path.dirname(lockPath);
+  if (!fs.existsSync(lockDir)) {
+    fs.mkdirSync(lockDir, { recursive: true });
+  }
+
+  // Check if an existing lock exists with a live process
+  if (fs.existsSync(lockPath)) {
+    try {
+      const existingPid = parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
+      if (!isNaN(existingPid)) {
+        try {
+          // Signal 0 doesn't kill — just checks if process exists
+          process.kill(existingPid, 0);
+          // Process is still alive — another server is running
+          return false;
+        } catch {
+          // Process is dead — stale lockfile, we can take over
+        }
+      }
+    } catch {
+      // Can't read lockfile — overwrite it
+    }
+  }
+
+  // Write our PID
+  fs.writeFileSync(lockPath, String(process.pid));
+  return true;
+}
+
+/**
+ * Release the PID lockfile for the given project directory.
+ */
+export function releaseServerLock(projectDir: string): void {
+  const lockPath = path.join(projectDir, '.contextos', 'server.pid');
+  try {
+    if (fs.existsSync(lockPath)) {
+      const pid = parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
+      if (pid === process.pid) {
+        fs.unlinkSync(lockPath);
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
