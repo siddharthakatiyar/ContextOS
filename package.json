@@ -1,6 +1,6 @@
 {
   "name": "@siddharthakatiyar/contextos",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Intelligent context routing for AI coding assistants via MCP",
   "repository": {
     "type": "git",
