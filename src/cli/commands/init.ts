@@ -140,28 +140,50 @@ export const initCommand = new Command('init')
       console.log(`Updated Cursor MCP configuration at ${configPath}`);
     }
 
-    // Generate Antigravity config if .agents exists
+    // Generate Antigravity MCP config
+    // 1. Global config: ~/.gemini/config/mcp_config.json (always written)
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const antigravityGlobalDir = path.join(homeDir, '.gemini', 'config');
+    if (homeDir) {
+      if (!fs.existsSync(antigravityGlobalDir)) {
+        fs.mkdirSync(antigravityGlobalDir, { recursive: true });
+      }
+      const globalConfigPath = path.join(antigravityGlobalDir, 'mcp_config.json');
+      let globalConfig: any = {};
+      if (fs.existsSync(globalConfigPath)) {
+        try {
+          const raw = fs.readFileSync(globalConfigPath, 'utf8').trim();
+          if (raw) globalConfig = JSON.parse(raw);
+        } catch (e) {}
+      }
+      const generatedAgy = generateCursorConfig({ projectRoot: cwd });
+      if (!globalConfig.mcpServers) globalConfig.mcpServers = {};
+      globalConfig.mcpServers = {
+        ...globalConfig.mcpServers,
+        ...generatedAgy.mcpServers
+      };
+      fs.writeFileSync(globalConfigPath, JSON.stringify(globalConfig, null, 2));
+      console.log(`Updated Antigravity global MCP configuration at ${globalConfigPath}`);
+    }
+
+    // 2. Project-level config: .agents/mcp_config.json (if .agents dir exists)
     if (fs.existsSync(path.join(cwd, '.agents'))) {
       const configPath = path.join(cwd, '.agents', 'mcp_config.json');
       let config: any = {};
-      
       if (fs.existsSync(configPath)) {
         try {
-          config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          const raw = fs.readFileSync(configPath, 'utf8').trim();
+          if (raw) config = JSON.parse(raw);
         } catch (e) {}
       }
-      
-      const generated = generateCursorConfig({
-        projectRoot: cwd
-      });
-      
+      const generatedLocal = generateCursorConfig({ projectRoot: cwd });
+      if (!config.mcpServers) config.mcpServers = {};
       config.mcpServers = {
         ...config.mcpServers,
-        ...generated.mcpServers
+        ...generatedLocal.mcpServers
       };
-      
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-      console.log(`Updated Antigravity MCP configuration at ${configPath}`);
+      console.log(`Updated Antigravity project MCP configuration at ${configPath}`);
     }
 
     // Generate Claude Code (and generic) MCP config (.mcp.json)
