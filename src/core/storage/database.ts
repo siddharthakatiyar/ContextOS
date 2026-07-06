@@ -90,44 +90,57 @@ export class DB {
  * Acquire a PID lockfile for the given project directory.
  * Returns true if we acquired the lock (no other server is running).
  * Returns false if another server process is already alive for this project.
+ * Never throws — returns true on any error (allowing the server to start).
  */
 export function acquireServerLock(projectDir: string): boolean {
-  const lockPath = path.join(projectDir, '.contextos', 'server.pid');
-  const lockDir = path.dirname(lockPath);
-  if (!fs.existsSync(lockDir)) {
-    fs.mkdirSync(lockDir, { recursive: true });
-  }
-
-  // Check if an existing lock exists with a live process
-  if (fs.existsSync(lockPath)) {
-    try {
-      const existingPid = parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
-      if (!isNaN(existingPid)) {
-        try {
-          // Signal 0 doesn't kill — just checks if process exists
-          process.kill(existingPid, 0);
-          // Process is still alive — another server is running
-          return false;
-        } catch {
-          // Process is dead — stale lockfile, we can take over
-        }
-      }
-    } catch {
-      // Can't read lockfile — overwrite it
+  try {
+    // Guard: don't try to write lockfiles to root or invalid paths
+    if (!projectDir || projectDir === '/' || projectDir.length < 3) {
+      return true;
     }
-  }
 
-  // Write our PID
-  fs.writeFileSync(lockPath, String(process.pid));
-  return true;
+    const lockPath = path.join(projectDir, '.contextos', 'server.pid');
+    const lockDir = path.dirname(lockPath);
+    if (!fs.existsSync(lockDir)) {
+      fs.mkdirSync(lockDir, { recursive: true });
+    }
+
+    // Check if an existing lock exists with a live process
+    if (fs.existsSync(lockPath)) {
+      try {
+        const existingPid = parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
+        if (!isNaN(existingPid)) {
+          try {
+            // Signal 0 doesn't kill — just checks if process exists
+            process.kill(existingPid, 0);
+            // Process is still alive — another server is running
+            return false;
+          } catch {
+            // Process is dead — stale lockfile, we can take over
+          }
+        }
+      } catch {
+        // Can't read lockfile — overwrite it
+      }
+    }
+
+    // Write our PID
+    fs.writeFileSync(lockPath, String(process.pid));
+    return true;
+  } catch {
+    // If anything fails (permissions, bad path, etc), just allow the server to start
+    return true;
+  }
 }
 
 /**
  * Release the PID lockfile for the given project directory.
+ * Never throws.
  */
 export function releaseServerLock(projectDir: string): void {
-  const lockPath = path.join(projectDir, '.contextos', 'server.pid');
   try {
+    if (!projectDir || projectDir === '/' || projectDir.length < 3) return;
+    const lockPath = path.join(projectDir, '.contextos', 'server.pid');
     if (fs.existsSync(lockPath)) {
       const pid = parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
       if (pid === process.pid) {
@@ -138,4 +151,3 @@ export function releaseServerLock(projectDir: string): void {
     // ignore
   }
 }
-
