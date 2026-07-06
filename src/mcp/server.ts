@@ -8,6 +8,8 @@ import { registerGetGraphTools } from "./tools/get-graph.js";
 import { registerExecuteTool } from "./tools/execute.js";
 import { registerListTopicsTool } from "./tools/list-topics.js";
 import { registerReadTopicTool } from "./tools/read-topic.js";
+import { registerKnowledgeTools } from "./tools/knowledge.js";
+import { registerFeedbackTools } from "./tools/feedback.js";
 import { DB } from "../core/storage/database.js";
 import { checkForUpdates } from "../core/updater/index.js";
 import { createRequire } from "module";
@@ -65,6 +67,8 @@ export async function startMcpServer(dbs: DB[]) {
   registerExecuteTool(server);
   registerListTopicsTool(server, dbs[0]);
   registerReadTopicTool(server, dbs[0]);
+  registerKnowledgeTools(server, dbs);
+  registerFeedbackTools(server, dbs);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

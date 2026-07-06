@@ -13,6 +13,7 @@ export interface RetrievalOptions {
   limit?: number;
   maxChunks?: number;
   layers?: string[];
+  feedbackAdjustments?: Record<string, number>;
 }
 
 export interface ScoredChunk extends Chunk {

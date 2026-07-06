@@ -7,10 +7,12 @@ ContextOS is an intelligent context engine designed for AI coding assistants. It
 - **Multi-Layer Architecture:** Organizes context into `global`, `workspace`, `repo`, and `session` layers to ensure separation of concerns.
 - **Intelligent Indexing:** Tree-Sitter based parsers perfectly extract semantic symbols (`function`, `class`, `interface`) from code, and regex-based parsers extract sections from markdown.
 - **Graph Expansion:** Automatically discovers dependencies and related symbols to fetch missing context the AI hasn't explicitly asked for.
-- **Smart Scoring:** Uses BM25 keyword matching combined with heuristic importance scores (e.g., `README.md` and `package.json` get boosted).
-- **Session Memory:** Remembers past user queries and AI context to maintain continuity.
-- **MCP Integration:** Exposes tools (`get_context`, `save_context`, `index_files`, `get_neighbors`, `ctx_execute`) to Model Context Protocol compatible clients like Cursor and Claude Desktop.
-- **Team Graph Sharing:** Export and import the graph to share knowledge bases across the team.
+- **Smart Context Assembly:** Fallback strategies swap overly-long code chunks with structural summaries, keeping your context window small but intact. Supports multiple outputs (`xml` for Claude, `markdown` for others).
+- **Adaptive Scoring & Feedback:** Incorporates `rate_chunk` tools so the AI can upvote/downvote chunks, which persistently trains ContextOS to route better data on similar future queries.
+- **Cross-Session Memory:** The `learn_fact` MCP tool writes permanent conceptual facts to an FTS5 table, retaining crucial lessons across agent reboots.
+- **Zero-Config DX:** Running `contextos init` instantly hooks up your `.cursor/mcp.json`, Claude config, starts a daemon, and you are ready to code!
+- **Graph Visualization:** Run `contextos visualize` to generate a stunning, interactive HTML map of your codebase's semantic relationships.
+- **MCP Integration:** Exposes tools (`get_context`, `save_context`, `index_files`, `get_neighbors`, `ctx_execute`, `learn_fact`, `rate_chunk`) to Model Context Protocol compatible clients.
 
 ## Installation
 
@@ -57,6 +59,12 @@ Export and import graph state for your team.
 ```bash
 contextos export graph.json
 contextos import graph.json
+```
+
+### Visualize Graph
+Generate a stunning, interactive HTML map of your codebase's semantic relationships.
+```bash
+contextos visualize -o my-graph.html
 ```
 
 ## Capabilities & Quantifiable Benefits

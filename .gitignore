@@ -6,3 +6,5 @@ dist/
 
 *.tgz
 test-wasm.*
+contextos-graph.html
+daemon.log

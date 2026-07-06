@@ -126,11 +126,57 @@ CREATE TRIGGER IF NOT EXISTS session_events_au AFTER UPDATE ON session_events BE
   VALUES (new.rowid, new.content);
 END;
 
+CREATE TABLE IF NOT EXISTS knowledge_facts (
+  id TEXT PRIMARY KEY,
+  fact TEXT NOT NULL,
+  confidence REAL DEFAULT 1.0,
+  category TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  last_accessed INTEGER NOT NULL,
+  access_count INTEGER DEFAULT 0
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_facts_fts USING fts5(
+  fact,
+  category,
+  content=knowledge_facts,
+  content_rowid=rowid
+);
+
+CREATE TRIGGER IF NOT EXISTS knowledge_facts_ai AFTER INSERT ON knowledge_facts BEGIN
+  INSERT INTO knowledge_facts_fts(rowid, fact, category)
+  VALUES (new.rowid, new.fact, new.category);
+END;
+
+CREATE TRIGGER IF NOT EXISTS knowledge_facts_ad AFTER DELETE ON knowledge_facts BEGIN
+  INSERT INTO knowledge_facts_fts(knowledge_facts_fts, rowid, fact, category)
+  VALUES ('delete', old.rowid, old.fact, old.category);
+END;
+
+CREATE TRIGGER IF NOT EXISTS knowledge_facts_au AFTER UPDATE ON knowledge_facts BEGIN
+  INSERT INTO knowledge_facts_fts(knowledge_facts_fts, rowid, fact, category)
+  VALUES ('delete', old.rowid, old.fact, old.category);
+  INSERT INTO knowledge_facts_fts(rowid, fact, category)
+  VALUES (new.rowid, new.fact, new.category);
+END;
+
+CREATE TABLE IF NOT EXISTS feedback_signals (
+  id TEXT PRIMARY KEY,
+  chunk_id TEXT NOT NULL,
+  score_adjustment REAL NOT NULL,
+  reason TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks(source_file);
 CREATE INDEX IF NOT EXISTS idx_chunks_layer ON chunks(layer);
 CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(hash);
 CREATE INDEX IF NOT EXISTS idx_relationships_source ON relationships(source);
 CREATE INDEX IF NOT EXISTS idx_relationships_target ON relationships(target);
+CREATE INDEX IF NOT EXISTS idx_knowledge_facts_category ON knowledge_facts(category);
+CREATE INDEX IF NOT EXISTS idx_feedback_chunk ON feedback_signals(chunk_id);
 `;
 
 export function applyMigrations(db: Database.Database) {
@@ -165,12 +211,33 @@ export function applyMigrations(db: Database.Database) {
     db.exec(SCHEMA_SQL);
     
     if (hasFiles) {
-      const updateStmt = db.prepare('UPDATE schema_version SET version = 1');
+      const updateStmt = db.prepare('UPDATE schema_version SET version = 3');
       if (updateStmt.run().changes === 0) {
-        db.prepare('INSERT INTO schema_version (version) VALUES (1)').run();
+        db.prepare('INSERT INTO schema_version (version) VALUES (3)').run();
       }
     } else {
-      db.prepare('INSERT INTO schema_version (version) VALUES (1)').run();
+      db.prepare('INSERT INTO schema_version (version) VALUES (3)').run();
+    }
+  } else if (currentVersion === 1) {
+    console.log('Migrating ContextOS database to v0.3.0 (Cross-Session Memory)...');
+    try {
+      // Version 2 adds knowledge_facts
+      db.exec(SCHEMA_SQL);
+      db.prepare('UPDATE schema_version SET version = 2').run();
+      
+      // Upgrade straight to version 3
+      db.prepare('UPDATE schema_version SET version = 3').run();
+    } catch (e: any) {
+      console.error(`Migration from v1 failed: ${e.message}`);
+    }
+  } else if (currentVersion === 2) {
+    console.log('Migrating ContextOS database to v0.4.0 (Adaptive Scoring)...');
+    try {
+      // Version 3 adds feedback_signals
+      db.exec(SCHEMA_SQL);
+      db.prepare('UPDATE schema_version SET version = 3').run();
+    } catch (e: any) {
+      console.error(`Migration to v3 failed: ${e.message}`);
     }
   }
 }

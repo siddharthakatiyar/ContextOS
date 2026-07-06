@@ -8,6 +8,7 @@ import { RelationshipsRepo } from "../../core/storage/relationships-repo.js";
 import { PromptsRepo } from "../../core/storage/prompts-repo.js";
 import { SessionStore } from "../../core/session/session-store.js";
 import { SessionManager } from "../../core/session/index.js";
+import { KnowledgeStore } from "../../core/memory/knowledge-store.js";
 import crypto from "crypto";
 
 export function registerGetContextTool(server: McpServer, dbs: DB[]) {
@@ -31,8 +32,9 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
       layers: z.array(z.enum(["global", "workspace", "repo", "session"]))
         .optional()
         .describe("Which context layers to search. Defaults to all layers."),
+      output_format: z.enum(["markdown", "xml"]).optional().default("markdown").describe("Format of the compiled context. Use XML if you are Claude or similar LLM that prefers XML."),
     },
-    async ({ prompt, max_tokens, layers }) => {
+    async ({ prompt, max_tokens, layers, output_format }) => {
       try {
         // Record user prompt event
         sessionStore.addEvent({
@@ -65,7 +67,29 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           } as any);
         }
 
-        const compiled = compile(result, { maxTokens: max_tokens });
+        // Add cross-session memory facts
+        const knowledgeStore = new KnowledgeStore(primaryDb);
+        const knowledgeFacts = knowledgeStore.searchFacts(prompt, 5);
+        for (const fact of knowledgeFacts) {
+          result.chunks.push({
+            id: fact.id,
+            content: `**[${fact.category.toUpperCase()}]**: ${fact.fact}`,
+            sourceFile: 'memory.fact',
+            layer: 'global',
+            workspaceName: null,
+            sectionTitle: 'Cross-Session Knowledge Fact',
+            sectionDepth: 1,
+            summary: null,
+            keywords: null,
+            hash: '',
+            tokenCount: 0, // estimated in compile
+            score: fact.confidence * 10,
+            fileType: 'text',
+            language: undefined
+          } as any);
+        }
+
+        const compiled = compile(result, { maxTokens: max_tokens, outputFormat: output_format as any });
         
         // Log to prompt history
         promptsRepo.insert({

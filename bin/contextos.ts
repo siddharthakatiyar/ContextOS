@@ -12,6 +12,8 @@ import { analyticsCommand } from '../src/cli/commands/analytics.js';
 import { statusCommand } from '../src/cli/commands/status.js';
 import { reindexCommand } from '../src/cli/commands/reindex.js';
 import { cleanCommand } from '../src/cli/commands/clean.js';
+import { daemonCommand } from '../src/cli/commands/daemon.js';
+import { visualizeCommand } from '../src/cli/commands/visualize.js';
 
 import fs from 'fs';
 import path from 'path';
@@ -41,5 +43,6 @@ program.addCommand(analyticsCommand);
 program.addCommand(statusCommand);
 program.addCommand(reindexCommand);
 program.addCommand(cleanCommand);
-
+program.addCommand(daemonCommand);
+program.addCommand(visualizeCommand);
 program.parse(process.argv);

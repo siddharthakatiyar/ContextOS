@@ -28,6 +28,7 @@ export class DB {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('busy_timeout = 5000');
     this.db.pragma('foreign_keys = ON');
+    // Skip integrity check on startup as it blocks the thread for minutes on large DBs
     this.runMigrations();
   }
 
@@ -36,6 +37,7 @@ export class DB {
       applyMigrations(this.db);
     } catch (e: any) {
       console.error(`Error executing schema migrations: ${e.message}`);
+      // In a severe locked state, don't crash the server, but log it
     }
   }
 
@@ -49,6 +51,13 @@ export class DB {
   public close(): void {
     try {
       if (this.db.open) {
+        // Ensure WAL file is checkpointed so it doesn't grow indefinitely
+        // TRUNCATE mode commits transactions and truncates the WAL file to zero bytes
+        try {
+          this.db.pragma('wal_checkpoint(TRUNCATE)');
+        } catch (e) {
+          // ignore checkpoint errors on close
+        }
         this.db.close();
       }
     } catch {

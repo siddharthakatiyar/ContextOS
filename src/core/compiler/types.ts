@@ -5,4 +5,5 @@ export interface CompiledContext {
 
 export interface CompilerOptions {
   maxTokens: number;
+  outputFormat?: 'markdown' | 'xml';
 }
