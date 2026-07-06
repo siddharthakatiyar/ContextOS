@@ -1,0 +1,188 @@
+import net from 'net';
+import fs from 'fs';
+import path from 'path';
+import { DB } from '../storage/database.js';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { registerGetContextTool } from "../../mcp/tools/get-context.js";
+import { registerSaveContextTool } from "../../mcp/tools/save-context.js";
+import { registerIndexFilesTool } from "../../mcp/tools/index-files.js";
+import { registerGetStatusTool } from "../../mcp/tools/get-status.js";
+import { registerGetGraphTools } from "../../mcp/tools/get-graph.js";
+import { registerExecuteTool } from "../../mcp/tools/execute.js";
+import { registerListTopicsTool } from "../../mcp/tools/list-topics.js";
+import { registerReadTopicTool } from "../../mcp/tools/read-topic.js";
+import { registerKnowledgeTools } from "../../mcp/tools/knowledge.js";
+import { registerFeedbackTools } from "../../mcp/tools/feedback.js";
+import { startWatcher } from '../watcher/index.js';
+import { createRequire } from "module";
+import chokidar, { FSWatcher } from "chokidar";
+
+const require = createRequire(import.meta.url);
+
+let version = '0.3.0';
+try {
+  version = require("../../../../package.json").version;
+} catch {
+  // fallback
+}
+
+export class ContextOSDaemon {
+  private server: net.Server;
+  private dbs: DB[] = [];
+  private socketPath: string;
+  private pidPath: string;
+  private watcher?: FSWatcher;
+  private projectDir: string;
+  private connections = 0;
+  private gcTimer?: NodeJS.Timeout;
+
+  constructor(projectDir: string) {
+    this.projectDir = projectDir;
+    const ctxDir = path.join(projectDir, '.contextos');
+    if (!fs.existsSync(ctxDir)) {
+      fs.mkdirSync(ctxDir, { recursive: true });
+    }
+    // On Windows, named pipes must be in \\.\pipe\ prefix. So we handle that conditionally.
+    const isWin = process.platform === 'win32';
+    if (isWin) {
+      const nameHash = Buffer.from(projectDir).toString('hex');
+      this.socketPath = path.join('\\\\?\\pipe', `contextos-${nameHash}`);
+    } else {
+      const os = require('os');
+      const runDir = path.join(os.homedir(), '.contextos', 'run');
+      if (!fs.existsSync(runDir)) fs.mkdirSync(runDir, { recursive: true });
+      const crypto = require('crypto');
+      const shortHash = crypto.createHash('md5').update(projectDir).digest('hex').substring(0, 12);
+      this.socketPath = path.join(runDir, `d-${shortHash}.sock`);
+    }
+    
+    this.pidPath = path.join(ctxDir, 'daemon.pid');
+
+    this.server = net.createServer((socket) => {
+      this.handleConnection(socket);
+    });
+
+    this.server.on('error', (err: any) => {
+      console.error(`Daemon server error: ${err.message}`);
+    });
+  }
+
+  public async start(): Promise<void> {
+    // Check if another daemon is already running
+    if (fs.existsSync(this.pidPath)) {
+      const pid = parseInt(fs.readFileSync(this.pidPath, 'utf8').trim(), 10);
+      if (pid) {
+        try {
+          process.kill(pid, 0); // Check if alive
+          throw new Error(`Daemon is already running with PID ${pid}`);
+        } catch {
+          // Stale PID file, clean it up
+        }
+      }
+    }
+
+    // Clean up stale socket (Unix only)
+    if (process.platform !== 'win32' && fs.existsSync(this.socketPath)) {
+      fs.unlinkSync(this.socketPath);
+    }
+
+    // Initialize core services ONCE
+    this.dbs = DB.resolveDatabases(this.projectDir);
+    this.watcher = startWatcher(this.dbs[0], this.projectDir);
+
+    return new Promise((resolve, reject) => {
+      this.server.once('error', (err) => {
+        reject(err);
+      });
+      
+      this.server.listen(this.socketPath, () => {
+        fs.writeFileSync(this.pidPath, String(process.pid));
+        
+        // Prevent unhandled errors from crashing the daemon
+        process.on('uncaughtException', (err) => {
+          console.error(`Daemon uncaught exception: ${err.message}`);
+        });
+        process.on('unhandledRejection', (reason) => {
+          console.error(`Daemon unhandled rejection: ${reason}`);
+        });
+
+        const cleanup = () => this.stop();
+        process.on('SIGINT', cleanup);
+        process.on('SIGTERM', cleanup);
+        process.on('exit', cleanup);
+
+        console.log(`ContextOS Daemon started on ${this.socketPath}`);
+        this.resetGCTimer(); // Start GC timer
+        resolve();
+      });
+    });
+  }
+
+  public stop() {
+    try {
+      if (fs.existsSync(this.pidPath)) fs.unlinkSync(this.pidPath);
+      if (process.platform !== 'win32' && fs.existsSync(this.socketPath)) fs.unlinkSync(this.socketPath);
+      for (const db of this.dbs) {
+        db.close();
+      }
+      if (this.watcher) {
+        this.watcher.close();
+      }
+      this.server.close();
+    } catch {
+      // Ignore errors on shutdown
+    }
+    process.exit(0);
+  }
+
+  private handleConnection(socket: net.Socket) {
+    this.connections++;
+    this.resetGCTimer(); // Cancel GC since we have an active connection
+
+    const mcpServer = new McpServer({
+      name: "contextos-daemon",
+      version: version,
+    });
+
+    // Register all tools for this specific MCP Server instance
+    registerGetContextTool(mcpServer, this.dbs);
+    registerSaveContextTool(mcpServer, this.dbs[0]);
+    registerIndexFilesTool(mcpServer, this.dbs[0]);
+    registerGetStatusTool(mcpServer, this.dbs[0]);
+    registerGetGraphTools(mcpServer, this.dbs[0]);
+    registerExecuteTool(mcpServer);
+    registerListTopicsTool(mcpServer, this.dbs[0]);
+    registerReadTopicTool(mcpServer, this.dbs[0]);
+    registerKnowledgeTools(mcpServer, this.dbs);
+    registerFeedbackTools(mcpServer, this.dbs);
+
+    // Use StdioServerTransport but with the socket stream
+    const transport = new StdioServerTransport(socket, socket);
+    mcpServer.connect(transport).catch(console.error);
+
+    socket.on('close', () => {
+      this.connections--;
+      if (this.connections <= 0) {
+        this.resetGCTimer(); // Start shutdown countdown when empty
+      }
+    });
+
+    socket.on('error', (err) => {
+      console.error(`Socket error: ${err.message}`);
+    });
+  }
+
+  /**
+   * Automatically shuts down the daemon if no one connects for 30 minutes.
+   */
+  private resetGCTimer() {
+    if (this.gcTimer) clearTimeout(this.gcTimer);
+    if (this.connections <= 0) {
+      this.gcTimer = setTimeout(() => {
+        console.log("No connections for 30 minutes, shutting down daemon.");
+        this.stop();
+      }, 30 * 60 * 1000);
+    }
+  }
+}

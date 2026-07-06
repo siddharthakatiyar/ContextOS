@@ -11,10 +11,12 @@ export * from './types.js';
 export class RetrievalEngine {
   private matcher: KeywordMatcher;
   private expander: GraphExpander;
+  private primaryChunksRepo: ChunksRepo;
 
   constructor(chunksRepos: ChunksRepo | ChunksRepo[], relsRepos: RelationshipsRepo | RelationshipsRepo[]) {
     this.matcher = new KeywordMatcher(chunksRepos);
     this.expander = new GraphExpander(relsRepos);
+    this.primaryChunksRepo = Array.isArray(chunksRepos) ? chunksRepos[0] : chunksRepos;
   }
 
   public async retrieve(prompt: string, opts?: RetrievalOptions): Promise<RetrievalResult> {
@@ -60,7 +62,15 @@ export class RetrievalEngine {
     }
     
     const allChunks = Array.from(allChunksMap.values());
-    const scored = scoreChunks(allChunks, expandedEntities);
+    const chunkIds = allChunks.map(c => c.id);
+    
+    // Fetch feedback adjustments if not provided in opts
+    let adjustments = opts?.feedbackAdjustments;
+    if (!adjustments && this.primaryChunksRepo) {
+      adjustments = this.primaryChunksRepo.getFeedbackAdjustments(chunkIds);
+    }
+    
+    const scored = scoreChunks(allChunks, expandedEntities, adjustments || {});
     
     // Step 6: Cap and return
     const topChunks = scored.slice(0, opts?.maxChunks ?? 15);

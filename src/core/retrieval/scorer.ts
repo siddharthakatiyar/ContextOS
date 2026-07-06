@@ -3,7 +3,7 @@ import { ExpandedEntity } from '../graph/expander.js';
 
 import { loadConfig } from '../../config/index.js';
 
-export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEntity[]): ScoredChunk[] {
+export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEntity[], feedbackAdjustments: Record<string, number> = {}): ScoredChunk[] {
   const config = loadConfig();
   const layerBoosts = config.layerBoosts || { session: 1.5, repo: 1.3, workspace: 1.1, global: 1.0 };
   const maxGraphBoost = config.maxGraphBoost || 10;
@@ -32,6 +32,11 @@ export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEnt
 
     // Importance weight
     finalScore += Math.min((chunk.importance || 0), 10) / 10 * 2.0;
+
+    // Feedback adjustment
+    if (chunk.id && feedbackAdjustments[chunk.id]) {
+      finalScore += feedbackAdjustments[chunk.id];
+    }
 
     // Layer boost (Multiplicative)
     finalScore *= (layerBoosts[chunk.layer as keyof typeof layerBoosts] || 1.0);

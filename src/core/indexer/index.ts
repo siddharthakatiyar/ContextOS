@@ -95,8 +95,9 @@ export class Indexer {
       chunks = chunkDocument(parsed, { layer, workspaceName });
     }
     
-    // Apply importance score
-    const importance = scoreFileImportance(filePath);
+    // Apply importance score (preserve existing if any, to keep feedback boosts)
+    const existingFile = this.filesRepo.getByPath(filePath);
+    const importance = existingFile ? existingFile.importance : scoreFileImportance(filePath);
     
     // Pass importance down to chunks
     for (const chunk of chunks) {

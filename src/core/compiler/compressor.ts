@@ -16,12 +16,44 @@ export function compressChunks(chunks: ScoredChunk[], maxTokens: number): Scored
 
   const compressed = [...deduped];
   
-  // Strategy 1: Truncate lowest scored chunks
+  // Strategy 1: Strip internal comments for code chunks
+  for (let i = compressed.length - 1; i >= 0 && currentTokens > maxTokens; i--) {
+    const chunk = compressed[i];
+    if (chunk.language && chunk.fileType !== 'markdown') {
+      const originalLen = chunk.content.length;
+      // Strip block and line comments (basic approximation)
+      chunk.content = chunk.content
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*/g, '')
+        .replace(/^\s*[\r\n]/gm, ''); // remove empty lines
+      
+      const newTokens = Math.floor(chunk.tokenCount * (chunk.content.length / originalLen));
+      currentTokens -= (chunk.tokenCount - newTokens);
+      chunk.tokenCount = newTokens;
+    }
+  }
+
+  if (currentTokens <= maxTokens) return compressed;
+
+  // Strategy 2: Structural Fallback (swap with summary if available)
+  for (let i = compressed.length - 1; i >= 0 && currentTokens > maxTokens; i--) {
+    const chunk = compressed[i];
+    if (chunk.summary && chunk.summary.length < chunk.content.length / 2) {
+      chunk.content = `[CODE OMITTED - SUMMARY] ${chunk.summary}`;
+      const newTokens = Math.floor(chunk.tokenCount * 0.2); // Approximation
+      currentTokens -= (chunk.tokenCount - newTokens);
+      chunk.tokenCount = newTokens;
+    }
+  }
+
+  if (currentTokens <= maxTokens) return compressed;
+
+  // Strategy 3: Truncate / Drop lowest scored chunks
   while (currentTokens > maxTokens && compressed.length > 0) {
     const dropped = compressed.pop()!;
     const diff = currentTokens - maxTokens;
     
-    // Strategy 2: Partial truncation
+    // Partial truncation
     if (diff < dropped.tokenCount && diff > 0) {
       const ratio = 1 - (diff / dropped.tokenCount);
       const keepLines = Math.max(1, Math.floor(dropped.content.split('\n').length * ratio));

@@ -21,6 +21,55 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     byLayer[chunk.layer].push(chunk);
   }
 
+  if (opts.outputFormat === 'xml') {
+    let xmlOutput = `<contextos_context>\n`;
+    
+    const formatXmlChunk = (chunk: any) => {
+      let out = `<chunk id="${chunk.id}" layer="${chunk.layer}" source="${path.basename(chunk.sourceFile)}"`;
+      if (chunk.symbolName) out += ` symbol="${chunk.symbolName}" kind="${chunk.symbolKind}"`;
+      if (chunk.sectionTitle) out += ` section="${chunk.sectionTitle}"`;
+      out += `>\n`;
+      out += `<![CDATA[\n${chunk.content.trim()}\n]]>\n`;
+      out += `</chunk>\n`;
+      return out;
+    };
+
+    if (byLayer.session.length > 0) {
+      xmlOutput += `<layer name="session">\n`;
+      byLayer.session.forEach(c => xmlOutput += formatXmlChunk(c));
+      xmlOutput += `</layer>\n`;
+    }
+    if (byLayer.repo.length > 0) {
+      xmlOutput += `<layer name="repo">\n`;
+      byLayer.repo.forEach(c => xmlOutput += formatXmlChunk(c));
+      xmlOutput += `</layer>\n`;
+    }
+    if (byLayer.workspace.length > 0) {
+      xmlOutput += `<layer name="workspace">\n`;
+      byLayer.workspace.forEach(c => xmlOutput += formatXmlChunk(c));
+      xmlOutput += `</layer>\n`;
+    }
+    if (byLayer.global.length > 0) {
+      xmlOutput += `<layer name="global">\n`;
+      byLayer.global.forEach(c => xmlOutput += formatXmlChunk(c));
+      xmlOutput += `</layer>\n`;
+    }
+    if (result.expandedEntities.length > 0) {
+      xmlOutput += `<related_entities>\n`;
+      for (const e of result.expandedEntities) {
+        xmlOutput += `  <entity name="${e.entity}" relationship="${e.relationshipType}" score="${e.score}" />\n`;
+      }
+      xmlOutput += `</related_entities>\n`;
+    }
+    xmlOutput += `</contextos_context>\n`;
+    
+    return {
+      output: xmlOutput,
+      tokenCount: estimateTokens(xmlOutput)
+    };
+  }
+
+  // Markdown format (default)
   let output = '## Relevant Context (ContextOS)\n\n';
 
   const formatChunk = (chunk: any) => {

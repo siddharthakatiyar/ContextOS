@@ -219,5 +219,18 @@ export const initCommand = new Command('init')
       }
     }
 
+    // Auto-start daemon in background for zero-config DX
+    try {
+      const { spawn } = await import('child_process');
+      const daemonProcess = spawn('npx', ['contextos', 'daemon'], {
+        detached: true,
+        stdio: 'ignore'
+      });
+      daemonProcess.unref();
+      console.log('ContextOS daemon started in background (zero-config).');
+    } catch (e) {
+      console.log('Failed to auto-start daemon, you can run `npx contextos daemon` manually.');
+    }
+
     console.log('ContextOS initialization complete. You can now use the agent!');
   });

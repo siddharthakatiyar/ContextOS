@@ -1,7 +1,7 @@
 {
   "name": "@siddharthakatiyar/contextos",
-  "version": "0.2.7",
-  "description": "Intelligent context routing for AI coding assistants via MCP",
+  "version": "0.3.0",
+  "description": "ContextOS - Universal knowledge graph for coding agents",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/siddharthakatiyar/ContextOS.git"

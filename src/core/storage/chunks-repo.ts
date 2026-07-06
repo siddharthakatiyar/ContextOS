@@ -158,6 +158,30 @@ export class ChunksRepo {
     return (stmt.all(...ids) as any[]).map(r => this.mapRow(r)) as Chunk[];
   }
 
+  public getFeedbackAdjustments(chunkIds: string[]): Record<string, number> {
+    if (!chunkIds || chunkIds.length === 0) return {};
+    
+    // Check if table exists (in case running on older db)
+    try {
+      const placeholders = chunkIds.map(() => '?').join(',');
+      const results = this.db.prepare(`
+        SELECT chunk_id, SUM(score_adjustment) as total_adjustment
+        FROM feedback_signals
+        WHERE chunk_id IN (${placeholders})
+        GROUP BY chunk_id
+      `).all(...chunkIds) as any[];
+
+      const adjustments: Record<string, number> = {};
+      for (const r of results) {
+        adjustments[r.chunk_id] = r.total_adjustment;
+      }
+      return adjustments;
+    } catch (e) {
+      // Table might not exist yet
+      return {};
+    }
+  }
+
   public getStats(): ChunkStats {
     const totalRow = this.db.prepare('SELECT COUNT(*) as c, SUM(token_count) as t FROM chunks').get() as any;
     const layersRow = this.db.prepare('SELECT layer, COUNT(*) as c FROM chunks GROUP BY layer').all() as any[];

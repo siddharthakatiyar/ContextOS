@@ -1,6 +1,5 @@
 import { Command } from 'commander';
-import { startMcpServer } from '../../mcp/server.js';
-import { DB, acquireServerLock, releaseServerLock } from '../../core/storage/database.js';
+import { runDaemonClient } from '../../core/daemon/client.js';
 
 export const serveCommand = new Command('serve')
   .description('Start the ContextOS MCP server (stdio)')
@@ -23,18 +22,14 @@ export const serveCommand = new Command('serve')
       // If we can't chdir, continue with whatever cwd we have
     }
     
-    // Prevent duplicate server processes for the same project
-    if (!acquireServerLock(projectDir)) {
-      process.stderr.write(`ContextOS: Another server is already running for ${projectDir}. Reusing existing instance.\n`);
-    }
+    // Provide stdout/stderr handlers to prevent crashing
+    process.on('uncaughtException', (err) => {
+      process.stderr.write(`ContextOS uncaught exception: ${err.message}\n`);
+    });
+    process.on('unhandledRejection', (reason) => {
+      process.stderr.write(`ContextOS unhandled rejection: ${reason}\n`);
+    });
     
-    // Release lock on exit
-    const releaseLock = () => releaseServerLock(projectDir);
-    process.on('exit', releaseLock);
-    process.on('SIGINT', releaseLock);
-    process.on('SIGTERM', releaseLock);
-    
-    // Suppress regular stdout logs since MCP uses stdout
-    const dbs = DB.resolveDatabases(projectDir);
-    await startMcpServer(dbs);
+    // Serve now just connects to the daemon or spawns it
+    await runDaemonClient(projectDir);
   });
