@@ -16,7 +16,7 @@ export function generateCursorConfig(options: {
     mcpServers: {
       contextos: {
         command: "npx",
-        args: ["-y", "@siddharthakatiyar/contextos", "serve"],
+        args: ["-y", "@siddharthakatiyar/contextos@latest", "serve"],
         env: {
           CONTEXTOS_REPO_ROOT: options.projectRoot,
           CONTEXTOS_WORKSPACE: options.workspaceName ?? "",

@@ -212,7 +212,7 @@ export const initCommand = new Command('init')
         codexConfig = fs.readFileSync(codexConfigPath, 'utf8');
       }
       if (!codexConfig.includes('[mcp_servers.contextos]')) {
-        codexConfig += `\n\n[mcp_servers.contextos]\ncommand = "npx"\nargs = ["-y", "@siddharthakatiyar/contextos", "serve"]\n`;
+        codexConfig += `\n\n[mcp_servers.contextos]\ncommand = "npx"\nargs = ["-y", "@siddharthakatiyar/contextos@latest", "serve"]\n`;
         codexConfig += `[mcp_servers.contextos.env]\nCONTEXTOS_REPO_ROOT = "${cwd}"\nCONTEXTOS_WORKSPACE = ""\n`;
         fs.writeFileSync(codexConfigPath, codexConfig.trim() + '\n');
         console.log(`Updated Codex CLI configuration at ${codexConfigPath}`);
