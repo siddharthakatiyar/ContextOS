@@ -3,6 +3,8 @@ import os from 'os';
 import { ContextOSConfig } from './types.js';
 
 export const defaultConfig: ContextOSConfig = {
+  // Note: dbPath is calculated at module-load time, but loadConfig() deep-clones
+  // this object so the dbPath will be resolved correctly later.
   dbPath: path.join(process.cwd(), '.contextos', 'index.db'),
   globalContextDir: path.join(os.homedir(), '.contextos', 'global'),
   
