@@ -88,15 +88,23 @@ export const visualizeCommand = new Command('visualize')
       chunk: { color: { background: '#007ACC', border: '#005a9e' } },
       entity: { color: { background: '#28A745', border: '#1e7e34' } }
     },
+    layout: {
+      improvedLayout: false
+    },
     physics: {
-      forceAtlas2Based: { gravitationalConstant: -26, centralGravity: 0.005, springLength: 230, springConstant: 0.18 },
-      maxVelocity: 146,
+      forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 100, springConstant: 0.08 },
+      maxVelocity: 50,
       solver: 'forceAtlas2Based',
       timestep: 0.35,
-      stabilization: { iterations: 150 }
+      stabilization: { enabled: true, iterations: 100, updateInterval: 25 }
     }
   };
   const network = new vis.Network(container, data, options);
+  
+  // Show physics progress if desired, but vis-network will now yield to browser
+  network.on("stabilizationProgress", function(params) {
+      console.log("Stabilizing: " + params.iterations + " / " + params.total);
+  });
 </script>
 </body>
 </html>`;

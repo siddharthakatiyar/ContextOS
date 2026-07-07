@@ -1,21 +1,24 @@
 import { exec, spawn } from 'child_process';
-import { createRequire } from 'module';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export async function checkForUpdates(): Promise<void> {
   try {
     // 1. Get local version
     let localVersion = '0.0.0';
     try {
-      localVersion = require("../../../package.json").version;
-    } catch {
-      try {
-        localVersion = require("../../../../package.json").version;
-      } catch {
-        // fail silently if we can't find package.json
-        return;
+      let pkgPath = path.join(__dirname, "../../../package.json");
+      if (!fs.existsSync(pkgPath)) {
+        pkgPath = path.join(__dirname, "../../../../package.json");
       }
+      localVersion = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version;
+    } catch {
+      // fail silently if we can't find package.json
+      return;
     }
 
     // 2. Fetch latest version from npm

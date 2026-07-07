@@ -12,21 +12,22 @@ import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerFeedbackTools } from "./tools/feedback.js";
 import { DB } from "../core/storage/database.js";
 import { checkForUpdates } from "../core/updater/index.js";
-import { createRequire } from "module";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let version = '0.3.0';
 try {
-  version = require("../../package.json").version;
-} catch {
-  try {
-    version = require("../../../package.json").version;
-  } catch {
-    // fallback
+  let pkgPath = path.join(__dirname, "../../package.json");
+  if (!fs.existsSync(pkgPath)) {
+    pkgPath = path.join(__dirname, "../../../package.json");
   }
+  version = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version;
+} catch {
+  // fallback
 }
 
 /**
