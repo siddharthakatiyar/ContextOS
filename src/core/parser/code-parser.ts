@@ -1,7 +1,7 @@
 import { createRequire } from 'module';
 import { ParsedCodeDocument, CodeSymbol } from './types.js';
 
-const require = createRequire(import.meta.url);
+const localRequire = createRequire(import.meta.url);
 
 const LANGUAGE_EXT_MAP: Record<string, string> = {
   '.ts': 'typescript',
@@ -31,7 +31,7 @@ async function getParser(langName: string): Promise<any> {
   if (langName === 'unknown') return null;
 
   if (!TreeSitter) {
-    TreeSitter = require('web-tree-sitter');
+    TreeSitter = localRequire('web-tree-sitter');
   }
 
   if (!parserInitPromise) {
@@ -45,7 +45,7 @@ async function getParser(langName: string): Promise<any> {
 
   if (!languageCache.has(langName)) {
     try {
-      const wasmPath = require.resolve(`tree-sitter-wasms/out/tree-sitter-${langName}.wasm`);
+      const wasmPath = localRequire.resolve(`tree-sitter-wasms/out/tree-sitter-${langName}.wasm`);
       const lang = await TreeSitter.Language.load(wasmPath);
       languageCache.set(langName, lang);
     } catch (e) {

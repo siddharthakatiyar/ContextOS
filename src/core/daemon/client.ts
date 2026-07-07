@@ -1,5 +1,7 @@
 import net from 'net';
 import path from 'path';
+import os from 'os';
+import crypto from 'crypto';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -13,11 +15,10 @@ function getSocketPath(projectDir: string): string {
   if (isWin) {
     return path.join('\\\\?\\pipe', `contextos-${nameHash}`);
   } else {
-    const os = require('os');
     const runDir = path.join(os.homedir(), '.contextos', 'run');
     if (!fs.existsSync(runDir)) fs.mkdirSync(runDir, { recursive: true });
     // Use a hash of the project path to ensure uniqueness but stay within max socket path length limit (104 chars)
-    const shortHash = require('crypto').createHash('md5').update(projectDir).digest('hex').substring(0, 12);
+    const shortHash = crypto.createHash('md5').update(projectDir).digest('hex').substring(0, 12);
     return path.join(runDir, `d-${shortHash}.sock`);
   }
 }

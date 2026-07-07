@@ -1,5 +1,7 @@
 import net from 'net';
 import fs from 'fs';
+import os from 'os';
+import crypto from 'crypto';
 import path from 'path';
 import { DB } from '../storage/database.js';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -15,14 +17,20 @@ import { registerReadTopicTool } from "../../mcp/tools/read-topic.js";
 import { registerKnowledgeTools } from "../../mcp/tools/knowledge.js";
 import { registerFeedbackTools } from "../../mcp/tools/feedback.js";
 import { startWatcher } from '../watcher/index.js';
-import { createRequire } from "module";
+
+import { fileURLToPath } from "url";
 import chokidar, { FSWatcher } from "chokidar";
 
-const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let version = '0.3.0';
 try {
-  version = require("../../../../package.json").version;
+  let pkgPath = path.join(__dirname, "../../../../package.json");
+  if (!fs.existsSync(pkgPath)) {
+    pkgPath = path.join(__dirname, "../../../../../package.json");
+  }
+  version = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version;
 } catch {
   // fallback
 }
@@ -49,10 +57,8 @@ export class ContextOSDaemon {
       const nameHash = Buffer.from(projectDir).toString('hex');
       this.socketPath = path.join('\\\\?\\pipe', `contextos-${nameHash}`);
     } else {
-      const os = require('os');
       const runDir = path.join(os.homedir(), '.contextos', 'run');
       if (!fs.existsSync(runDir)) fs.mkdirSync(runDir, { recursive: true });
-      const crypto = require('crypto');
       const shortHash = crypto.createHash('md5').update(projectDir).digest('hex').substring(0, 12);
       this.socketPath = path.join(runDir, `d-${shortHash}.sock`);
     }
