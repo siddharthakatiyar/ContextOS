@@ -49,7 +49,6 @@ export function extractRelationships(chunk: Chunk): Relationship[] {
   const extractEntities = (text: string): string[] => {
     const entities = new Set<string>();
     for (const pattern of ENTITY_PATTERNS) {
-      pattern.lastIndex = 0; // reset regex state
       const matches = text.match(pattern);
       if (matches) {
         for (const m of matches) {

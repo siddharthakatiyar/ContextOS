@@ -2,20 +2,26 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { exec } from "child_process";
 import { promisify } from "util";
+import path from "path";
 
 const execAsync = promisify(exec);
 
 export function registerExecuteTool(server: McpServer) {
   server.tool(
     "ctx_execute",
-    "Execute a shell command within the workspace. Use this to run tests, build the project, or check status. SECURITY WARNING: Only allowed commands are permitted (ls, cat, npm test, npm run build, tsc, node). Directory traversal outside cwd is not allowed.",
+    "Execute a shell command within the workspace. Use this to run tests, build the project, or check status. SECURITY WARNING: Only allowed commands are permitted (ls, cat, head, tail, wc, find, grep, tree, npm test, npm run, npx, tsc, git). Directory traversal outside cwd is not allowed.",
     {
       command: z.string().describe("The shell command to execute"),
       cwd: z.string().optional().describe("Working directory for the command (defaults to current directory)"),
     },
     async ({ command, cwd }) => {
       try {
-        const allowedCommands = ['ls', 'cat', 'npm test', 'npm run build', 'tsc', 'node'];
+        const allowedCommands = [
+          'ls', 'cat', 'head', 'tail', 'wc', 'find', 'grep', 'tree',
+          'npm test', 'npm run', 'npx vitest', 'npx jest',
+          'tsc',
+          'git status', 'git log', 'git diff', 'git branch'
+        ];
         const isAllowed = allowedCommands.some(cmd => command === cmd || command.startsWith(`${cmd} `));
         
         if (!isAllowed) {
@@ -26,19 +32,38 @@ export function registerExecuteTool(server: McpServer) {
         }
 
         // Security: block actual shell operators in the command structure
-        // We need to allow & | ; inside quoted node -e "..." arguments
         // Strip all single-quoted and double-quoted strings, then check the remainder
         const stripped = command.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
-        if (stripped.includes('cd ') || /[&|;]/.test(stripped) || stripped.includes('`')) {
+        if (stripped.includes('cd ') || /[&|;\n\r`]/.test(stripped) || /\$\([^)]*\)/.test(stripped) || stripped.includes('${')) {
           return {
-            content: [{ type: "text", text: "Command chaining and directory changes are not allowed for security reasons." }],
+            content: [{ type: "text", text: "Command chaining, subshells, and directory changes are not allowed for security reasons." }],
+            isError: true,
+          };
+        }
+        
+        // Security: tight cat rules
+        if (command.startsWith('cat ') && command.includes(' /')) {
+          return {
+            content: [{ type: "text", text: "Reading absolute paths with cat is not allowed." }],
+            isError: true,
+          };
+        }
+
+        // Security: Validate cwd
+        const targetCwd = cwd || process.cwd();
+        const root = process.env.CONTEXTOS_REPO_ROOT || process.cwd();
+        const resolvedCwd = path.resolve(targetCwd);
+        if (!resolvedCwd.startsWith(path.resolve(root))) {
+          return {
+            content: [{ type: "text", text: `Execution outside workspace root (${root}) is not allowed.` }],
             isError: true,
           };
         }
 
         const { stdout, stderr } = await execAsync(command, { 
-          cwd: cwd || process.cwd(),
-          timeout: 30000 // 30 second timeout
+          cwd: resolvedCwd,
+          timeout: 30000, // 30 second timeout
+          maxBuffer: 1024 * 1024 // 1MB buffer limit
         });
         
         let output = "";

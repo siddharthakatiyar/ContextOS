@@ -9,8 +9,8 @@ export function parseConfig(filePath: string, content: string): ParsedCodeDocume
   if (ext === 'json') {
     // Basic regex to find top-level JSON keys
     for (let i = 0; i < lines.length; i++) {
-      const jsonKeyRegex = /^ {2}"([^"]+)":/g;
-      const rootRegex = /^"([^"]+)":/g;
+      const jsonKeyRegex = /^ {2}"([^"]+)":/;
+      const rootRegex = /^"([^"]+)":/;
       const line = lines[i];
       let match;
       // Also match root level
@@ -27,7 +27,7 @@ export function parseConfig(filePath: string, content: string): ParsedCodeDocume
   } else if (ext === 'yml' || ext === 'yaml') {
     // Basic regex to find top-level YAML keys
     for (let i = 0; i < lines.length; i++) {
-      const yamlKeyRegex = /^([a-zA-Z0-9_-]+):/g;
+      const yamlKeyRegex = /^([a-zA-Z0-9_-]+):/;
       const line = lines[i];
       let match;
       if ((match = yamlKeyRegex.exec(line)) !== null) {
@@ -43,8 +43,8 @@ export function parseConfig(filePath: string, content: string): ParsedCodeDocume
   } else if (ext === 'toml' || ext === 'ini') {
     // Basic regex to find TOML/INI sections
     for (let i = 0; i < lines.length; i++) {
-      const tomlSectionRegex = /^\[([^\]]+)\]/g;
-      const tomlKeyRegex = /^([a-zA-Z0-9_-]+)\s*=/g;
+      const tomlSectionRegex = /^\[([^\]]+)\]/;
+      const tomlKeyRegex = /^([a-zA-Z0-9_-]+)\s*=/;
       const line = lines[i];
       let match;
       if ((match = tomlSectionRegex.exec(line)) !== null) {
