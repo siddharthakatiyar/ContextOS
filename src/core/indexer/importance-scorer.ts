@@ -20,7 +20,7 @@ export function scoreFileImportance(filePath: string): number {
   if (dir.includes('core') || dir.includes('shared')) score += 2;
   
   // Less important directories
-  if (dir.includes('test') || dir.includes('__tests__') || dir.includes('spec')) {
+  if (dir.split('/').includes('test') || dir.includes('__tests__') || dir.includes('spec')) {
     score -= 2;
   }
   if (dir.includes('vendor') || dir.includes('node_modules')) {

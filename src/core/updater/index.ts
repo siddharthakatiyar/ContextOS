@@ -1,4 +1,4 @@
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -31,18 +31,9 @@ export async function checkForUpdates(): Promise<void> {
       const remoteVersion = stdout.trim();
       if (!remoteVersion) return;
 
-      // 3. Compare versions (simple string comparison works for major.minor.patch if padded, but better to use simple split)
+      // 3. Compare versions
       if (isNewerVersion(localVersion, remoteVersion)) {
-        process.stderr.write(`\n[ContextOS] A new version (${remoteVersion}) is available. Auto-updating in background...\n`);
-
-        // 4. Spawn detached npm install
-        const child = spawn('npm', ['install', '-g', '@siddharthakatiyar/contextos@latest'], {
-          detached: true,
-          stdio: 'ignore'
-        });
-        
-        // Unref the child process so it doesn't prevent the parent from exiting
-        child.unref();
+        process.stderr.write(`\n[ContextOS] A new version (${remoteVersion}) is available. Please update by running: npm install -g @siddharthakatiyar/contextos@latest\n`);
       }
     });
   } catch (error) {

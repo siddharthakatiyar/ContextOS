@@ -13,11 +13,12 @@ export const statusCommand = new Command('status')
     const config = loadConfig();
     const dbs = DB.resolveDatabases(cwd);
     
-    const results = [];
-    let totalSize = 0;
-    let totalFiles = 0;
-    let totalChunks = 0;
-    let totalRels = 0;
+    try {
+      const results = [];
+      let totalSize = 0;
+      let totalFiles = 0;
+      let totalChunks = 0;
+      let totalRels = 0;
 
     for (const dbInst of dbs) {
       const db = dbInst.getInstance();
@@ -76,9 +77,14 @@ export const statusCommand = new Command('status')
       console.log('');
     }
 
-    console.log(chalk.green.bold(`[Total Aggregated]`));
-    console.log(`Size:          ${(totalSize / (1024 * 1024)).toFixed(2)} MB`);
-    console.log(`Files Indexed: ${totalFiles}`);
-    console.log(`Chunks:        ${totalChunks}`);
-    console.log(`Relationships: ${totalRels}\n`);
+      console.log(chalk.green.bold(`[Total Aggregated]`));
+      console.log(`Size:          ${(totalSize / (1024 * 1024)).toFixed(2)} MB`);
+      console.log(`Files Indexed: ${totalFiles}`);
+      console.log(`Chunks:        ${totalChunks}`);
+      console.log(`Relationships: ${totalRels}\n`);
+    } finally {
+      for (const dbInst of dbs) {
+        dbInst.close();
+      }
+    }
   });

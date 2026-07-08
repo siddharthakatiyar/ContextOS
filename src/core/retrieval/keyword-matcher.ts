@@ -1,5 +1,6 @@
 import { ChunksRepo } from '../storage/chunks-repo.js';
 import { DetectedIntent, ScoredChunk, RetrievalOptions } from './types.js';
+import { loadConfig } from '../../config/index.js';
 
 export class KeywordMatcher {
   private chunksRepos: ChunksRepo[];
@@ -22,14 +23,16 @@ export class KeywordMatcher {
       }
     };
 
+    const config = loadConfig();
+    
     const runFTS = (query: string, boost: number) => {
       for (const repo of this.chunksRepos) {
         if (opts?.layers && opts.layers.length > 0) {
           for (const layer of opts.layers) {
-            addOrUpdate(repo.searchFTS(query, { layer: layer as any, limit: opts?.limit ?? 30 }), boost);
+            addOrUpdate(repo.searchFTS(query, { layer: layer as any, limit: opts?.limit ?? config.ftsLimit }), boost);
           }
         } else {
-          addOrUpdate(repo.searchFTS(query, { limit: opts?.limit ?? 30 }), boost);
+          addOrUpdate(repo.searchFTS(query, { limit: opts?.limit ?? config.ftsLimit }), boost);
         }
       }
     };

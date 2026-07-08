@@ -24,7 +24,7 @@ export function registerGetGraphTools(server: McpServer, db: DB) {
         }
 
         // Get the chunks that originated these relationships
-        const chunkIds = [...new Set(relationships.map(r => r.sourceChunkId).filter(Boolean))] as string[];
+        const chunkIds = [...new Set(relationships.map(r => r.sourceChunkId))] as string[];
         const chunks = chunksRepo.getByIds(chunkIds);
         const chunkMap = new Map(chunks.map(c => [c.id, c]));
 
@@ -37,13 +37,11 @@ export function registerGetGraphTools(server: McpServer, db: DB) {
           
           output += `- \`${entity}\` ${direction} [${rel.relationshipType}] ${direction} \`${other}\` (weight: ${rel.weight})\n`;
           
-          if (rel.sourceChunkId) {
-            const chunk = chunkMap.get(rel.sourceChunkId);
-            if (chunk) {
-              output += `  * Source: \`${chunk.sourceFile}\`\n`;
-              if (chunk.symbolName) {
-                output += `  * Found in: \`${chunk.symbolKind} ${chunk.symbolName}\`\n`;
-              }
+          const chunk = chunkMap.get(rel.sourceChunkId);
+          if (chunk) {
+            output += `  * Source: \`${chunk.sourceFile}\`\n`;
+            if (chunk.symbolName) {
+              output += `  * Found in: \`${chunk.symbolKind} ${chunk.symbolName}\`\n`;
             }
           }
         }

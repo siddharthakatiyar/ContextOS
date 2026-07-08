@@ -3,12 +3,14 @@ import { ParsedCodeDocument, CodeSymbol } from '../parser/types.js';
 import { Chunk } from '../storage/types.js';
 import { ChunkCreationOptions } from './types.js';
 import { estimateTokens } from '../../utils/tokens.js';
+import { loadConfig } from '../../config/index.js';
 import { hashContent } from '../../utils/hash.js';
 import { extractKeywords } from './index.js';
 
 export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions): Chunk[] {
   const chunks: Chunk[] = [];
-  const maxTokens = options.maxChunkTokens || 1500;
+  const config = loadConfig();
+  const maxTokens = options.maxChunkTokens || config.maxChunkTokens;
 
   for (const symbol of doc.symbols) {
     // Only chunk meaningful symbols, skipping basic variable declarations if we had them
@@ -17,7 +19,7 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
     }
 
     const titleContext = symbol.parent ? `${symbol.parent} > ${symbol.name}` : symbol.name;
-    let tokens = estimateTokens(symbol.body);
+    let tokens = estimateTokens(`File: ${doc.filePath}\n` + symbol.body);
 
     // If body is huge (e.g. large struct), we'd split it, but for V1 we keep it as one
     chunks.push(createCodeChunk(symbol, titleContext, doc.filePath, doc.language, options));
@@ -76,7 +78,7 @@ function createCodeChunk(symbol: CodeSymbol, titleContext: string, filePath: str
     keywords: Array.from(new Set(keywords)).join(', '),
     hash: contentHashVal,
     importance: options.importance ?? 5,
-    tokenCount: estimateTokens(symbol.body),
+    tokenCount: estimateTokens(`File: ${filePath}\n` + symbol.body),
     fileType: 'code',
     language,
     symbolName: symbol.name,

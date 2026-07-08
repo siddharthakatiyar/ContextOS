@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Database } from 'better-sqlite3';
 import { DB } from '../storage/database.js';
+import { sanitizeFTSQuery } from '../storage/fts-sanitizer.js';
 
 export interface Session {
   id: string;
@@ -104,7 +105,8 @@ export class SessionStore {
       JOIN session_events e ON fts.rowid = e.id
       WHERE session_events_fts MATCH ?
     `;
-    const params: any[] = [query];
+    const sanitizedQuery = sanitizeFTSQuery(query);
+    const params: any[] = [sanitizedQuery];
     
     if (sessionId) {
       sql += ' AND e.session_id = ?';

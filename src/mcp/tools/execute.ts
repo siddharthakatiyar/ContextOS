@@ -1,55 +1,99 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import path from "path";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export function registerExecuteTool(server: McpServer) {
   server.tool(
     "ctx_execute",
-    "Execute a shell command within the workspace. Use this to run tests, build the project, or check status. SECURITY WARNING: Only allowed commands are permitted (ls, cat, head, tail, wc, find, grep, tree, npm test, npm run, npx, tsc, git). Directory traversal outside cwd is not allowed.",
+    "Execute a shell command within the workspace. Use this to run tests, build the project, or check status. SECURITY WARNING: Only allowed commands are permitted (ls, cat, head, tail, wc, find, grep, tree, npm, npx, tsc, git). Directory traversal outside cwd is not allowed.",
     {
       command: z.string().describe("The shell command to execute"),
       cwd: z.string().optional().describe("Working directory for the command (defaults to current directory)"),
     },
     async ({ command, cwd }) => {
       try {
+        const cmdParts = command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+        if (cmdParts.length === 0) {
+          return { content: [{ type: "text", text: "Empty command." }], isError: true };
+        }
+        
+        const exe = cmdParts[0] as string;
+        const args: string[] = cmdParts.slice(1).map(arg => {
+          if ((arg.startsWith('"') && arg.endsWith('"')) || (arg.startsWith("'") && arg.endsWith("'"))) {
+            return arg.slice(1, -1);
+          }
+          return arg;
+        });
+
         const allowedCommands = [
           'ls', 'cat', 'head', 'tail', 'wc', 'find', 'grep', 'tree',
-          'npm test', 'npm run', 'npx vitest', 'npx jest',
-          'tsc',
-          'git status', 'git log', 'git diff', 'git branch'
+          'npm', 'npx', 'tsc', 'git'
         ];
-        const isAllowed = allowedCommands.some(cmd => command === cmd || command.startsWith(`${cmd} `));
         
-        if (!isAllowed) {
+        if (!allowedCommands.includes(exe)) {
           return {
-            content: [{ type: "text", text: `Command not allowed. Allowed commands are: ${allowedCommands.join(', ')}` }],
+            content: [{ type: "text", text: `Command not allowed. Allowed executables are: ${allowedCommands.join(', ')}` }],
             isError: true,
           };
         }
 
-        // Security: block actual shell operators in the command structure
-        // Strip all single-quoted and double-quoted strings, then check the remainder
-        const stripped = command.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
-        if (stripped.includes('cd ') || /[&|;\n\r`]/.test(stripped) || /\$\([^)]*\)/.test(stripped) || stripped.includes('${')) {
-          return {
-            content: [{ type: "text", text: "Command chaining, subshells, and directory changes are not allowed for security reasons." }],
-            isError: true,
-          };
-        }
-        
-        // Security: tight cat rules
-        if (command.startsWith('cat ') && command.includes(' /')) {
-          return {
-            content: [{ type: "text", text: "Reading absolute paths with cat is not allowed." }],
-            isError: true,
-          };
+        if (exe === 'npm') {
+          if (args[0] !== 'test' && args[0] !== 'run') {
+            return {
+              content: [{ type: "text", text: `Arbitrary npm commands are not allowed. Allowed: test, run` }],
+              isError: true,
+            };
+          }
+          if (args[0] === 'run') {
+            const allowedScripts = ['test', 'build', 'lint'];
+            if (!allowedScripts.includes(args[1])) {
+              return {
+                content: [{ type: "text", text: `Arbitrary npm run scripts are not allowed. Allowed scripts: ${allowedScripts.join(', ')}` }],
+                isError: true,
+              };
+            }
+          }
         }
 
-        // Security: Validate cwd
+        if (exe === 'npx') {
+          const allowedNpx = ['vitest', 'jest'];
+          if (!allowedNpx.includes(args[0])) {
+            return {
+              content: [{ type: "text", text: `Arbitrary npx commands are not allowed. Allowed: ${allowedNpx.join(', ')}` }],
+              isError: true,
+            };
+          }
+        }
+
+        if (exe === 'git') {
+          const allowedGit = ['status', 'log', 'diff', 'branch'];
+          if (!allowedGit.includes(args[0])) {
+            return {
+              content: [{ type: "text", text: `Arbitrary git commands are not allowed. Allowed: ${allowedGit.join(', ')}` }],
+              isError: true,
+            };
+          }
+        }
+
+        for (const arg of args) {
+          if (path.isAbsolute(arg) || arg.startsWith('/')) {
+            return {
+              content: [{ type: "text", text: "Absolute paths are not allowed in arguments." }],
+              isError: true,
+            };
+          }
+          if (arg.includes('../') || arg.includes('..\\')) {
+            return {
+              content: [{ type: "text", text: "Directory traversal is not allowed in arguments." }],
+              isError: true,
+            };
+          }
+        }
+
         const targetCwd = cwd || process.cwd();
         const root = process.env.CONTEXTOS_REPO_ROOT || process.cwd();
         const resolvedCwd = path.resolve(targetCwd);
@@ -60,10 +104,10 @@ export function registerExecuteTool(server: McpServer) {
           };
         }
 
-        const { stdout, stderr } = await execAsync(command, { 
+        const { stdout, stderr } = await execFileAsync(exe, args, { 
           cwd: resolvedCwd,
-          timeout: 30000, // 30 second timeout
-          maxBuffer: 1024 * 1024 // 1MB buffer limit
+          timeout: 30000,
+          maxBuffer: 1024 * 1024
         });
         
         let output = "";

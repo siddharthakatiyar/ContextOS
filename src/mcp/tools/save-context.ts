@@ -8,7 +8,6 @@ import { PromptsRepo } from "../../core/storage/prompts-repo.js";
 export function registerSaveContextTool(server: McpServer, db: DB) {
   const sessionStore = new SessionStore(db);
   const promptsRepo = new PromptsRepo(db.getInstance());
-  const sessionManager = new SessionManager(promptsRepo, sessionStore);
 
   server.tool(
     "save_context",
@@ -19,8 +18,13 @@ export function registerSaveContextTool(server: McpServer, db: DB) {
     },
     async ({ note, related_files }) => {
       try {
+        let session = sessionStore.getLatestSession();
+        if (!session) {
+          session = sessionStore.createSession(process.cwd());
+        }
+
         sessionStore.addEvent({
-          sessionId: sessionManager.getSessionId(),
+          sessionId: session.id,
           eventType: 'system_response', // Treat saved notes as system responses/context
           content: note,
           relatedFiles: related_files || null

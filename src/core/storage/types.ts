@@ -37,7 +37,7 @@ export interface Relationship {
   target: string;
   relationshipType: string;
   weight: number;
-  sourceChunkId: string | null;
+  sourceChunkId: string;
   layer: Layer | null;
   createdAt: number;
 }

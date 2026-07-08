@@ -7,6 +7,7 @@ import { SessionStore } from '../../core/session/session-store.js';
 import { SessionManager } from '../../core/session/index.js';
 import { RetrievalEngine } from '../../core/retrieval/index.js';
 import { compile } from '../../core/compiler/index.js';
+import { loadConfig } from '../../config/index.js';
 import chalk from 'chalk';
 
 export const queryCommand = new Command('query')
@@ -22,14 +23,15 @@ export const queryCommand = new Command('query')
     const sessionManager = new SessionManager(promptsRepo, sessionStore);
     const engine = new RetrievalEngine(chunksRepos, relsRepos);
 
-    console.log(chalk.bold(`\nQuerying ContextOS with: "${prompt}"\n`));
+    try {
+      console.log(chalk.bold(`\nQuerying ContextOS with: "${prompt}"\n`));
 
-    sessionStore.addEvent({
-      sessionId: sessionManager.getSessionId(),
-      eventType: 'user_prompt',
-      content: prompt,
-      relatedFiles: null
-    });
+      sessionStore.addEvent({
+        sessionId: sessionManager.getSessionId(),
+        eventType: 'user_prompt',
+        content: prompt,
+        relatedFiles: null
+      });
 
     const result = await engine.retrieve(prompt);
     
@@ -73,14 +75,20 @@ export const queryCommand = new Command('query')
       console.log('');
     }
 
-    const compiled = compile(result, { maxTokens: 4000 });
+    const config = loadConfig();
+    const compiled = compile(result, { maxTokens: config.maxTokenBudget });
     console.log(chalk.blue.bold(`Compiled Context (${compiled.tokenCount} tokens):`));
     console.log(compiled.output.substring(0, 500) + '...\n[Output truncated]\n');
     
-    sessionStore.addEvent({
-      sessionId: sessionManager.getSessionId(),
-      eventType: 'context_retrieved',
-      content: `Retrieved ${result.chunks.length} chunks. Token count: ${compiled.tokenCount}.`,
-      relatedFiles: null
-    });
+      sessionStore.addEvent({
+        sessionId: sessionManager.getSessionId(),
+        eventType: 'context_retrieved',
+        content: `Retrieved ${result.chunks.length} chunks. Token count: ${compiled.tokenCount}.`,
+        relatedFiles: null
+      });
+    } finally {
+      for (const dbInst of dbs) {
+        dbInst.close();
+      }
+    }
   });

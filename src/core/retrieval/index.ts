@@ -5,6 +5,7 @@ import { detectIntent } from './intent-detector.js';
 import { KeywordMatcher } from './keyword-matcher.js';
 import { scoreChunks } from './scorer.js';
 import { RetrievalOptions, RetrievalResult } from './types.js';
+import { loadConfig } from '../../config/index.js';
 
 export * from './types.js';
 
@@ -21,6 +22,7 @@ export class RetrievalEngine {
 
   public async retrieve(prompt: string, opts?: RetrievalOptions): Promise<RetrievalResult> {
     const startTime = Date.now();
+    const config = loadConfig();
     
     // Step 1: Detect intent
     const intent = detectIntent(prompt);
@@ -33,6 +35,7 @@ export class RetrievalEngine {
     const isIdentifier = (k: string) => /^[a-z]+(?:[A-Z][a-z]+)+$|^[a-z]+(?:_[a-z]+)+$|^[a-z]+(?:\.[a-z]+)+$/.test(k);
     
     // Only extract identifier-shaped keywords from top matches (not generic words)
+    directMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
     for (const match of directMatches.slice(0, 5)) {
       if (match.keywords) {
         match.keywords.split(', ').map((k: string) => k.trim()).filter(isIdentifier).forEach((k: string) => seedEntities.add(k));
@@ -43,7 +46,7 @@ export class RetrievalEngine {
       }
     }
     
-    const expandedEntities = this.expander.expand(Array.from(seedEntities), 2, 20);
+    const expandedEntities = this.expander.expand(Array.from(seedEntities), config.graphExpansionDepth || 2, config.graphExpansionMaxNodes || 20);
     
     // Step 4: Retrieve chunks for expanded entities
     const expandedEntityNames = expandedEntities.map(e => e.entity);
@@ -73,7 +76,7 @@ export class RetrievalEngine {
     const scored = scoreChunks(allChunks, expandedEntities, adjustments || {});
     
     // Step 6: Cap and return
-    const topChunks = scored.slice(0, opts?.maxChunks ?? 15);
+    const topChunks = scored.slice(0, opts?.maxChunks ?? config.maxRetrievalResults);
     
     return {
       chunks: topChunks,

@@ -10,6 +10,7 @@ import { SessionStore } from "../../core/session/session-store.js";
 import { SessionManager } from "../../core/session/index.js";
 import { KnowledgeStore } from "../../core/memory/knowledge-store.js";
 import crypto from "crypto";
+import { loadConfig } from "../../config/index.js";
 
 export function registerGetContextTool(server: McpServer, dbs: DB[]) {
   const chunksRepos = dbs.map(db => new ChunksRepo(db.getInstance()));
@@ -28,13 +29,14 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
     "Retrieve relevant engineering context for a coding task. Call this BEFORE answering any coding question to get relevant conventions, architecture details, service relationships, and implementation patterns. Returns only the context needed for the specific task.",
     {
       prompt: z.string().describe("The user's coding question or task description"),
-      max_tokens: z.number().optional().default(4000).describe("Maximum tokens for returned context"),
+      max_tokens: z.number().optional().default(loadConfig().maxTokenBudget).describe("Maximum tokens for returned context"),
       layers: z.array(z.enum(["global", "workspace", "repo", "session"]))
         .optional()
         .describe("Which context layers to search. Defaults to all layers."),
       output_format: z.enum(["markdown", "xml"]).optional().default("markdown").describe("Format of the compiled context. Use XML if you are Claude or similar LLM that prefers XML."),
     },
     async ({ prompt, max_tokens, layers, output_format }) => {
+      const sessionManager = new SessionManager(promptsRepo, sessionStore);
       try {
         // Record user prompt event
         sessionStore.addEvent({
@@ -45,7 +47,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         });
 
         const result = await engine.retrieve(prompt, {
-          maxChunks: 15,
+          maxChunks: loadConfig().maxRetrievalResults,
           layers: layers as string[],
         });
         

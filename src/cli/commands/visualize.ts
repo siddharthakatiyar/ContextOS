@@ -70,8 +70,8 @@ export const visualizeCommand = new Command('visualize')
 <body>
 <div id="mynetwork"></div>
 <script type="text/javascript">
-  const nodes = new vis.DataSet(${JSON.stringify(graphData.nodes)});
-  const edges = new vis.DataSet(${JSON.stringify(graphData.edges)});
+  const nodes = new vis.DataSet(${JSON.stringify(graphData.nodes).replace(/</g, '\\u003c')});
+  const edges = new vis.DataSet(${JSON.stringify(graphData.edges).replace(/</g, '\\u003c')});
   const container = document.getElementById('mynetwork');
   const data = { nodes: nodes, edges: edges };
   const options = {

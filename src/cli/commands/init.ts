@@ -33,7 +33,8 @@ export const initCommand = new Command('init')
     const { loadConfig } = await import('../../config/index.js');
     const config = loadConfig();
 
-    // SAFETY: These patterns are always excluded, regardless of user config
+    try {
+      // SAFETY: These patterns are always excluded, regardless of user config
     const SAFETY_IGNORE = [
       '**/node_modules/**',
       '**/.git/**',
@@ -233,4 +234,7 @@ export const initCommand = new Command('init')
     }
 
     console.log('ContextOS initialization complete. You can now use the agent!');
+    } finally {
+      db.close();
+    }
   });

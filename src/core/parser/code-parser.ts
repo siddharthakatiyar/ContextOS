@@ -93,9 +93,11 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
     return { filePath, language, symbols };
   }
 
+  parser.reset();
   const tree = parser.parse(rawContent);
 
   function traverse(node: any, parentName?: string) {
+    let currentParent = parentName;
     if (FUNCTION_TYPES.has(node.type)) {
       const nameNode = node.childForFieldName('name') || node.children.find((c: any) => c.type === 'identifier' || c.type === 'name');
       if (nameNode) {
@@ -105,7 +107,7 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
           startLine: node.startPosition.row + 1,
           endLine: node.endPosition.row + 1,
           body: node.text,
-          parent: parentName
+          parent: currentParent
         });
       }
     } else if (CLASS_TYPES.has(node.type)) {
@@ -118,14 +120,14 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
           startLine: node.startPosition.row + 1,
           endLine: node.endPosition.row + 1,
           body: node.text,
-          parent: parentName
+          parent: currentParent
         });
-        parentName = className;
+        currentParent = className;
       }
     }
 
     for (let i = 0; i < node.childCount; i++) {
-      traverse(node.child(i)!, parentName);
+      traverse(node.child(i)!, currentParent);
     }
   }
 
