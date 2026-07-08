@@ -16,6 +16,15 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
   const watcher = chokidar.watch(cwd, {
     ignored: [
       /(^|[\/\\])\../, // ignore dotfiles
+      (p: string) => {
+        const normalized = p.replace(/\\/g, '/');
+        return normalized.includes('/node_modules/') || normalized.endsWith('/node_modules') ||
+               normalized.includes('/.git/') || normalized.endsWith('/.git') ||
+               normalized.includes('/.next/') || normalized.endsWith('/.next') ||
+               normalized.includes('/dist/') || normalized.endsWith('/dist') ||
+               normalized.includes('/build/') || normalized.endsWith('/build') ||
+               normalized.includes('/coverage/') || normalized.endsWith('/coverage');
+      },
       ...config.ignorePatterns.map(p => `**/${p}`)
     ],
     persistent: true,
