@@ -5,8 +5,12 @@ import { ContextOSConfig } from './types.js';
 export const defaultConfig: ContextOSConfig = {
   // Note: dbPath is calculated at module-load time, but loadConfig() deep-clones
   // this object so the dbPath will be resolved correctly later.
-  dbPath: path.join(process.cwd(), '.contextos', 'index.db'),
-  globalContextDir: path.join(os.homedir(), '.contextos', 'global'),
+  get dbPath() {
+    return path.join(process.cwd(), '.contextos', 'index.db');
+  },
+  get globalContextDir() {
+    return path.join(os.homedir(), '.contextos', 'global');
+  },
   
   indexablePatterns: [
     '**/*.md',
@@ -44,6 +48,17 @@ export const defaultConfig: ContextOSConfig = {
     '__pycache__/**',
     'target/**',
     'vendor/**',
+    
+    // OS-level exclusions to prevent system-wide indexing if homedir is accidentally used
+    'Library/**',
+    'Applications/**',
+    'Downloads/**',
+    'Pictures/**',
+    'Music/**',
+    'Movies/**',
+    'go/pkg/**',
+    'Desktop/**',
+    
     '*.min.js',
     '*.min.css',
     '*.map',

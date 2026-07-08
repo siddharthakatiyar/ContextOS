@@ -1,5 +1,63 @@
 import { ScoredChunk } from '../retrieval/types.js';
 
+function stripComments(code: string): string {
+  let out = '';
+  let i = 0;
+  let inString = false;
+  let stringChar = '';
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  while (i < code.length) {
+    const char = code[i];
+    const nextChar = code[i + 1] || '';
+
+    if (inLineComment) {
+      if (char === '\n') {
+        inLineComment = false;
+        out += char;
+      }
+      i++;
+    } else if (inBlockComment) {
+      if (char === '*' && nextChar === '/') {
+        inBlockComment = false;
+        i += 2;
+      } else {
+        i++;
+      }
+    } else if (inString) {
+      if (char === '\\') {
+        out += char + nextChar;
+        i += 2;
+      } else if (char === stringChar) {
+        inString = false;
+        out += char;
+        i++;
+      } else {
+        out += char;
+        i++;
+      }
+    } else {
+      if (char === '"' || char === "'" || char === '`') {
+        inString = true;
+        stringChar = char;
+        out += char;
+        i++;
+      } else if (char === '/' && nextChar === '/') {
+        inLineComment = true;
+        i += 2;
+      } else if (char === '/' && nextChar === '*') {
+        inBlockComment = true;
+        i += 2;
+      } else {
+        out += char;
+        i++;
+      }
+    }
+  }
+  return out.replace(/^\s*[\r\n]/gm, '');
+}
+
 export function compressChunks(chunks: ScoredChunk[], maxTokens: number): ScoredChunk[] {
   // Strategy 0: Deduplicate by content hash
   const uniqueHashes = new Set<string>();
@@ -21,11 +79,8 @@ export function compressChunks(chunks: ScoredChunk[], maxTokens: number): Scored
     const chunk = compressed[i];
     if (chunk.language && chunk.fileType !== 'markdown') {
       const originalLen = chunk.content.length;
-      // Strip block and line comments (basic approximation)
-      chunk.content = chunk.content
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/\/\/.*/g, '')
-        .replace(/^\s*[\r\n]/gm, ''); // remove empty lines
+      // Strip block and line comments while ignoring string literals
+      chunk.content = stripComments(chunk.content);
       
       const newTokens = Math.floor(chunk.tokenCount * (chunk.content.length / originalLen));
       currentTokens -= (chunk.tokenCount - newTokens);

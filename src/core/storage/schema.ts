@@ -185,59 +185,63 @@ export function applyMigrations(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
   `);
   
-  const versionRow = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
-  const currentVersion = versionRow ? versionRow.version : 0;
+  const runMigrations = db.transaction(() => {
+    const versionRow = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
+    const currentVersion = versionRow ? versionRow.version : 0;
 
-  if (currentVersion === 0) {
-    // We are either a new database or upgrading from 0.1.0 where schema_version didn't exist
-    // If files table exists, it's an upgrade
-    const hasFiles = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='files'").get();
-    
-    if (hasFiles) {
-      console.log('Migrating ContextOS database to v0.2.0...');
-      try {
-        db.exec(`
-          ALTER TABLE chunks ADD COLUMN file_type TEXT;
-          ALTER TABLE chunks ADD COLUMN language TEXT;
-          ALTER TABLE chunks ADD COLUMN symbol_name TEXT;
-          ALTER TABLE chunks ADD COLUMN symbol_kind TEXT;
-        `);
-      } catch (e: any) {
-        // columns might already exist if migration partially failed
-      }
-    }
-    
-    // Run the full schema SQL to ensure all tables (like sessions) exist
-    db.exec(SCHEMA_SQL);
-    
-    if (hasFiles) {
-      const updateStmt = db.prepare('UPDATE schema_version SET version = 3');
-      if (updateStmt.run().changes === 0) {
-        db.prepare('INSERT INTO schema_version (version) VALUES (3)').run();
-      }
-    } else {
-      db.prepare('INSERT INTO schema_version (version) VALUES (3)').run();
-    }
-  } else if (currentVersion === 1) {
-    console.log('Migrating ContextOS database to v0.3.0 (Cross-Session Memory)...');
-    try {
-      // Version 2 adds knowledge_facts
-      db.exec(SCHEMA_SQL);
-      db.prepare('UPDATE schema_version SET version = 2').run();
+    if (currentVersion === 0) {
+      // We are either a new database or upgrading from 0.1.0 where schema_version didn't exist
+      // If files table exists, it's an upgrade
+      const hasFiles = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='files'").get();
       
-      // Upgrade straight to version 3
-      db.prepare('UPDATE schema_version SET version = 3').run();
-    } catch (e: any) {
-      console.error(`Migration from v1 failed: ${e.message}`);
-    }
-  } else if (currentVersion === 2) {
-    console.log('Migrating ContextOS database to v0.4.0 (Adaptive Scoring)...');
-    try {
-      // Version 3 adds feedback_signals
+      if (hasFiles) {
+        console.log('Migrating ContextOS database to v0.2.0...');
+        try {
+          db.exec(`
+            ALTER TABLE chunks ADD COLUMN file_type TEXT;
+            ALTER TABLE chunks ADD COLUMN language TEXT;
+            ALTER TABLE chunks ADD COLUMN symbol_name TEXT;
+            ALTER TABLE chunks ADD COLUMN symbol_kind TEXT;
+          `);
+        } catch (e: any) {
+          // columns might already exist if migration partially failed
+        }
+      }
+      
+      // Run the full schema SQL to ensure all tables (like sessions) exist
       db.exec(SCHEMA_SQL);
-      db.prepare('UPDATE schema_version SET version = 3').run();
-    } catch (e: any) {
-      console.error(`Migration to v3 failed: ${e.message}`);
+      
+      if (hasFiles) {
+        const updateStmt = db.prepare('UPDATE schema_version SET version = 3');
+        if (updateStmt.run().changes === 0) {
+          db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (3)').run();
+        }
+      } else {
+        db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (3)').run();
+      }
+    } else if (currentVersion === 1) {
+      console.log('Migrating ContextOS database to v0.3.0 (Cross-Session Memory)...');
+      try {
+        // Version 2 adds knowledge_facts
+        db.exec(SCHEMA_SQL);
+        db.prepare('UPDATE schema_version SET version = 2').run();
+        
+        // Upgrade straight to version 3
+        db.prepare('UPDATE schema_version SET version = 3').run();
+      } catch (e: any) {
+        console.error(`Migration from v1 failed: ${e.message}`);
+      }
+    } else if (currentVersion === 2) {
+      console.log('Migrating ContextOS database to v0.4.0 (Adaptive Scoring)...');
+      try {
+        // Version 3 adds feedback_signals
+        db.exec(SCHEMA_SQL);
+        db.prepare('UPDATE schema_version SET version = 3').run();
+      } catch (e: any) {
+        console.error(`Migration to v3 failed: ${e.message}`);
+      }
     }
-  }
+  });
+
+  runMigrations();
 }

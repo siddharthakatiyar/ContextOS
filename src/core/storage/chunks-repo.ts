@@ -1,5 +1,6 @@
 import { Database } from 'better-sqlite3';
 import { Chunk, Layer, ChunkStats } from './types.js';
+import { sanitizeFTSQuery } from './fts-sanitizer.js';
 
 export interface ScoredChunk extends Chunk {
   score: number;
@@ -113,7 +114,8 @@ export class ChunksRepo {
       JOIN chunks c ON chunks_fts.rowid = c.rowid
       WHERE chunks_fts MATCH ?
     `;
-    const params: any[] = [query];
+    const sanitizedQuery = sanitizeFTSQuery(query);
+    const params: any[] = [sanitizedQuery];
     
     if (opts?.layer) {
       sql += ` AND c.layer = ?`;
@@ -137,7 +139,8 @@ export class ChunksRepo {
       ORDER BY score LIMIT 20
     `;
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all(`"${keyword.replace(/"/g, '""')}"`) as any[];
+    const sanitizedKeyword = sanitizeFTSQuery(keyword);
+    const rows = stmt.all(`"${sanitizedKeyword.replace(/"/g, '""')}"`) as any[];
     return rows.map(r => this.mapRow(r)) as Chunk[];
   }
 

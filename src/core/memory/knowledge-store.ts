@@ -1,5 +1,6 @@
 import { DB } from '../storage/database.js';
 import crypto from 'crypto';
+import { loadConfig } from '../../config/index.js';
 
 export interface KnowledgeFact {
   id: string;
@@ -92,7 +93,7 @@ export class KnowledgeStore {
     `).all(category, limit) as KnowledgeFact[];
   }
 
-  public getAllFacts(limit: number = 50): KnowledgeFact[] {
+  public getAllFacts(limit: number = loadConfig().ftsLimit): KnowledgeFact[] {
     return this.db.getInstance().prepare(`
       SELECT * FROM knowledge_facts 
       ORDER BY confidence DESC 

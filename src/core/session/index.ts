@@ -1,6 +1,9 @@
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
 import { PromptsRepo } from '../storage/prompts-repo.js';
 import { SessionChunk } from './types.js';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export * from './types.js';
 export * from './session-store.js';
@@ -35,7 +38,8 @@ export class SessionManager {
     
     // 1. Git branch context
     try {
-      const branch = execSync('git rev-parse --abbrev-ref HEAD', { stdio: 'pipe' }).toString().trim();
+      const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
+      const branch = stdout.trim();
       if (branch) {
         chunks.push({
           id: `session:branch:${this.sessionId}`,

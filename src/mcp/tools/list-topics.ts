@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DB } from "../../core/storage/database.js";
 import { ChunksRepo } from "../../core/storage/chunks-repo.js";
+import { loadConfig } from "../../config/index.js";
 
 export function registerListTopicsTool(server: McpServer, db: DB) {
   server.tool(
@@ -15,7 +16,7 @@ export function registerListTopicsTool(server: McpServer, db: DB) {
           SELECT DISTINCT source_file, section_title, summary
           FROM chunks
           WHERE file_type = 'md' AND section_depth = 1 AND section_title IS NOT NULL
-          LIMIT 50
+          LIMIT ${loadConfig().ftsLimit}
         `);
         const rows = stmt.all() as any[];
 

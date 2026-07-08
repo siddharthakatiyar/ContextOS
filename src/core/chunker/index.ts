@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { ParsedDocument, Section } from '../parser/types.js';
 import { Chunk } from '../storage/types.js';
+import { loadConfig } from '../../config/index.js';
 import { ChunkCreationOptions } from './types.js';
 import { estimateTokens } from '../../utils/tokens.js';
 import { hashContent } from '../../utils/hash.js';
@@ -8,7 +9,7 @@ import { STOPWORDS } from '../../utils/stopwords.js';
 
 export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions): Chunk[] {
   const chunks: Chunk[] = [];
-  const maxTokens = options.maxChunkTokens || 1500;
+  const maxTokens = options.maxChunkTokens || loadConfig().maxChunkTokens;
 
   function traverse(sections: Section[], breadcrumbs: string[] = []) {
     for (const section of sections) {
@@ -90,6 +91,7 @@ function createChunk(content: string, titleContext: string, depth: number, fileP
     hash: contentHashVal,
     importance: options.importance ?? 5,
     tokenCount: estimateTokens(content),
+    fileType: 'markdown',
     createdAt: Date.now(),
     updatedAt: Date.now()
   };

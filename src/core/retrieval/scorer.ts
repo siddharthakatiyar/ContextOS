@@ -34,7 +34,7 @@ export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEnt
     finalScore += Math.min((chunk.importance || 0), 10) / 10 * 2.0;
 
     // Feedback adjustment
-    if (chunk.id && feedbackAdjustments[chunk.id]) {
+    if (chunk.id && feedbackAdjustments[chunk.id] !== undefined) {
       finalScore += feedbackAdjustments[chunk.id];
     }
 

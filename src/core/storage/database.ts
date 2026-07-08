@@ -13,7 +13,6 @@ export class DB {
   private db: Database.Database;
 
   constructor(dbPath?: string) {
-    const config = loadConfig();
     let resolvedPath = dbPath;
     if (!resolvedPath) {
       // Per-project isolation: use .contextos/index.db in current working directory

@@ -9,7 +9,7 @@ export interface ExpandedEntity {
 }
 
 // Minimum weight to traverse an edge (low-weight = noise)
-const MIN_EDGE_WEIGHT = 1.2;
+const MIN_EDGE_WEIGHT = 0.9;
 // If a node has more connections than this, it's a hub (e.g., "license") — skip it
 const MAX_CONNECTIONS_THRESHOLD = 30;
 // Minimum entity length to consider
@@ -31,13 +31,18 @@ export class GraphExpander {
 
   public expand(seeds: string[], maxDepth: number = 2, maxNodes: number = 20): ExpandedEntity[] {
     const visited = new Set<string>();
-    const queue: { entity: string; depth: number; weight: number }[] = [];
+    const queue: { entity: string; depth: number; weight: number; relType?: string }[] = [];
+    const pushQueue = (item: { entity: string; depth: number; weight: number; relType?: string }) => {
+      queue.push(item);
+      queue.sort((a, b) => b.weight - a.weight);
+    };
+    
     const results: ExpandedEntity[] = [];
 
     // Only seed with quality entities
     for (const seed of seeds) {
       if (isQualityEntity(seed)) {
-        queue.push({ entity: seed, depth: 0, weight: 1.0 });
+        pushQueue({ entity: seed, depth: 0, weight: 1.0 });
       }
     }
 
@@ -52,7 +57,7 @@ export class GraphExpander {
       if (current.depth > 0) {
         results.push({
           entity: current.entity,
-          relationshipType: 'expanded',
+          relationshipType: current.relType || 'expanded',
           depth: current.depth,
           score: current.weight * Math.pow(0.5, current.depth) // decay by depth
         });
@@ -72,10 +77,11 @@ export class GraphExpander {
 
           const neighbor = rel.source === current.entity ? rel.target : rel.source;
           if (!visited.has(neighbor) && isQualityEntity(neighbor)) {
-            queue.push({ 
+            pushQueue({ 
               entity: neighbor, 
               depth: current.depth + 1, 
-              weight: rel.weight 
+              weight: rel.weight,
+              relType: rel.relationshipType
             });
           }
         }

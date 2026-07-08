@@ -82,7 +82,12 @@ export class ContextOSDaemon {
         try {
           process.kill(pid, 0); // Check if alive
           throw new Error(`Daemon is already running with PID ${pid}`);
-        } catch {
+        } catch (err: any) {
+          if (err.code === 'EPERM') {
+            throw new Error(`Daemon is already running with PID ${pid} (owned by another user)`);
+          } else if (err.code !== 'ESRCH') {
+            throw err;
+          }
           // Stale PID file, clean it up
         }
       }
@@ -139,7 +144,6 @@ export class ContextOSDaemon {
     } catch {
       // Ignore errors on shutdown
     }
-    process.exit(0);
   }
 
   private handleConnection(socket: net.Socket) {

@@ -6,6 +6,16 @@ import path from 'path';
 
 export * from './types.js';
 
+function escapeXml(unsafe: string | null | undefined): string {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 export function compile(result: RetrievalResult, opts: CompilerOptions): CompiledContext {
   const compressedChunks = compressChunks(result.chunks, opts.maxTokens);
   
@@ -25,9 +35,9 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     let xmlOutput = `<contextos_context>\n`;
     
     const formatXmlChunk = (chunk: any) => {
-      let out = `<chunk id="${chunk.id}" layer="${chunk.layer}" source="${path.basename(chunk.sourceFile)}"`;
-      if (chunk.symbolName) out += ` symbol="${chunk.symbolName}" kind="${chunk.symbolKind}"`;
-      if (chunk.sectionTitle) out += ` section="${chunk.sectionTitle}"`;
+      let out = `<chunk id="${escapeXml(chunk.id)}" layer="${escapeXml(chunk.layer)}" source="${escapeXml(path.basename(chunk.sourceFile))}"`;
+      if (chunk.symbolName) out += ` symbol="${escapeXml(chunk.symbolName)}" kind="${escapeXml(chunk.symbolKind)}"`;
+      if (chunk.sectionTitle) out += ` section="${escapeXml(chunk.sectionTitle)}"`;
       out += `>\n`;
       out += `<![CDATA[\n${chunk.content.trim()}\n]]>\n`;
       out += `</chunk>\n`;
@@ -57,7 +67,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     if (result.expandedEntities.length > 0) {
       xmlOutput += `<related_entities>\n`;
       for (const e of result.expandedEntities) {
-        xmlOutput += `  <entity name="${e.entity}" relationship="${e.relationshipType}" score="${e.score}" />\n`;
+        xmlOutput += `  <entity name="${escapeXml(e.entity)}" relationship="${escapeXml(e.relationshipType)}" score="${e.score}" />\n`;
       }
       xmlOutput += `</related_entities>\n`;
     }

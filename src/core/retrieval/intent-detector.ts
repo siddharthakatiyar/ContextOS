@@ -23,7 +23,9 @@ export function detectIntent(prompt: string): DetectedIntent {
   
   const identifiers = prompt.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g)    // camelCase
     ?.concat(prompt.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])           // snake_case
-    ?.concat(prompt.match(/\b[a-z]+(?:\.[a-z]+)+\b/g) ?? []) ?? [];   // dot.notation
+    ?.concat(prompt.match(/\b[a-z]+(?:\.[a-z]+)+\b/g) ?? [])          // dot.notation
+    ?.concat(prompt.match(/\b[A-Z][a-zA-Z0-9]+\b/g) ?? [])            // PascalCase
+    ?.concat(prompt.match(/\b[A-Z_]+\b/g) ?? []) ?? [];               // UPPER_CASE
   
   const quoted = prompt.match(/"([^"]+)"|'([^']+)'/g)
     ?.map(q => q.replace(/['"]/g, '')) ?? [];
