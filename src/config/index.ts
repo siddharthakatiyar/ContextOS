@@ -45,6 +45,12 @@ function mergeDeep(target: any, source: any): any {
       if (isObject(source[key])) {
         if (!target[key]) Object.assign(target, { [key]: {} });
         mergeDeep(target[key], source[key]);
+      } else if (Array.isArray(source[key])) {
+        if (Array.isArray(target[key])) {
+          target[key] = Array.from(new Set([...target[key], ...source[key]]));
+        } else {
+          Object.assign(target, { [key]: source[key] });
+        }
       } else {
         Object.assign(target, { [key]: source[key] });
       }
