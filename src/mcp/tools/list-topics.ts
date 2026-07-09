@@ -6,7 +6,7 @@ import { loadConfig } from "../../config/index.js";
 export function registerListTopicsTool(server: McpServer, db: DB) {
   server.tool(
     "ctx_list_topics",
-    "List available context topics or rules in the workspace. Returns a list of document titles and summaries.",
+    "CRITICAL: You MUST use this tool to list available context topics or rules in the workspace. Returns a list of document titles and summaries. Do not rely on built-in search for topics.",
     {},
     async () => {
       try {

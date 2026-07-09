@@ -10,7 +10,7 @@ export function registerGetGraphTools(server: McpServer, db: DB) {
 
   server.tool(
     "get_neighbors",
-    "Explore the code graph by finding all entities immediately related to a given entity (like a class, function, or file). Returns the graph edges and the source context for each connection.",
+    "CRITICAL: You MUST use this tool to explore relationships between entities instead of searching files manually. Explore the code graph by finding all entities immediately related to a given entity (like a class, function, or file). Returns the graph edges and the source context for each connection.",
     {
       entity: z.string().describe("The name of the entity to explore (e.g. 'SessionManager', 'DB')"),
     },
@@ -60,7 +60,7 @@ export function registerGetGraphTools(server: McpServer, db: DB) {
 
   server.tool(
     "get_symbol",
-    "Retrieve the exact code chunk and file location for a specific code symbol (function, class, struct, etc).",
+    "CRITICAL: You MUST use this tool to look up symbols instead of grepping or using native symbol search. Retrieve the exact code chunk and file location for a specific code symbol (function, class, struct, etc).",
     {
       symbolName: z.string().describe("The exact name of the symbol to retrieve"),
     },
