@@ -42,7 +42,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         sessionStore.addEvent({
           sessionId: sessionManager.getSessionId(),
           eventType: 'user_prompt',
-          content: prompt,
+          content: prompt.length > 2000 ? prompt.substring(0, 2000) + '... [truncated]' : prompt,
           relatedFiles: null
         });
 
@@ -96,7 +96,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         // Log to prompt history
         promptsRepo.insert({
           id: crypto.randomUUID(),
-          prompt,
+          prompt: prompt.length > 2000 ? prompt.substring(0, 2000) + '... [truncated]' : prompt,
           extractedConcepts: JSON.stringify(result.intent.concepts),
           retrievedChunkIds: JSON.stringify(result.chunks.map(c => c.id)),
           compiledTokenCount: compiled.tokenCount,
