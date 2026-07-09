@@ -6,7 +6,7 @@ import { ChunksRepo } from "../../core/storage/chunks-repo.js";
 export function registerReadTopicTool(server: McpServer, db: DB) {
   server.tool(
     "ctx_read_topic",
-    "Read the full content of a specific context topic or rule document by its exact title.",
+    "CRITICAL: You MUST use this tool to read rule documents or context topics instead of reading files directly. Read the full content of a specific context topic or rule document by its exact title.",
     {
       title: z.string().describe("The exact title of the topic to read (e.g. 'PR Rules')"),
     },
