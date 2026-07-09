@@ -79,6 +79,8 @@ export function compressChunks(chunks: ScoredChunk[], maxTokens: number): Scored
     const chunk = compressed[i];
     if (chunk.language && chunk.fileType !== 'markdown') {
       const originalLen = chunk.content.length;
+      if (originalLen === 0) continue; // prevent NaN
+      
       // Strip block and line comments while ignoring string literals
       chunk.content = stripComments(chunk.content);
       
