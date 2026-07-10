@@ -18,6 +18,23 @@ export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEnt
   const scored = chunks.map(chunk => {
     let finalScore = chunk.score || 0;
 
+    const lowerPath = chunk.sourceFile.toLowerCase();
+    
+    // 1. Hard penalty for poison paths
+    if (
+      lowerPath.includes('/node_modules/') || 
+      lowerPath.includes('changelog') ||
+      lowerPath.endsWith('.map') ||
+      lowerPath.endsWith('.lock')
+    ) {
+      finalScore = -9999;
+    }
+
+    // 2. Huge boost for architectural source-of-truth docs (CLAUDE.md, engineering.md)
+    if (lowerPath.endsWith('claude.md') || lowerPath.endsWith('engineering.md')) {
+      finalScore += 20; // Massive additive boost to float rules to the top
+    }
+
     // Graph expansion boost
     if (chunk.keywords) {
       const chunkKeywords = chunk.keywords.split(', ').map(k => k.trim());
@@ -42,7 +59,7 @@ export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEnt
     finalScore *= (layerBoosts[chunk.layer as keyof typeof layerBoosts] || 1.0);
 
     return { ...chunk, score: finalScore };
-  });
+  }).filter(chunk => chunk.score > -9000);
 
   // Sort by score descending
   scored.sort((a, b) => b.score - a.score);

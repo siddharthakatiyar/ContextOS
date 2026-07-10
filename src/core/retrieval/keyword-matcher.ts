@@ -79,6 +79,18 @@ export class KeywordMatcher {
       runFTS('"pr" OR "pull request" OR "rules" OR "guidelines"', 5.0);
     }
 
+    // Strategy 5: Semantic routing overrides
+    const lowerConcepts = intent.concepts.map(c => c.toLowerCase());
+    const hasErrorConcepts = lowerConcepts.some(c => 
+      c.includes('error') || 
+      c.includes('exception') || 
+      c.includes('frontend-safe') || 
+      c.includes('fail')
+    );
+    if (hasErrorConcepts) {
+      runFTS('"CLAUDE.md" OR "engineering.md" OR "errorHandler" OR "errorResponse"', 20.0);
+    }
+
     return Array.from(results.values());
   }
 
