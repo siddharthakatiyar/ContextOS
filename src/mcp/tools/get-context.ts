@@ -26,13 +26,14 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
 
   server.tool(
     "get_context",
-    "CRITICAL: You MUST use this tool to answer ANY question about the codebase, architecture, or how something works BEFORE using your built-in codebase search. ContextOS provides superior graph-based context. Retrieve relevant engineering context for a coding task, including conventions, service relationships, and implementation patterns. DO NOT call this tool repeatedly in a loop for the same query if you see [...truncated]; use the read_file tool to read the full file instead.",
+    "CRITICAL: You MUST use this tool to answer ANY question about the codebase, architecture, or how something works BEFORE using your built-in codebase search. ContextOS provides superior graph-based context. Retrieve relevant engineering context for a coding task, including conventions, service relationships, and implementation patterns. DO NOT call this tool repeatedly in a loop for the same query if you see [...truncated]; use the read_file tool to read the full file instead. By default, this search is restricted to local code (session, workspace, repo). If you specifically need shared context, third-party libraries, or node_modules, you MUST explicitly include 'global' in the layers array.",
     {
       prompt: z.string().describe("The user's coding question or task description"),
       max_tokens: z.number().max(8000).optional().default(loadConfig().maxTokenBudget).describe("Maximum tokens for returned context. Capped at 8000 to prevent context overflow."),
       layers: z.array(z.enum(["global", "workspace", "repo", "session"]))
         .optional()
-        .describe("Which context layers to search. Defaults to all layers."),
+        .default(["session", "workspace", "repo"])
+        .describe("Which context layers to search. By default searches local code only. Include 'global' if you explicitly need shared third-party or dependency context."),
       output_format: z.enum(["markdown", "xml"]).optional().default("markdown").describe("Format of the compiled context. Use XML if you are Claude or similar LLM that prefers XML."),
     },
     async ({ prompt, max_tokens, layers, output_format }) => {
