@@ -10,6 +10,7 @@ import { registerListTopicsTool } from "./tools/list-topics.js";
 import { registerReadTopicTool } from "./tools/read-topic.js";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerFeedbackTools } from "./tools/feedback.js";
+import { registerReadFileTool } from "./tools/read-file.js";
 import { DB } from "../core/storage/database.js";
 import { checkForUpdates } from "../core/updater/index.js";
 import fs from "fs";
@@ -70,6 +71,7 @@ export async function startMcpServer(dbs: DB[]) {
   registerReadTopicTool(server, dbs[0]);
   registerKnowledgeTools(server, dbs);
   registerFeedbackTools(server, dbs);
+  registerReadFileTool(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
