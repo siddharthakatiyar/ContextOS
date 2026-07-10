@@ -26,10 +26,10 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
 
   server.tool(
     "get_context",
-    "CRITICAL: You MUST use this tool to answer ANY question about the codebase, architecture, or how something works BEFORE using your built-in codebase search. ContextOS provides superior graph-based context. Retrieve relevant engineering context for a coding task, including conventions, service relationships, and implementation patterns.",
+    "CRITICAL: You MUST use this tool to answer ANY question about the codebase, architecture, or how something works BEFORE using your built-in codebase search. ContextOS provides superior graph-based context. Retrieve relevant engineering context for a coding task, including conventions, service relationships, and implementation patterns. DO NOT call this tool repeatedly in a loop for the same query if you see [...truncated]; use the read_file tool to read the full file instead.",
     {
       prompt: z.string().describe("The user's coding question or task description"),
-      max_tokens: z.number().optional().default(loadConfig().maxTokenBudget).describe("Maximum tokens for returned context"),
+      max_tokens: z.number().max(8000).optional().default(loadConfig().maxTokenBudget).describe("Maximum tokens for returned context. Capped at 8000 to prevent context overflow."),
       layers: z.array(z.enum(["global", "workspace", "repo", "session"]))
         .optional()
         .describe("Which context layers to search. Defaults to all layers."),
