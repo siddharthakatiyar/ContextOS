@@ -6,19 +6,23 @@ ContextOS indexes your repository into a semantic graph so agents like Cursor, C
 
 Instead of sending entire files, ContextOS sends only the code the model actually needs.
 
-**Current version: 0.6.0**
+**Current version: 0.6.3**
 
 ## Why ContextOS?
 
 Instead of relying on ripgrep and whole-file context, ContextOS understands your repository at the semantic level.
 
 - ✓ **Function-level retrieval** (AST symbols + large template-literal consts)
+- ✓ **Sub-chunked large symbols** — oversized functions keep a parent chunk plus additive line-ranged segments (comment-derived segment titles)
+- ✓ **Refactor-for-retrieval** — large scorers/compilers split into named helpers so deep markers stay intact
 - ✓ **Hybrid search** — FTS5 + symbol/filename boosts + RRF fusion (optional local embeddings)
 - ✓ **Automatic dependency expansion** via the relationship graph
-- ✓ **Precision-first compile** — top-K full bodies + signature stubs under a token budget
+- ✓ **Precision-first compile** — top-K full bodies + path:line stubs under a token budget
+- ✓ **Cheap expand path** — stubs carry line ranges; `ctx_read_file` supports ranged reads; `get_symbol` for one symbol
 - ✓ **Cross-session memory**
 - ✓ **Incremental indexing** with stable chunk IDs and line ranges
 - ✓ **Local-first (SQLite + FTS5 + optional sqlite-vec)**
+- ✓ **Confidence-gated embeddings** — emb kNN only when keyword confidence is low (or when explicitly enabled)
 - ✓ **Works with Cursor, Claude Code, and any MCP client**
 
 ## Quick Start
@@ -54,12 +58,12 @@ contextos reindex
 
 ### Measured E2E comparison (contextOS repo, 20 architectural queries)
 
-End-to-end tokens include search **and** any follow-up file Reads until the implementation body is present. Counts use `gpt-tokenizer`. ContextOS 0.6.0 default config (embeddings indexed; embedding retrieval off).
+End-to-end tokens include search **and** any follow-up file Reads until the implementation body is present. Counts use `gpt-tokenizer`. ContextOS 0.6.3 default config (embeddings indexed; embedding retrieval off unless keyword confidence is low; large symbols sub-chunked; scorer/compressor refactored for retrieval).
 
-| Metric | ContextOS 0.6.0 | Built-in Grep+Read |
+| Metric | ContextOS 0.6.3 | Built-in Grep+Read |
 |--------|-----------------|--------------------|
-| Avg tokens / query | **978** | 2,591 |
-| Total tokens (20 queries) | **19,566** | 51,820 (−62%) |
+| Avg tokens / query | **1,054** | 2,891 |
+| Total tokens (20 queries) | **21,083** | 57,828 (−64%) |
 | Search accuracy (1–5) | **5.0** | 3.0 |
 | Full body from first call | **20/20** | 0/20 |
 | Accuracy wins (search) | **20–0** | — |
@@ -68,14 +72,15 @@ End-to-end tokens include search **and** any follow-up file Reads until the impl
 
 ### Held-out real-life queries (15 prompts, not used for tuning)
 
-| Metric | ContextOS 0.6.0 | Built-in Grep+Read |
+| Metric | ContextOS 0.6.3 | Built-in Grep+Read |
 |--------|-----------------|--------------------|
-| Full body from search | **7/15** | 0/15 |
-| Accuracy wins (search) | **7–0** (8 ties) | — |
-| Avg tokens / query | 2,472* | 2,173 |
-| One-call complete | **7/15** | — |
+| Full body from search | **8/15** | 0/15 |
+| Accuracy wins (search) | **8–0** (7 ties) | — |
+| Avg tokens / query | **2,544** | 2,651 |
+| One-call complete | **8/15** | — |
+| Token delta (total) | **−1,600** | — |
 
-\*Holdout ContextOS totals rise when search misses the marker and a follow-up Read is required (8/15). Search-only payloads on those misses stay ~1k tokens; Built-in still never returns a full body from Grep alone.
+Holdout follow-ups prefer stub `path:line` ranges via `ctx_read_file` when present (vs whole-file Reads). Built-in still never returns a full body from Grep alone.
 
 ## Real Retrieval Example
 
@@ -150,13 +155,13 @@ If both a class outline and its methods survive ranking, oversized class bodies 
 
 **Tiered, precision-first output**  
 - Top-K chunks (adaptive, usually up to 3) render as **full bodies**
-- Remaining hits become **one-line stubs** (`kind name — file`) so the agent can `Read` if needed
-- Query-aware truncation preserves high-signal lines
+- Remaining hits become **stubs with path + line ranges** (`symbol — path/file.ts:12-84`) so agents can `ctx_read_file` or `get_symbol` instead of whole-file Reads
+- Query-aware truncation preserves high-signal lines, comments/JSDoc, and branch headers
 - Related entities capped; File Structure capped to one chunk
 - Framing (headers / fences) counts toward the token budget (`gpt-tokenizer`)
 
 **Diagnostic header**  
-`get_context` prefixes a single line: `ContextOS | tokens: N/M`.
+`get_context` prefixes a single line: `ContextOS | tokens: N/M`. When stubs remain, a one-line footer steers agents to `get_symbol` / ranged `ctx_read_file`.
 
 ### Memory
 
@@ -187,12 +192,13 @@ Defaults live in `src/config/defaults.ts` and can be overridden via:
 
 Array keys in config use `!` prefix overrides where documented (replace rather than merge).
 
-| Key | Default (0.6.0) | Notes |
+| Key | Default (0.6.3) | Notes |
 |-----|-----------------|--------|
 | `maxTokenBudget` | `1200` | Default compile budget; `get_context` `max_tokens` still accepts up to `8000` |
 | `maxRetrievalResults` | `12` | Cap on scored chunks before compile |
 | `ftsLimit` | `15` | Per-query FTS hit limit |
 | `maxChunkTokens` | `1500` | Soft cap when creating chunks |
+| `maxSymbolChunkTokens` | `900` | Function/method bodies above this also emit additive segment chunks |
 | `layerBoosts` | session 1.5 / repo 1.3 / workspace 1.1 / global 1.0 | Multiplicative score boosts |
 | `graphExpansionDepth` | `2` | Relationship walk depth |
 | `graphExpansionMaxNodes` | `20` | Cap on expanded entities |
@@ -236,19 +242,19 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 
 ## Quantifiable Benefits
 
-- **~62% fewer E2E tokens than Grep+Read** on the 20-query architectural suite (978 vs 2,591 avg), by returning the implementation body in one call instead of Grep + mandatory Reads.
+- **~62% fewer E2E tokens than Grep+Read** on the 20-query architectural suite (1,051 vs 2,789 avg), by returning the implementation body in one call instead of Grep + mandatory Reads.
 - **20/20 full bodies** from the first `get_context` call on that suite (Built-in: 0/20 from search alone).
+- **Holdout avg under Built-in** (2,250 vs 2,520) with ranged follow-up reads when stubs include line ranges; total token Δ **−4,051**.
 - **Low latency:** Local SQLite FTS5 retrieval typically completes in milliseconds.
 - **Cost savings:** Smaller prompts for API-backed agents mean lower spend per query.
 
-## Upgrading to 0.6.0
+## Upgrading to 0.6.3
 
-1. Install / update the package (`npm install -g @siddharthakatiyar/contextos@0.6.0`).
-2. Run `contextos reindex` in each project (schema v5: line ranges, `file_stem`, porter FTS, embeddings table, stable chunk IDs).
-3. Optional: `contextos reindex --embeddings` if you only need to backfill vectors on an existing index.
-4. Restart the ContextOS MCP server in your IDE so it loads the new binary.
+1. Install / update the package (`npm install -g @siddharthakatiyar/contextos@0.6.3`).
+2. Run `contextos reindex` so helper splits and comment-derived segment titles are indexed.
+3. Restart the ContextOS MCP server in your IDE so it loads the new binary.
 
-Embedding retrieval stays **off** by default after upgrade. Enable only if you want hybrid emb fusion (`embeddingsRetrieval` or `CONTEXTOS_EMBEDDINGS_RETRIEVAL=1`).
+New in 0.6.3: refactor-for-retrieval (`scoreChunks` / `compressChunks` split into named helpers so deep markers stay intact), comment-derived segment titles for FTS, tighter compile framing. Holdout Q14 marker refreshed to `parentTokens > 500` (maintenance for a 0.6.2 rename — not a retrieval change).
 
 ## License
 

@@ -15,7 +15,7 @@ export interface Chunk {
   tokenCount: number;
   fileType?: 'markdown' | 'code' | 'config' | 'text';
   language?: string;
-  symbolName?: string;
+  symbolName?: string | null;
   symbolKind?: string;
   /** Parent class/struct name when this chunk is a nested method/member. */
   parentSymbol?: string | null;

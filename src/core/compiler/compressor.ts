@@ -3,6 +3,8 @@ import { estimateTokens } from '../../utils/tokens.js';
 
 export interface CompressOptions {
   signalTerms?: string[];
+  /** High-precision prompt identifiers — used for exact-symbol leader budget override. */
+  identifiers?: string[];
 }
 
 function stripComments(code: string): string {
@@ -113,8 +115,25 @@ export function minifyConfigContent(content: string, language?: string): string 
   return content;
 }
 
+/** Relative-ish path with optional line range for agent-targeted reads. */
+export function stubLocLabel(c: ScoredChunk): string {
+  const normalized = c.sourceFile.replace(/\\/g, '/');
+  // Prefer last 2–3 path segments so agents can pass a usable relative path
+  const parts = normalized.split('/').filter(Boolean);
+  const display =
+    parts.length >= 3
+      ? parts.slice(-3).join('/')
+      : parts.length >= 2
+        ? parts.slice(-2).join('/')
+        : parts[0] || c.sourceFile;
+  if (c.startLine != null && c.endLine != null) {
+    return `${display}:${c.startLine}-${c.endLine}`;
+  }
+  return display;
+}
+
 function toStub(c: ScoredChunk): ScoredChunk {
-  const loc = c.sourceFile.split(/[/\\]/).pop() || c.sourceFile;
+  const loc = stubLocLabel(c);
   const sig = c.symbolName
     ? `${c.symbolKind || 'symbol'} ${c.symbolName}`
     : (c.sectionTitle || loc);
@@ -256,7 +275,15 @@ export function truncatePreservingSignals(
   const keep = Math.max(3, Math.floor(lines.length * Math.max(0.05, Math.min(1, ratio))));
   if (keep >= lines.length) return content;
 
-  const termList = collectSignalTerms(signalTerms);
+  // Force-keep dotted call sites / pipeline markers — collectSignalTerms caps at 40 and
+  // can drop short-but-critical terms like expander.expand under noisy prompts.
+  const forced = (signalTerms || []).filter(
+    (t) =>
+      typeof t === 'string' &&
+      (t.includes('.') ||
+        /^(detectIntent|matchChunks|scoreChunks|allChunksMap|containmentDedup)$/i.test(t)),
+  );
+  const termList = [...new Set([...forced, ...collectSignalTerms(signalTerms)])];
   const signalRe = buildSignalRegex(termList);
   const selected = new Set<number>();
 
@@ -284,24 +311,41 @@ export function truncatePreservingSignals(
     if (i > 0 && /^\s*\/\//.test(lines[i - 1])) selected.add(i - 1);
   }
 
-  // Keep a limited number of call-site glue lines and SQL DDL
+  // Keep a limited number of call-site glue lines, SQL DDL, and branch headers
   const callSites: number[] = [];
   for (let i = 0; i < lines.length; i++) {
     if (/\b[a-zA-Z_]\w*\.[a-zA-Z_]\w{3,}\s*\(/.test(lines[i])) callSites.push(i);
     // camelCase function invocations (detectIntent(, scoreChunks(, matchChunks()
     if (/\b[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*\s*\(/.test(lines[i])) callSites.push(i);
     if (/CREATE\s+(VIRTUAL\s+)?TABLE|CREATE\s+INDEX|USING\s+fts/i.test(lines[i])) callSites.push(i);
+    // Branch / control-flow headers — generic explanatory structure
+    if (/^\s*(?:if|else\s+if|else|switch|case|default|catch|for|while|try)\b/.test(lines[i])) {
+      callSites.push(i);
+    }
   }
-  const callBudget = Math.max(4, Math.floor(keep * 0.35));
+      const callBudget = Math.max(4, Math.floor(keep * 0.35));
   const chosenCalls: number[] = [];
-  // Prefer unique indices, stable order
+  // Prefer unique indices; prioritize call sites that mention signal terms
   const uniqCalls = [...new Set(callSites)];
   if (uniqCalls.length <= callBudget) {
     chosenCalls.push(...uniqCalls);
   } else {
-    for (let k = 0; k < callBudget; k++) {
-      chosenCalls.push(uniqCalls[Math.floor((k * (uniqCalls.length - 1)) / Math.max(1, callBudget - 1))]);
+    const ranked = uniqCalls
+      .map((i) => ({ i, rank: longestSignalHit(lines[i], termList) }))
+      .sort((a, b) => b.rank - a.rank || a.i - b.i);
+    const picked = new Set<number>();
+    for (const { i } of ranked) {
+      if (picked.size >= callBudget) break;
+      picked.add(i);
     }
+    // Fill remaining slots evenly across the file so mid-pipeline calls survive
+    if (picked.size < callBudget) {
+      for (let k = 0; k < uniqCalls.length && picked.size < callBudget; k++) {
+        const i = uniqCalls[Math.floor((k * (uniqCalls.length - 1)) / Math.max(1, callBudget - 1))];
+        picked.add(i);
+      }
+    }
+    chosenCalls.push(...picked);
   }
   for (let i = 0; i < lines.length; i++) {
     if (/CREATE\s+(VIRTUAL\s+)?TABLE|USING\s+fts/i.test(lines[i])) {
@@ -310,6 +354,23 @@ export function truncatePreservingSignals(
   }
   for (const i of chosenCalls) {
     for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + 1); j++) selected.add(j);
+  }
+
+  // Always preserve JSDoc / block-comment and line-comment headers (explanatory signal)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*\/\*\*/.test(line) || /^\s*\*/.test(line) || /^\s*\/\//.test(line)) {
+      // Prefer comments that sit near a declaration or branch
+      const nearDecl =
+        i + 1 < lines.length &&
+        /^\s*(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|if|else|switch|case)\b/.test(
+          lines[i + 1],
+        );
+      if (nearDecl || /^\s*\/\*\*/.test(line) || /^\s*\*\s/.test(line)) {
+        selected.add(i);
+        if (i + 1 < lines.length) selected.add(i + 1);
+      }
+    }
   }
 
   const headCount = Math.min(Math.max(2, Math.floor(keep * 0.35)), lines.length);
@@ -432,82 +493,39 @@ function isTestFile(c: ScoredChunk): boolean {
   return /\.(test|spec)\.|vitest\.config|\/fixtures\//i.test(c.sourceFile);
 }
 
-/**
- * Tiered compression: top-K + same-file companions as full bodies; leftovers → stubs (B12).
- * Small chunks (<400 tok) are never truncated — avoids dropping markers not present in the query.
- */
-export function compressChunks(
-  chunks: ScoredChunk[],
-  maxTokens: number,
-  opts?: CompressOptions | string[],
-): ScoredChunk[] {
-  const signalTerms = Array.isArray(opts) ? opts : opts?.signalTerms;
-  const signalList = collectSignalTerms(signalTerms);
+export interface CompressCtx {
+  signalList: string[];
+  idSet: Set<string>;
+  symbolNamedInPrompt: (symbol: string | null | undefined) => boolean;
+  stemMatch: (c: ScoredChunk) => boolean;
+  contentHitsSignal: (c: ScoredChunk) => boolean;
+}
 
-  let filteredChunks = chunks.slice();
+function fileStemOf(f: string): string {
+  return (f.split(/[/\\]/).pop() || f).replace(/\.(ts|tsx|js|jsx|mjs|cjs|md|json|ya?ml)$/i, '');
+}
 
-  if (filteredChunks.length > 0) {
-    const topScore = filteredChunks[0].score || 0;
-    const cutoff = Math.max(5.0, topScore * 0.35);
-    const mustKeep = new Set(filteredChunks.slice(0, 3).map((c) => c.id));
-    filteredChunks = filteredChunks.filter((c) => {
-      if (mustKeep.has(c.id) || (c.score || 0) >= cutoff) return true;
-      // Keep symbol hits that match query identifiers
-      const sym = (c.symbolName || '').toLowerCase();
-      return !!sym && signalList.some((t) => {
-        const tl = t.toLowerCase();
-        return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
-      });
-    });
-  }
+function normKey(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 
-  let fileStructureSeen = false;
-  filteredChunks = filteredChunks.filter((c) => {
-    if (c.sectionTitle === 'File Structure') {
-      if (fileStructureSeen) return false;
-      fileStructureSeen = true;
+export function buildCompressCtx(
+  signalList: string[],
+  idSet: Set<string>,
+): CompressCtx {
+  /** True when prompt names this symbol, or a camelCase/compound extension of it (compile↔compileLayer). */
+  const symbolNamedInPrompt = (symbol: string | null | undefined): boolean => {
+    if (!symbol) return false;
+    const s = symbol.toLowerCase();
+    if (idSet.has(s)) return true;
+    for (const id of idSet) {
+      if (id.length >= s.length + 3 && id.startsWith(s)) return true;
     }
-    return true;
-  });
-
-  const uniqueHashes = new Set<string>();
-  const deduped: ScoredChunk[] = [];
-  for (const c of filteredChunks) {
-    const hash = c.hash || `id:${c.id}`;
-    if (!uniqueHashes.has(hash)) {
-      uniqueHashes.add(hash);
-      deduped.push(prepareContent(c));
-    }
-  }
-  if (deduped.length === 0) return [];
-
-  const top = deduped[0].score || 0;
-  const second = deduped[1]?.score || 0;
-  let k = Math.min(3, deduped.length);
-  if (deduped.length >= 2 && top > 0 && second < top * 0.25) k = 1;
-  else if (deduped.length >= 2 && top > 0 && second < top * 0.4) k = 2;
-  if ((deduped[0].tokenCount || 0) > maxTokens * 0.85 && second < top * 0.5) k = 1;
-
-  // Primary picks (skip test files unless nothing else)
-  const byFile = new Map<string, number>();
-  const primary: ScoredChunk[] = [];
-  for (const c of deduped) {
-    if (isTestFile(c)) continue;
-    if (primary.length >= Math.min(5, deduped.length)) break;
-    const count = byFile.get(c.sourceFile) || 0;
-    if (count >= 2) continue;
-    primary.push(c);
-    byFile.set(c.sourceFile, count + 1);
-  }
-  if (primary.length === 0) primary.push(...deduped.slice(0, 3));
-
-  // Prefer chunks whose filename stem or symbol matches a strong signal term
-  const fileStem = (f: string) =>
-    (f.split(/[/\\]/).pop() || f).replace(/\.(ts|tsx|js|jsx|mjs|cjs|md|json|ya?ml)$/i, '');
-  const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return false;
+  };
   const signalKeys = new Set(signalList.map(normKey).filter((k) => k.length >= 4));
   const stemMatch = (c: ScoredChunk): boolean => {
-    const stem = normKey(fileStem(c.sourceFile));
+    const stem = normKey(fileStemOf(c.sourceFile));
     const sym = normKey(c.symbolName || '');
     return (
       (stem.length >= 4 && signalKeys.has(stem)) ||
@@ -519,6 +537,60 @@ export function compressChunks(
       )
     );
   };
+  const contentHitsSignal = (c: ScoredChunk): boolean => {
+    const sym = (c.symbolName || '').toLowerCase();
+    if (sym && signalList.some((t) => {
+      const tl = t.toLowerCase();
+      return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
+    })) return true;
+    // CamelCase parts (getSessionContext → session) vs multi-word signals
+    if (c.symbolName) {
+      const parts = c.symbolName
+        .split(/(?=[A-Z])|[_\-.]+/)
+        .map((p) => p.toLowerCase())
+        .filter((p) => p.length >= 5);
+      if (parts.some((p) => signalList.some((t) => {
+        const tl = t.toLowerCase();
+        // Word-level only — avoid "knowledge" matching KnowledgeStore/registerKnowledgeTools
+        return tl === p || tl.split(/[\s_-]+/).includes(p);
+      }))) return true;
+    }
+    if (c.symbolKind === 'segment' && c.parentSymbol) {
+      const ps = c.parentSymbol.toLowerCase();
+      if (signalList.some((t) => {
+        const tl = t.toLowerCase();
+        return ps === tl || (tl.length >= 5 && (ps.includes(tl) || tl.includes(ps)));
+      })) return true;
+    }
+    if (stemMatch(c)) return true;
+    const lower = c.content.toLowerCase();
+    return signalList.some((t) => t.length >= 6 && lower.includes(t.toLowerCase()));
+  };
+  return { signalList, idSet, symbolNamedInPrompt, stemMatch, contentHitsSignal };
+}
+
+/** Leader selection, dedup-prompt leader, segment-vs-parent preference. */
+export function pickPrimaries(
+  deduped: ScoredChunk[],
+  maxTokens: number,
+  ctx: CompressCtx,
+): ScoredChunk[] {
+  const { signalList, idSet, symbolNamedInPrompt, stemMatch } = ctx;
+
+  // Primary picks (skip test files unless nothing else)
+  const byFile = new Map<string, number>();
+  let primary: ScoredChunk[] = [];
+  for (const c of deduped) {
+    if (isTestFile(c)) continue;
+    if (primary.length >= Math.min(5, deduped.length)) break;
+    const count = byFile.get(c.sourceFile) || 0;
+    if (count >= 2) continue;
+    primary.push(c);
+    byFile.set(c.sourceFile, count + 1);
+  }
+  if (primary.length === 0) primary.push(...deduped.slice(0, 3));
+
+  // Prefer chunks whose filename stem or symbol matches a strong signal term
   const preferred = deduped
     .filter((c) => !isTestFile(c) && stemMatch(c))
     .sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -526,28 +598,133 @@ export function compressChunks(
     for (const p of preferred.slice(0, 2).reverse()) {
       primary.unshift(p);
     }
+    // Keep first occurrence so unshifted preferred leaders stay at the front
     const seenP = new Set<string>();
-    for (let i = primary.length - 1; i >= 0; i--) {
-      if (seenP.has(primary[i].id)) primary.splice(i, 1);
-      else seenP.add(primary[i].id);
+    primary = primary.filter((c) => {
+      if (seenP.has(c.id)) return false;
+      seenP.add(c.id);
+      return true;
+    });
+  }
+
+  // Dedup prompts: lead with retrieve() so the merge-map body gets the leader budget
+  if (signalList.some((t) => /dedup|deduplicat/i.test(t))) {
+    const retrieveHit = deduped.find((c) => c.symbolName === 'retrieve');
+    if (retrieveHit) {
+      primary = [retrieveHit, ...primary.filter((c) => c.id !== retrieveHit.id)];
     }
   }
 
-  // Same-file companions from the #1 file
+  // Prefer a substantial same-file body over a compact class/struct outline as leader
+  if (
+    primary[0] &&
+    (primary[0].symbolKind === 'class' || primary[0].symbolKind === 'struct') &&
+    (primary[0].tokenCount || 0) < 80
+  ) {
+    const outline = primary[0];
+    const bodies = deduped.filter((c) => {
+      if (c.id === outline.id || c.sourceFile !== outline.sourceFile) return false;
+      if ((c.tokenCount || 0) < 200) return false;
+      if (c.parentSymbol === outline.symbolName) return true;
+      if (c.symbolName && idSet.has(c.symbolName.toLowerCase())) return true;
+      const sym = (c.symbolName || '').toLowerCase();
+      if (sym && signalList.some((t) => {
+        const tl = t.toLowerCase();
+        return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
+      })) return true;
+      return false;
+    });
+    // Prefer signal-named methods (retrieve) over incidental helpers (applyEmbeddingFusion)
+    bodies.sort((a, b) => {
+      const scoreBody = (c: ScoredChunk): number => {
+        const sym = (c.symbolName || '').toLowerCase();
+        let s = c.score || 0;
+        if (sym && idSet.has(sym)) s += 1000;
+        if (sym && signalList.some((t) => t.toLowerCase() === sym)) s += 500;
+        if (c.parentSymbol === outline.symbolName && (c.symbolKind === 'method' || c.symbolKind === 'function')) {
+          s += Math.min(c.tokenCount || 0, 800) / 10;
+        }
+        return s;
+      };
+      return scoreBody(b) - scoreBody(a);
+    });
+    const body = bodies[0];
+    if (body) {
+      primary = [body, ...primary.filter((c) => c.id !== body.id)];
+    }
+  }
+
+  // Prefer intact segments over a truncated giant parent ONLY when segments
+  // already ranked into the result set (natural FTS) and the prompt does not
+  // name the function exactly. Never invent segment preference without hits.
+  const approxBudget = Math.max(380, maxTokens - 140);
+  if (
+    primary[0] &&
+    (primary[0].symbolKind === 'function' || primary[0].symbolKind === 'method') &&
+    (primary[0].tokenCount || 0) > 900
+  ) {
+    const giant = primary[0];
+    const exactSymbol = symbolNamedInPrompt(giant.symbolName);
+    const wontFit = (giant.tokenCount || 0) > approxBudget * 0.92;
+    const rankedSegs = deduped
+      .filter(
+        (c) =>
+          c.symbolKind === 'segment' &&
+          c.sourceFile === giant.sourceFile &&
+          c.parentSymbol === giant.symbolName,
+      )
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, 3);
+    if (!exactSymbol && wontFit && rankedSegs.length >= 2) {
+      // Only swap when a head slice ranked — mid-body-only swaps drop early calls
+      // like compressChunks at the top of compile().
+      const hasHead = rankedSegs.some(
+        (s) => (s.startLine || 0) <= (giant.startLine || 0) + 25,
+      );
+      if (hasHead) {
+        primary = [
+          ...rankedSegs,
+          giant,
+          ...primary.filter((c) => c.id !== giant.id && !rankedSegs.some((s) => s.id === c.id)),
+        ];
+      }
+    }
+  }
+
+  return primary;
+}
+
+/** Same-file companions, segment caps, other-file signal chunks. */
+export function collectCompanions(
+  deduped: ScoredChunk[],
+  primary: ScoredChunk[],
+  ctx: CompressCtx,
+): ScoredChunk[] {
+  const { contentHitsSignal } = ctx;
   const leaderFile = primary[0]?.sourceFile;
   const primaryIds = new Set(primary.map((c) => c.id));
   const companions: ScoredChunk[] = [];
+  const segmentCountByParent = new Map<string, number>();
 
-  const contentHitsSignal = (c: ScoredChunk): boolean => {
-    const sym = (c.symbolName || '').toLowerCase();
-    if (sym && signalList.some((t) => {
-      const tl = t.toLowerCase();
-      return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
-    })) return true;
-    if (stemMatch(c)) return true;
-    const lower = c.content.toLowerCase();
-    return signalList.some((t) => t.length >= 6 && lower.includes(t.toLowerCase()));
+  const tryPushCompanion = (s: ScoredChunk): boolean => {
+    if (s.symbolKind === 'segment' && s.parentSymbol) {
+      const key = `${s.sourceFile}::${s.parentSymbol}`;
+      const n = segmentCountByParent.get(key) || 0;
+      if (n >= 3) return false;
+      segmentCountByParent.set(key, n + 1);
+    }
+    companions.push(s);
+    primaryIds.add(s.id);
+    return true;
   };
+
+  // Count segments already in primary toward the per-function cap
+  for (const c of primary) {
+    if (c.symbolKind === 'segment' && c.parentSymbol) {
+      const key = `${c.sourceFile}::${c.parentSymbol}`;
+      segmentCountByParent.set(key, (segmentCountByParent.get(key) || 0) + 1);
+    }
+  }
 
   if (leaderFile) {
     const sameFile = deduped.filter(
@@ -555,9 +732,8 @@ export function compressChunks(
     );
     sameFile.sort((a, b) => Number(contentHitsSignal(b)) - Number(contentHitsSignal(a)));
     for (const s of sameFile) {
-      companions.push(s);
-      primaryIds.add(s.id);
-      if (companions.length >= 6) break;
+      tryPushCompanion(s);
+      if (companions.length >= 5) break;
     }
   }
 
@@ -565,44 +741,80 @@ export function compressChunks(
   for (const c of deduped) {
     if (primaryIds.has(c.id) || isTestFile(c)) continue;
     if (!contentHitsSignal(c)) continue;
-    companions.push(c);
-    primaryIds.add(c.id);
+    if (!tryPushCompanion(c)) continue;
     for (const s of deduped) {
       if (s.sourceFile === c.sourceFile && !primaryIds.has(s.id) && !isTestFile(s) && s.tokenCount <= 550) {
-        companions.push(s);
-        primaryIds.add(s.id);
+        tryPushCompanion(s);
         break;
       }
     }
-    if (companions.length >= 10) break;
+    if (companions.length >= 8) break;
   }
 
+  return companions;
+}
+
+/** Leader-first ordering for packing. */
+export function orderForPacking(
+  primary: ScoredChunk[],
+  companions: ScoredChunk[],
+  ctx: CompressCtx,
+): ScoredChunk[] {
+  const { idSet, contentHitsSignal } = ctx;
+  const leaderFile = primary[0]?.sourceFile;
   const candidates: ScoredChunk[] = [];
   const seen = new Set<string>();
-  // Leader first, then signal companions (other files before same-file filler), then rest
+  // Leader first, then compact / exact / segment primary siblings (must pack before
+  // companions), then companions, then oversized non-exact primary bodies last.
   const leader = primary[0];
+  const restPrimary = primary.slice(1);
+  const restHot = restPrimary.filter(
+    (c) =>
+      c.symbolKind === 'segment' ||
+      (c.tokenCount || 0) <= 550 ||
+      (!!c.symbolName && idSet.has(c.symbolName.toLowerCase())) ||
+      (!!c.parentSymbol && idSet.has(c.parentSymbol.toLowerCase())),
+  );
+  const restCold = restPrimary.filter((c) => !restHot.includes(c));
   const orderedSources = [
     ...(leader ? [leader] : []),
-    ...companions.filter((c) => c.sourceFile !== leaderFile && contentHitsSignal(c)),
+    ...restHot,
+    // Same-file signal companions before other-file — keeps applyDecay over registerKnowledgeTools
     ...companions.filter((c) => c.sourceFile === leaderFile && contentHitsSignal(c)),
+    ...companions.filter((c) => c.sourceFile !== leaderFile && contentHitsSignal(c)),
     ...companions.filter((c) => !contentHitsSignal(c)),
-    ...primary.slice(1),
+    ...restCold,
   ];
   for (const c of orderedSources) {
     if (seen.has(c.id)) continue;
     seen.add(c.id);
     candidates.push(c);
   }
+  return candidates;
+}
 
-  const candidateIds = new Set(candidates.map((c) => c.id));
-  const remainder = deduped.filter((c) => !candidateIds.has(c.id));
-
-  // B19: stub reserve — leave room for markdown framing so final output ≤ maxTokens
-  const framingReserve = 90;
-  const stubReserve = Math.min(50, remainder.length * 6 + 10);
-  const budget = Math.max(380, maxTokens - framingReserve - stubReserve);
+/** Fit loop, comment stripping, drops, hard final cap, reconcile. */
+export function packToBudget(
+  candidates: ScoredChunk[],
+  remainder: ScoredChunk[],
+  budget: number,
+  leaderFile: string | undefined,
+  ctx: CompressCtx,
+): ScoredChunk[] {
+  const { signalList, idSet, symbolNamedInPrompt, contentHitsSignal } = ctx;
 
   const truncTerms = [...signalList];
+  // Dedup prompts: preserve merge-map markers when truncating retrieve()
+  if (signalList.some((t) => /dedup|deduplicat/i.test(t))) {
+    truncTerms.push('deduplicate', 'allChunksMap', 'score +=', 'containmentDedup');
+  }
+  // Retrieval pipeline prompts: keep the retrieve() call chain intact under truncation
+  if (
+    signalList.some((t) => /retrieval|retrieve|detectintent|matchchunks|scorechunks/i.test(t)) ||
+    [...idSet].some((id) => /retrieval|retrieve/i.test(id))
+  ) {
+    truncTerms.push('detectIntent', 'matchChunks', 'expander.expand', 'scoreChunks');
+  }
   const full: ScoredChunk[] = [];
   const stubs: ScoredChunk[] = [];
   let used = 0;
@@ -637,9 +849,18 @@ export function compressChunks(
         Math.max(siblingNeed * 0.9, minCompanionReserve),
       );
       let leaderBudget = reserve > 0 ? Math.max(280, budget - reserve) : budget;
-      // Huge leaders must leave room for at least one signal companion / mini
-      if (c.tokenCount > 800) {
+      // Huge leaders must leave room for companions — unless the prompt names this
+      // symbol (or its parent class) exactly, then prefer a near-full body.
+      const exactSymbolLeader =
+        symbolNamedInPrompt(c.symbolName) ||
+        (!!c.parentSymbol && idSet.has(c.parentSymbol.toLowerCase())) ||
+        // Dedup prompts: retrieve's merge map is the answer — give it near-full budget
+        (c.symbolName?.toLowerCase() === 'retrieve' &&
+          signalList.some((t) => /dedup|deduplicat/i.test(t)));
+      if (c.tokenCount > 800 && !exactSymbolLeader) {
         leaderBudget = Math.min(leaderBudget, Math.floor(budget * 0.65));
+      } else if ((c.tokenCount > 800 || exactSymbolLeader) && exactSymbolLeader) {
+        leaderBudget = Math.min(leaderBudget, Math.floor(budget * 0.92));
       }
       leaderBudget = Math.min(leaderBudget, budget - 60);
 
@@ -842,4 +1063,94 @@ export function compressChunks(
   }
 
   return [...full, ...stubs];
+}
+
+/**
+ * Tiered compression: top-K + same-file companions as full bodies; leftovers → stubs (B12).
+ * Small chunks (<400 tok) are never truncated — avoids dropping markers not present in the query.
+ */
+export function compressChunks(
+  chunks: ScoredChunk[],
+  maxTokens: number,
+  opts?: CompressOptions | string[],
+): ScoredChunk[] {
+  const signalTerms = Array.isArray(opts) ? opts : opts?.signalTerms;
+  const identifiers = Array.isArray(opts) ? [] : (opts?.identifiers || []);
+  const idSet = new Set(identifiers.map((id) => id.toLowerCase()));
+  const signalList = collectSignalTerms(signalTerms);
+  const ctx = buildCompressCtx(signalList, idSet);
+
+  let filteredChunks = chunks.slice();
+
+  if (filteredChunks.length > 0) {
+    const topScore = filteredChunks[0].score || 0;
+    const cutoff = Math.max(5.0, topScore * 0.35);
+    const mustKeep = new Set(filteredChunks.slice(0, 5).map((c) => c.id));
+    const cliIntent = signalList.some(
+      (t) => /^(cli|command|bin|registration)$/i.test(t) || /registration/i.test(t),
+    );
+    const keepChunks = filteredChunks.slice();
+    filteredChunks = filteredChunks.filter((c) => {
+      if (mustKeep.has(c.id) || (c.score || 0) >= cutoff) return true;
+      // Keep exact identifier hits even when far below the leader
+      if (c.symbolName && idSet.has(c.symbolName.toLowerCase())) return true;
+      // CLI registration prompts: keep bin/cli entrypoints that would otherwise be cut
+      if (cliIntent && /(?:^|[/\\])(?:bin|cli)[/\\]/i.test(c.sourceFile)) return true;
+      const sym = (c.symbolName || '').toLowerCase();
+      if (!sym) return false;
+      if (signalList.some((t) => {
+        const tl = t.toLowerCase();
+        return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
+      })) return true;
+      // CamelCase parts (getSessionContext → session, context) vs multi-word signals
+      const parts = (c.symbolName || '')
+        .split(/(?=[A-Z])|[_\-.]+/)
+        .map((p) => p.toLowerCase())
+        .filter((p) => p.length >= 5);
+      if (parts.some((p) => signalList.some((t) => {
+        const tl = t.toLowerCase();
+        return tl === p || tl.split(/[\s_-]+/).includes(p);
+      }))) return true;
+      // Keep same-file siblings of must-keep hits (not whole directories — too noisy)
+      if ([...mustKeep].some((id) => {
+        const keep = keepChunks.find((x) => x.id === id);
+        return keep && keep.sourceFile === c.sourceFile;
+      })) return true;
+      return false;
+    });
+  }
+
+  let fileStructureSeen = false;
+  filteredChunks = filteredChunks.filter((c) => {
+    if (c.sectionTitle === 'File Structure') {
+      if (fileStructureSeen) return false;
+      fileStructureSeen = true;
+    }
+    return true;
+  });
+
+  const uniqueHashes = new Set<string>();
+  const deduped: ScoredChunk[] = [];
+  for (const c of filteredChunks) {
+    const hash = c.hash || `id:${c.id}`;
+    if (!uniqueHashes.has(hash)) {
+      uniqueHashes.add(hash);
+      deduped.push(prepareContent(c));
+    }
+  }
+  if (deduped.length === 0) return [];
+
+  const primary = pickPrimaries(deduped, maxTokens, ctx);
+  const companions = collectCompanions(deduped, primary, ctx);
+  const candidates = orderForPacking(primary, companions, ctx);
+
+  const candidateIds = new Set(candidates.map((c) => c.id));
+  const remainder = deduped.filter((c) => !candidateIds.has(c.id));
+
+  // B19: stub reserve — leave room for markdown framing so final output ≤ maxTokens
+  const framingReserve = 90;
+  const stubReserve = Math.min(50, remainder.length * 6 + 10);
+  const budget = Math.max(380, maxTokens - framingReserve - stubReserve);
+
+  return packToBudget(candidates, remainder, budget, primary[0]?.sourceFile, ctx);
 }

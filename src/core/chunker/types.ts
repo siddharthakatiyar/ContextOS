@@ -5,4 +5,6 @@ export interface ChunkCreationOptions {
   workspaceName?: string;
   importance?: number;
   maxChunkTokens?: number;
+  /** Override for segment threshold (defaults to config.maxSymbolChunkTokens). */
+  maxSymbolChunkTokens?: number;
 }

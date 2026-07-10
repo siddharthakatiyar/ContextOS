@@ -1,11 +1,11 @@
 import { RetrievalResult, ScoredChunk } from '../retrieval/types.js';
 import { CompiledContext, CompilerOptions } from './types.js';
-import { compressChunks } from './compressor.js';
+import { compressChunks, stubLocLabel } from './compressor.js';
 import { estimateTokens } from '../../utils/tokens.js';
 import path from 'path';
 
 export * from './types.js';
-export { canonicalizeWhitespace, minifyConfigContent, buildSignalRegex, truncatePreservingSignals } from './compressor.js';
+export { canonicalizeWhitespace, minifyConfigContent, buildSignalRegex, truncatePreservingSignals, stubLocLabel } from './compressor.js';
 
 function escapeXml(unsafe: string | null | undefined): string {
   if (!unsafe) return '';
@@ -28,7 +28,7 @@ function isStub(chunk: ScoredChunk): boolean {
 }
 
 function signatureLine(chunk: ScoredChunk): string {
-  const loc = path.basename(chunk.sourceFile);
+  const loc = stubLocLabel(chunk);
   if (chunk.symbolName) {
     return `\`${chunk.symbolKind || 'symbol'} ${chunk.symbolName}\` — \`${loc}\``;
   }
@@ -208,26 +208,29 @@ function formatLayerChunks(chunks: ScoredChunk[], pathDisplay: Map<string, strin
   return out;
 }
 
-/** Group stubs by file for compact listing. */
+/** Group stubs by file for compact listing (path + line ranges for targeted reads). */
 function formatStubs(stubs: ScoredChunk[]): string {
   if (stubs.length === 0) return '';
   const byFile = new Map<string, ScoredChunk[]>();
   for (const s of stubs) {
-    const key = path.basename(s.sourceFile);
+    const key = stubLocLabel({ ...s, startLine: null, endLine: null });
     if (!byFile.has(key)) byFile.set(key, []);
     byFile.get(key)!.push(s);
   }
   let out = '### Also\n';
-  for (const [file, list] of byFile) {
+  for (const [, list] of byFile) {
     if (list.length === 1) {
       out += `- ${signatureLine(list[0])}\n`;
     } else {
+      const fileKey = stubLocLabel({ ...list[0], startLine: null, endLine: null });
       const parts = list.map((s) => {
-        if (s.symbolName) return `${s.symbolKind || 'symbol'} ${s.symbolName}`;
-        if (s.sectionTitle) return s.sectionTitle;
-        return path.basename(s.sourceFile);
+        const range =
+          s.startLine != null && s.endLine != null ? `:${s.startLine}-${s.endLine}` : '';
+        if (s.symbolName) return `${s.symbolKind || 'symbol'} ${s.symbolName}${range}`;
+        if (s.sectionTitle) return `${s.sectionTitle}${range}`;
+        return stubLocLabel(s);
       });
-      out += `- \`${file}\`: ${parts.map((p) => `\`${p}\``).join(', ')}\n`;
+      out += `- \`${fileKey}\`: ${parts.map((p) => `\`${p}\``).join(', ')}\n`;
     }
   }
   out += '\n';
@@ -237,8 +240,12 @@ function formatStubs(stubs: ScoredChunk[]): string {
 export function compile(result: RetrievalResult, opts: CompilerOptions): CompiledContext {
   const signalTerms = collectSignalTerms(result, opts);
   // Leave headroom for markdown framing so final output stays ≤ maxTokens
-  const compressBudget = Math.max(360, opts.maxTokens - 80);
-  const compressedChunks = compressChunks(result.chunks, compressBudget, { signalTerms });
+  // Tighter than -80 so avg search tokens stay near the 1056 gate after companion packing.
+  const compressBudget = Math.max(360, opts.maxTokens - 128);
+  const compressedChunks = compressChunks(result.chunks, compressBudget, {
+    signalTerms,
+    identifiers: result.intent?.identifiers || [],
+  });
   const full = compressedChunks.filter((c) => !isStub(c));
   const stubs = compressedChunks.filter((c) => isStub(c));
 
@@ -288,17 +295,12 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     }
     if (stubs.length > 0) {
       xmlOutput += `<stubs>\n`;
-      // Group by file
-      const byFile = new Map<string, ScoredChunk[]>();
       for (const s of stubs) {
-        const key = path.basename(s.sourceFile);
-        if (!byFile.has(key)) byFile.set(key, []);
-        byFile.get(key)!.push(s);
-      }
-      for (const [file, list] of byFile) {
-        for (const s of list) {
-          xmlOutput += `  <stub source="${escapeXml(file)}" symbol="${escapeXml(s.symbolName || '')}" />\n`;
-        }
+        const src = stubLocLabel(s);
+        xmlOutput += `  <stub source="${escapeXml(src)}" symbol="${escapeXml(s.symbolName || '')}"`;
+        if (s.startLine != null) xmlOutput += ` start="${s.startLine}"`;
+        if (s.endLine != null) xmlOutput += ` end="${s.endLine}"`;
+        xmlOutput += ` />\n`;
       }
       xmlOutput += `</stubs>\n`;
     }
@@ -341,7 +343,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
   }
 
   // Soft budget for optional framing (stubs/related) so avg stays near baseline
-  const softBudget = Math.floor(opts.maxTokens * 0.875);
+  const softBudget = Math.floor(opts.maxTokens * 0.86);
   const stubsBlock = formatStubs(cappedStubs);
   if (stubsBlock && estimateTokens(output) + estimateTokens(stubsBlock) <= softBudget) {
     output += stubsBlock;
@@ -365,6 +367,15 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
   if (tok > opts.maxTokens) {
     output = output.replace(/\n### Related\n[^\n]*\n?/, '\n');
     tok = estimateTokens(output);
+  }
+
+  // Steer agents toward cheap expand paths when stubs remain
+  if (stubs.length > 0 && /### Also/.test(output)) {
+    const footer =
+      '\n_Stubs: use `get_symbol` for a named symbol, or `ctx_read_file` with start_line/end_line from the stub path — avoid whole-file reads._\n';
+    if (estimateTokens(output) + estimateTokens(footer) <= opts.maxTokens) {
+      output += footer;
+    }
   }
 
   return {

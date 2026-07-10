@@ -8,6 +8,8 @@ export interface ContextOSConfig {
   indexablePatterns: string[];
   ignorePatterns: string[];
   maxChunkTokens: number;
+  /** Soft threshold: function/method bodies above this also emit additive segment chunks. */
+  maxSymbolChunkTokens: number;
   
   maxRetrievalResults: number;
   maxTokenBudget: number;
@@ -38,6 +40,7 @@ export const configJsonSchema = z.object({
   indexablePatterns: z.array(z.string()).optional(),
   ignorePatterns: z.array(z.string()).optional(),
   maxChunkTokens: z.number().positive().optional(),
+  maxSymbolChunkTokens: z.number().positive().optional(),
   maxRetrievalResults: z.number().int().positive().optional(),
   maxTokenBudget: z.number().int().positive().optional(),
   layerBoosts: z.object({

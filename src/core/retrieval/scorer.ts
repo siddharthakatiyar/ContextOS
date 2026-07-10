@@ -7,6 +7,177 @@ import path from 'path';
 const PRIMARY_EXPORT_RE =
   /^(extract|parse|compile|expand|start|init|register|create|add|search|match|load|merge)/i;
 
+export interface ScoreAdjustContext {
+  repoRoot: string;
+  matchTokens: string[];
+  identifiers: Set<string>;
+}
+
+/** Hard penalty for poison paths — returns -9999 when path is excluded. */
+export function applyPoisonPenalty(chunk: ScoredChunk, finalScore: number): number {
+  const lowerPath = chunk.sourceFile.toLowerCase();
+  // 1. Hard penalty for poison paths
+  if (
+    lowerPath.includes('/node_modules/') ||
+    lowerPath.includes('/.git/') ||
+    lowerPath.includes('changelog') ||
+    lowerPath.includes('changes.md') ||
+    lowerPath.includes('history.md') ||
+    lowerPath.endsWith('.map') ||
+    lowerPath.endsWith('.lock') ||
+    lowerPath.endsWith('.min.js') ||
+    lowerPath.endsWith('.min.css')
+  ) {
+    finalScore = -9999;
+  }
+  return finalScore;
+}
+
+/** Prefer repo-local source files over foreign workspace pollution. */
+export function applyWorkspacePenalty(
+  chunk: ScoredChunk,
+  finalScore: number,
+  ctx: ScoreAdjustContext,
+): number {
+  if (chunk.layer === 'workspace' && chunk.workspaceName) {
+    const ws = chunk.workspaceName;
+    const isLocal =
+      ws === ctx.repoRoot ||
+      ctx.repoRoot.startsWith(ws + path.sep) ||
+      ws.startsWith(ctx.repoRoot + path.sep) ||
+      path.basename(ctx.repoRoot) === path.basename(ws);
+    if (!isLocal) {
+      finalScore *= 0.3;
+    }
+  }
+  return finalScore;
+}
+
+/** Demote tests / README noise and File Structure stubs relative to implementation. */
+export function applyNoiseDemotion(chunk: ScoredChunk, finalScore: number): number {
+  // Prefer primary symbol bodies over File Structure stubs
+  if (chunk.sectionTitle === 'File Structure') {
+    finalScore *= 0.45;
+  }
+
+  // Demote tests / README noise relative to implementation
+  if (/\.(test|spec)\./i.test(chunk.sourceFile) || /\/tests?\//i.test(chunk.sourceFile)) {
+    finalScore *= 0.55;
+  }
+  if (/readme\.md$/i.test(chunk.sourceFile)) {
+    finalScore *= 0.4;
+  }
+  return finalScore;
+}
+
+/** Intent-aware boosts/demotions for config, dedup, watcher, and CLI prompts. */
+export function applyIntentAdjustments(
+  chunk: ScoredChunk,
+  finalScore: number,
+  ctx: ScoreAdjustContext,
+): number {
+  const snLower = (chunk.symbolName || '').toLowerCase();
+  const fileStemLower = (
+    chunk.fileStem || path.basename(chunk.sourceFile).replace(/\.[^.]+$/, '')
+  ).toLowerCase();
+  const { matchTokens, identifiers } = ctx;
+
+  // Generic: when prompt mentions config/defaults/overrides, prefer load*/merge* helpers
+  if (
+    snLower &&
+    /^(load|merge)/i.test(snLower) &&
+    matchTokens.some(t => /^(config|default|override)/.test(t) || t.includes('config') || t.includes('override') || t.includes('default'))
+  ) {
+    finalScore *= 2.0;
+  }
+
+  // Generic: dedup prompts prefer containmentDedup / retrieve; demote pure scorers
+  // and unrelated "merge" helpers (formatMergedFileGroup, mergeDeep, …)
+  const wantsDedup = [...matchTokens, ...identifiers].some(
+    (t) => t.includes('dedup') || t.includes('deduplicat'),
+  );
+  if (wantsDedup) {
+    if (snLower.includes('dedup')) finalScore *= 2.4;
+    else if (snLower === 'retrieve') finalScore *= 3.2;
+    else if (chunk.symbolKind === 'segment' && (chunk.parentSymbol || '').toLowerCase() === 'retrieve') {
+      finalScore *= 2.8;
+    } else if (snLower === 'scorechunks' || snLower === 'score') finalScore *= 0.35;
+    else if (snLower.includes('merge') || snLower.startsWith('format')) finalScore *= 0.45;
+  }
+
+  // Generic: watcher / file-change prompts prefer startWatcher over CLI reindex commands
+  const wantsWatcher = [...matchTokens, ...identifiers].some(
+    (t) => t.includes('watcher') || t.includes('chokidar') || (t.includes('change') && t.includes('file')),
+  );
+  if (wantsWatcher) {
+    if (snLower === 'startwatcher' || snLower === 'filewatcher') finalScore *= 3.0;
+    else if (/command$/i.test(snLower) && /reindex|watch/i.test(snLower)) finalScore *= 0.45;
+  }
+
+  // Generic CLI intent: boost bin/cli entrypoint files so registration wiring surfaces
+  const wantsCli = matchTokens.some(t => /^(cli|command|bin|registration)$/i.test(t))
+    || [...identifiers].some(id => /^(cli|command|registration)/i.test(id) || /registration/i.test(id));
+  if (wantsCli && /(?:^|[/\\])(?:bin|cli)[/\\]/i.test(chunk.sourceFile)) {
+    finalScore *= chunk.symbolKind === 'file' || /\.(ts|js|mjs|cjs)$/i.test(chunk.symbolName || '')
+      ? 6.0
+      : 3.0;
+  }
+  // Prefer the exact *Command named in the prompt; demote sibling *Command symbols
+  if (chunk.symbolName && /Command$/i.test(chunk.symbolName)) {
+    const exactCommand = [...identifiers].some(
+      id => id.toLowerCase() === chunk.symbolName!.toLowerCase()
+    );
+    if (exactCommand) {
+      finalScore *= 1.15;
+    } else if (wantsCli || [...identifiers].some(id => /command$/i.test(id))) {
+      finalScore *= 0.45;
+    }
+  }
+
+  // When prompt identifier matches file stem (get_context → get-context.ts), prefer that file's bodies
+  if (identifiers.size > 0) {
+    const fsCompact = fileStemLower.replace(/[_-]/g, '');
+    for (const id of identifiers) {
+      const idc = id.replace(/[_-]/g, '');
+      if (idc.length >= 6 && fsCompact === idc) {
+        finalScore *= 2.0;
+        break;
+      }
+    }
+  }
+
+  // Constructors rarely answer architectural questions
+  if (chunk.symbolName === 'constructor') {
+    finalScore *= 0.35;
+  }
+
+  // Trivial getters: name match /^get[A-Z]/ && tiny body
+  if (
+    chunk.symbolName &&
+    /^get[A-Z]/.test(chunk.symbolName) &&
+    (chunk.tokenCount || 0) < 40
+  ) {
+    finalScore *= 0.5;
+  }
+
+  // Primary-export style boost ONLY when symbol also overlaps a prompt token
+  if (chunk.symbolName && PRIMARY_EXPORT_RE.test(chunk.symbolName)) {
+    const sn = chunk.symbolName.toLowerCase();
+    const overlaps =
+      [...identifiers].some(
+        t => sn === t || sn.startsWith(t) || t.startsWith(sn) || (t.length >= 5 && sn.includes(t))
+      ) ||
+      matchTokens.some(
+        t => t.length >= 5 && (sn === t || sn.startsWith(t) || sn.includes(t))
+      );
+    if (overlaps) {
+      finalScore *= 1.3;
+    }
+  }
+
+  return finalScore;
+}
+
 export function scoreChunks(
   chunks: ScoredChunk[],
   expandedEntities: ExpandedEntity[],
@@ -27,6 +198,7 @@ export function scoreChunks(
       .map(t => t.toLowerCase().replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/i, ''))
       .filter(t => t.length >= 3)
   );
+  const adjustCtx: ScoreAdjustContext = { repoRoot, matchTokens, identifiers };
 
   const entityScores = new Map<string, number>();
   for (const e of expandedEntities) {
@@ -38,22 +210,7 @@ export function scoreChunks(
   const scored = chunks.map(chunk => {
     let finalScore = chunk.score || 0;
 
-    const lowerPath = chunk.sourceFile.toLowerCase();
-
-    // 1. Hard penalty for poison paths
-    if (
-      lowerPath.includes('/node_modules/') ||
-      lowerPath.includes('/.git/') ||
-      lowerPath.includes('changelog') ||
-      lowerPath.includes('changes.md') ||
-      lowerPath.includes('history.md') ||
-      lowerPath.endsWith('.map') ||
-      lowerPath.endsWith('.lock') ||
-      lowerPath.endsWith('.min.js') ||
-      lowerPath.endsWith('.min.css')
-    ) {
-      finalScore = -9999;
-    }
+    finalScore = applyPoisonPenalty(chunk, finalScore);
 
     // Graph expansion boost (capped absolute)
     if (chunk.keywords) {
@@ -85,11 +242,22 @@ export function scoreChunks(
 
       // Identifiers get stronger exact/prefix boosts than plain concepts
       for (const t of identifiers) {
-        if (sn && sn === t) best = Math.max(best, 4.0);
-        else if (sn && (sn.startsWith(t) || t.startsWith(sn))) best = Math.max(best, 3.0);
+        if (sn && sn === t) {
+          // Compact class/struct outlines matching the name are weaker than method bodies
+          const compactOutline =
+            (chunk.symbolKind === 'class' || chunk.symbolKind === 'struct') &&
+            (chunk.tokenCount || 0) < 80;
+          best = Math.max(best, compactOutline ? 2.2 : 4.0);
+        } else if (sn && (sn.startsWith(t) || t.startsWith(sn))) best = Math.max(best, 3.0);
         else if (sn && t.length >= 5 && sn.includes(t)) best = Math.max(best, 2.2);
         if (parent && (parent === t || parent.startsWith(t) || t.startsWith(parent))) {
           best = Math.max(best, 2.8);
+        }
+        // Identifier → file stem (get_context → get-context.ts)
+        const fsCompact = fs.replace(/[_-]/g, '');
+        const tCompact = t.replace(/[_-]/g, '');
+        if (fsCompact && tCompact.length >= 5 && (fsCompact === tCompact || fsCompact.includes(tCompact))) {
+          best = Math.max(best, 3.5);
         }
       }
 
@@ -150,46 +318,24 @@ export function scoreChunks(
       finalScore *= 1 + 0.12 * Math.exp(-ageDays / 45);
     }
 
-    // Prefer repo-local source files over foreign workspace pollution
-    if (chunk.layer === 'workspace' && chunk.workspaceName) {
-      const ws = chunk.workspaceName;
-      const isLocal =
-        ws === repoRoot ||
-        repoRoot.startsWith(ws + path.sep) ||
-        ws.startsWith(repoRoot + path.sep) ||
-        path.basename(repoRoot) === path.basename(ws);
-      if (!isLocal) {
-        finalScore *= 0.3;
-      }
-    }
-
-    // Prefer primary symbol bodies over File Structure stubs
-    if (chunk.sectionTitle === 'File Structure') {
-      finalScore *= 0.45;
-    }
-
-    // Demote tests / README noise relative to implementation
-    if (/\.(test|spec)\./i.test(chunk.sourceFile) || /\/tests?\//i.test(chunk.sourceFile)) {
-      finalScore *= 0.55;
-    }
-    if (/readme\.md$/i.test(chunk.sourceFile)) {
-      finalScore *= 0.4;
-    }
+    finalScore = applyWorkspacePenalty(chunk, finalScore, adjustCtx);
+    finalScore = applyNoiseDemotion(chunk, finalScore);
 
     // Prefer large schema/DDL variable symbols (template-literal consts)
     if (chunk.symbolKind === 'variable' && (chunk.tokenCount || 0) > 200) {
       finalScore *= 1.8;
     }
 
-    // Prefer method bodies over compact class outlines when both appear
+    // Prefer method / segment bodies over compact class outlines when both appear
     if (chunk.parentSymbol && (chunk.symbolKind === 'function' || chunk.symbolKind === 'method')) {
       finalScore *= 1.2;
     }
+    // Segments are intact slices — mild preference, but do not outrank real symbols
+    if (chunk.symbolKind === 'segment' && chunk.parentSymbol) {
+      finalScore *= 1.05;
+    }
 
     const snLower = (chunk.symbolName || '').toLowerCase();
-    const fileStemLower = (
-      chunk.fileStem || path.basename(chunk.sourceFile).replace(/\.[^.]+$/, '')
-    ).toLowerCase();
     const isExactIdHit = snLower && identifiers.has(snLower);
     if (
       (chunk.symbolKind === 'class' || chunk.symbolKind === 'struct') &&
@@ -207,107 +353,7 @@ export function scoreChunks(
       finalScore *= 0.75;
     }
 
-    // Config load/merge helpers when prompt asks about defaults/overrides
-    if (
-      snLower &&
-      /^(load|merge)/i.test(snLower) &&
-      matchTokens.some(t => /^(config|default|override)/.test(t) || t.includes('config') || t.includes('override') || t.includes('default'))
-    ) {
-      finalScore *= 2.8;
-    }
-
-    // Dedup/merge retrieval path: prefer retrieve() when prompt talks about dedup
-    const wantsDedup = [...matchTokens, ...identifiers].some(
-      t => t.includes('dedup') || t.includes('deduplicat')
-    );
-    if (wantsDedup && snLower === 'retrieve') {
-      finalScore *= 5.0;
-    }
-    if (wantsDedup && snLower === 'containmentdedup') {
-      finalScore *= 1.5;
-    }
-    if (wantsDedup && snLower === 'scorechunks') {
-      finalScore *= 0.35;
-    }
-
-    // Boost file-level entrypoint chunks (bin/*) only for CLI/registration prompts
-    const wantsCli = matchTokens.some(t => /^(cli|registration)$/i.test(t))
-      || [...identifiers].some(id => /^(cli|registration)/i.test(id) || /registration/i.test(id));
-    if (
-      wantsCli &&
-      chunk.symbolKind === 'file' &&
-      /(?:^|[/\\])bin[/\\]/i.test(chunk.sourceFile)
-    ) {
-      finalScore *= 8.0;
-    }
-    if (wantsCli && chunk.symbolName && /Command$/i.test(chunk.symbolName)) {
-      const exact = [...identifiers].some(
-        id => id.toLowerCase() === chunk.symbolName!.toLowerCase()
-      );
-      finalScore *= exact ? 0.75 : 0.3;
-    }
-    if (wantsCli && snLower.startsWith('register')) {
-      finalScore *= 0.25;
-    }
-
-    // Prefer get-context tool module when prompt names get_context
-    const wantsGetContext = [...matchTokens, ...identifiers].some(
-      t => t.replace(/[_-]/g, '') === 'getcontext'
-    );
-    if (wantsGetContext) {
-      if (fileStemLower.replace(/-/g, '') === 'getcontext' || snLower.includes('getcontext')) {
-        finalScore *= 3.5;
-      }
-      if (snLower === 'registerknowledgetools') {
-        finalScore *= 0.4;
-      }
-      if (snLower === 'mergememorypipeline') {
-        finalScore *= 1.6;
-      }
-      if (snLower === 'registergetcontexttool') {
-        finalScore *= 1.15;
-        if ((chunk.tokenCount || 0) > 900) finalScore *= 0.75;
-      }
-    }
-
-    // When prompt names a specific *Command, demote other *Command siblings
-    if (chunk.symbolName && /Command$/i.test(chunk.symbolName)) {
-      const exactCommand = [...identifiers].some(
-        id => id.toLowerCase() === chunk.symbolName!.toLowerCase()
-      );
-      if (!exactCommand && [...identifiers].some(id => /command$/i.test(id))) {
-        finalScore *= 0.35;
-      }
-    }
-
-    // Constructors rarely answer architectural questions
-    if (chunk.symbolName === 'constructor') {
-      finalScore *= 0.35;
-    }
-
-    // Trivial getters: name match /^get[A-Z]/ && tiny body
-    if (
-      chunk.symbolName &&
-      /^get[A-Z]/.test(chunk.symbolName) &&
-      (chunk.tokenCount || 0) < 40
-    ) {
-      finalScore *= 0.5;
-    }
-
-    // Primary-export style boost ONLY when symbol also overlaps a prompt token
-    if (chunk.symbolName && PRIMARY_EXPORT_RE.test(chunk.symbolName)) {
-      const sn = chunk.symbolName.toLowerCase();
-      const overlaps =
-        [...identifiers].some(
-          t => sn === t || sn.startsWith(t) || t.startsWith(sn) || (t.length >= 5 && sn.includes(t))
-        ) ||
-        matchTokens.some(
-          t => t.length >= 5 && (sn === t || sn.startsWith(t) || sn.includes(t))
-        );
-      if (overlaps) {
-        finalScore *= 1.3;
-      }
-    }
+    finalScore = applyIntentAdjustments(chunk, finalScore, adjustCtx);
 
     return { ...chunk, score: finalScore };
   }).filter(chunk => chunk.score > -9000);

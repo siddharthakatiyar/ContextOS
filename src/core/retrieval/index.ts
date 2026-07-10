@@ -15,9 +15,16 @@ export * from './types.js';
  * both survive: never drop method bodies for a compact outline; keep cheap outlines so
  * `class Foo` markers survive. Only drop oversized class bodies (pure duplication).
  * Avoid cumulative parent-score inflation across loop iterations.
+ *
+ * Also: function/method parents vs additive `segment` children — keep parent when it is
+ * an exact identifier hit; otherwise prefer matched segments and drop the giant parent.
  */
-function containmentDedup(chunks: ScoredChunk[]): ScoredChunk[] {
+export function containmentDedup(
+  chunks: ScoredChunk[],
+  identifiers: string[] = [],
+): ScoredChunk[] {
   const drop = new Set<string>();
+  const idSet = new Set(identifiers.map((id) => id.toLowerCase()));
 
   const classes = chunks.filter(c => c.symbolKind === 'class' || c.symbolKind === 'struct');
   const methods = chunks.filter(c => c.parentSymbol && (c.symbolKind === 'function' || c.symbolKind === 'method'));
@@ -73,6 +80,39 @@ function containmentDedup(chunks: ScoredChunk[]): ScoredChunk[] {
     }
   }
 
+  // Function/method parents vs additive segment children
+  // Accuracy-first: NEVER drop the parent (E2E relies on full bodies when the
+  // prompt names or needs the whole function). Only drop segments when the
+  // parent is an exact identifier hit (full body will be compiled).
+  const fnParents = chunks.filter(
+    (c) =>
+      (c.symbolKind === 'function' || c.symbolKind === 'method') &&
+      c.symbolName &&
+      (c.tokenCount || 0) > 900,
+  );
+  const segments = chunks.filter((c) => c.symbolKind === 'segment' && c.parentSymbol);
+
+  for (const parent of fnParents) {
+    if (drop.has(parent.id)) continue;
+    const kids = segments.filter(
+      (s) =>
+        !drop.has(s.id) &&
+        s.sourceFile === parent.sourceFile &&
+        s.parentSymbol === parent.symbolName,
+    );
+    if (kids.length === 0) continue;
+
+    const exactId =
+      !!parent.symbolName && idSet.has(parent.symbolName.toLowerCase());
+
+    if (exactId) {
+      // Prompt names this function — keep full parent body, drop segments
+      for (const s of kids) drop.add(s.id);
+    }
+    // Otherwise keep both: compressor prefers intact segments as leader when
+    // the parent is not an exact-id hit; parent remains available as fallback.
+  }
+
   return chunks.filter(c => !drop.has(c.id));
 }
 
@@ -96,34 +136,25 @@ export class RetrievalEngine {
 
     // Step 2: Keyword matching (FTS + direct) → RRF-fused
     let directMatches = this.matcher.matchChunks(intent, opts);
+    directMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
 
-    // Step 2b: Optional embedding hybrid — agreement boost only (no emb-only inserts).
-    // Appending emb-only hits / equal RRF diluted keyword precision after full backfill.
-    try {
-      if (
-          isEmbeddingsAvailable() &&
-          this.primaryChunksRepo &&
-          (loadConfig().embeddingsRetrieval === true ||
-            process.env.CONTEXTOS_EMBEDDINGS_RETRIEVAL === '1')
-        ) {
-        const embHits = await searchEmbeddingChunks(
-          this.primaryChunksRepo.getDatabase(),
-          prompt,
-          15
-        );
-        if (embHits.length > 0) {
-          const embRank = new Map(embHits.map((c, i) => [c.id, i]));
-          for (const c of directMatches) {
-            const rank = embRank.get(c.id);
-            if (rank !== undefined && rank < 10) {
-              c.score = (c.score || 0) * (1.03 + 0.08 * (1 / (1 + rank)));
-            }
-          }
-        }
-      }
-    } catch {
-      // keyword-only path must keep working
-    }
+    // Keyword confidence: top-score margin + hit count (gates emb fallback)
+    const topScore = directMatches[0]?.score || 0;
+    const secondScore = directMatches[1]?.score || 0;
+    const margin = topScore > 0 ? (topScore - secondScore) / topScore : 0;
+    const hasExactId =
+      intent.identifiers.length > 0 &&
+      directMatches.slice(0, 5).some(
+        (c) =>
+          c.symbolName &&
+          intent.identifiers.some((id) => id.toLowerCase() === c.symbolName!.toLowerCase()),
+      );
+    const lowConfidence =
+      directMatches.length === 0 ||
+      (!hasExactId && (topScore < 8 || (directMatches.length >= 2 && margin < 0.15)));
+
+    // Step 2b: Embeddings (helper keeps `retrieve` body under the segment threshold)
+    directMatches = await this.applyEmbeddingFusion(prompt, directMatches, lowConfidence);
 
     // Step 3: Relationship expansion — ONLY use actual code identifiers as seeds
     const seedEntities = new Set<string>([...intent.identifiers, ...intent.quotedTerms]);
@@ -179,11 +210,42 @@ export class RetrievalEngine {
       identifiers: intent.identifiers,
     });
     // Containment dedup after scoring so we keep the higher-scoring class or method
-    scored = containmentDedup(scored);
+    scored = containmentDedup(scored, intent.identifiers);
     scored.sort((a, b) => (b.score || 0) - (a.score || 0));
 
+    // Soft segment cap: keep at most 2 naturally-matched segments so they don't
+    // crowd out other symbols. Exact-id parents already dropped their segments in dedup.
+    // Prefer segments whose parent is also in the result set and that hit prompt terms.
+    const maxChunks = opts?.maxChunks ?? config.maxRetrievalResults;
+    const parentNames = new Set(
+      scored.filter((c) => c.symbolName).map((c) => c.symbolName!.toLowerCase()),
+    );
+    const promptTerms = [
+      ...intent.identifiers,
+      ...intent.concepts.filter((c) => !c.includes(' ')),
+    ].map((t) => t.toLowerCase());
+    const segs = scored
+      .filter((c) => c.symbolKind === 'segment')
+      .sort((a, b) => {
+        const aParent = parentNames.has((a.parentSymbol || '').toLowerCase()) ? 1 : 0;
+        const bParent = parentNames.has((b.parentSymbol || '').toLowerCase()) ? 1 : 0;
+        if (aParent !== bParent) return bParent - aParent;
+        const aHits = promptTerms.filter((t) => t.length >= 5 && a.content.toLowerCase().includes(t)).length;
+        const bHits = promptTerms.filter((t) => t.length >= 5 && b.content.toLowerCase().includes(t)).length;
+        if (aHits !== bHits) return bHits - aHits;
+        return (b.score || 0) - (a.score || 0);
+      })
+      .slice(0, 2);
+    const segIds = new Set(segs.map((s) => s.id));
+    const limited: ScoredChunk[] = [];
+    for (const c of scored) {
+      if (c.symbolKind === 'segment' && !segIds.has(c.id)) continue;
+      limited.push(c);
+      if (limited.length >= maxChunks) break;
+    }
+
     // Step 6: Cap and return
-    const topChunks = scored.slice(0, opts?.maxChunks ?? config.maxRetrievalResults);
+    const topChunks = limited;
 
     return {
       chunks: topChunks,
@@ -191,5 +253,58 @@ export class RetrievalEngine {
       expandedEntities,
       latencyMs: Date.now() - startTime,
     };
+  }
+
+  /**
+   * Optional embedding fusion: agreement-boost keyword hits; on low confidence,
+   * insert a few emb-only candidates. Kept out of `retrieve` so that method's
+   * body stays under maxSymbolChunkTokens (E2E can show the full pipeline).
+   */
+  private async applyEmbeddingFusion(
+    prompt: string,
+    directMatches: ScoredChunk[],
+    lowConfidence: boolean,
+  ): Promise<ScoredChunk[]> {
+    try {
+      const embRetrievalOn =
+        loadConfig().embeddingsRetrieval === true ||
+        process.env.CONTEXTOS_EMBEDDINGS_RETRIEVAL === '1';
+      if (
+        !isEmbeddingsAvailable() ||
+        !this.primaryChunksRepo ||
+        !(embRetrievalOn || lowConfidence)
+      ) {
+        return directMatches;
+      }
+      const embHits = await searchEmbeddingChunks(
+        this.primaryChunksRepo.getDatabase(),
+        prompt,
+        15,
+      );
+      if (embHits.length === 0) return directMatches;
+
+      const embRank = new Map(embHits.map((c, i) => [c.id, i]));
+      for (const c of directMatches) {
+        const rank = embRank.get(c.id);
+        if (rank !== undefined && rank < 10) {
+          c.score = (c.score || 0) * (1.03 + 0.08 * (1 / (1 + rank)));
+        }
+      }
+      if (lowConfidence) {
+        const seen = new Set(directMatches.map((c) => c.id));
+        let inserted = 0;
+        for (let i = 0; i < embHits.length && inserted < 5; i++) {
+          const hit = embHits[i];
+          if (seen.has(hit.id)) continue;
+          seen.add(hit.id);
+          const base = Math.max(2, 6 - i * 0.6);
+          directMatches.push({ ...hit, score: base });
+          inserted++;
+        }
+      }
+    } catch {
+      // keyword-only path must keep working
+    }
+    return directMatches;
   }
 }
