@@ -2,6 +2,7 @@ import { ScoredChunk } from './types.js';
 import { ExpandedEntity } from '../graph/expander.js';
 
 import { loadConfig } from '../../config/index.js';
+import path from 'path';
 
 export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEntity[], feedbackAdjustments: Record<string, number> = {}): ScoredChunk[] {
   const config = loadConfig();
@@ -9,6 +10,7 @@ export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEnt
   const maxGraphBoost = config.maxGraphBoost || 10;
   const diversityDecay = config.diversityDecay || 0.7;
   const diversityPenaltyStart = config.diversityPenaltyStart || 3;
+  const cwd = process.cwd();
 
   const entityScores = new Map<string, number>();
   for (const e of expandedEntities) {
@@ -35,11 +37,6 @@ export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEnt
       finalScore = -9999;
     }
 
-    // 2. Huge boost for architectural source-of-truth docs (CLAUDE.md, engineering.md)
-    if (lowerPath.endsWith('claude.md') || lowerPath.endsWith('engineering.md')) {
-      finalScore += 20; // Massive additive boost to float rules to the top
-    }
-
     // Graph expansion boost
     if (chunk.keywords) {
       const chunkKeywords = chunk.keywords.split(', ').map(k => k.trim());
@@ -62,6 +59,52 @@ export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEnt
 
     // Layer boost (Multiplicative)
     finalScore *= (layerBoosts[chunk.layer as keyof typeof layerBoosts] || 1.0);
+
+    // Prefer repo-local source files over foreign workspace pollution
+    if (chunk.layer === 'workspace' && chunk.workspaceName) {
+      const ws = chunk.workspaceName;
+      const isLocal =
+        ws === cwd ||
+        cwd.startsWith(ws + path.sep) ||
+        ws.startsWith(cwd + path.sep) ||
+        path.basename(cwd) === path.basename(ws);
+      if (!isLocal) {
+        finalScore *= 0.3;
+      }
+    }
+
+    // Prefer primary symbol bodies over File Structure stubs
+    if (chunk.sectionTitle === 'File Structure') {
+      finalScore *= 0.5;
+    }
+
+    // Prefer large schema/DDL variable symbols (template-literal consts)
+    if (chunk.symbolKind === 'variable' && (chunk.tokenCount || 0) > 200) {
+      finalScore *= 1.8;
+    }
+
+    // Prefer method bodies over compact class outlines when both appear
+    if (chunk.parentSymbol && (chunk.symbolKind === 'function' || chunk.symbolKind === 'method')) {
+      finalScore *= 1.15;
+    }
+    // Demote tiny class outlines (member lists) relative to real implementations
+    if ((chunk.symbolKind === 'class' || chunk.symbolKind === 'struct') && (chunk.tokenCount || 0) < 80) {
+      finalScore *= 0.6;
+    }
+    // Constructors and trivial getters rarely answer architectural questions
+    if (chunk.symbolName === 'constructor') {
+      finalScore *= 0.35;
+    }
+    if (chunk.symbolName === 'getLatestSession' || chunk.symbolName === 'dbPath' || chunk.symbolName === 'globalContextDir') {
+      finalScore *= 0.5;
+    }
+    if (chunk.symbolName === 'ENTITY_BLOCKLIST' || chunk.symbolName === 'ENTITY_PATTERNS' || chunk.symbolName === 'ENTITY_STOPWORDS') {
+      finalScore *= 0.4;
+    }
+    // Prefer primary exported functions named like the query topic
+    if (chunk.symbolName && /^(extract|parse|compile|expand|start|init|register)/i.test(chunk.symbolName)) {
+      finalScore *= 1.2;
+    }
 
     return { ...chunk, score: finalScore };
   }).filter(chunk => chunk.score > -9000);

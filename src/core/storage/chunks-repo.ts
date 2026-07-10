@@ -1,6 +1,7 @@
 import { Database } from 'better-sqlite3';
 import { Chunk, Layer, ChunkStats } from './types.js';
 import { sanitizeFTSQuery } from './fts-sanitizer.js';
+import path from 'path';
 
 export interface ScoredChunk extends Chunk {
   score: number;
@@ -19,12 +20,12 @@ export class ChunksRepo {
       INSERT INTO chunks (
         id, source_file, layer, workspace_name, section_title, section_depth,
         content, summary, keywords, hash, importance, token_count,
-        file_type, language, symbol_name, symbol_kind,
+        file_type, language, symbol_name, symbol_kind, parent_symbol,
         created_at, updated_at
       ) VALUES (
         @id, @sourceFile, @layer, @workspaceName, @sectionTitle, @sectionDepth,
         @content, @summary, @keywords, @hash, @importance, @tokenCount,
-        @fileType, @language, @symbolName, @symbolKind,
+        @fileType, @language, @symbolName, @symbolKind, @parentSymbol,
         @createdAt, @updatedAt
       ) ON CONFLICT(id) DO UPDATE SET
         source_file = excluded.source_file,
@@ -42,6 +43,7 @@ export class ChunksRepo {
         language = excluded.language,
         symbol_name = excluded.symbol_name,
         symbol_kind = excluded.symbol_kind,
+        parent_symbol = excluded.parent_symbol,
         updated_at = excluded.updated_at
     `);
     stmt.run({
@@ -50,6 +52,7 @@ export class ChunksRepo {
       language: chunk.language || null,
       symbolName: chunk.symbolName || null,
       symbolKind: chunk.symbolKind || null,
+      parentSymbol: chunk.parentSymbol || null,
     });
   }
 
@@ -58,12 +61,12 @@ export class ChunksRepo {
       INSERT INTO chunks (
         id, source_file, layer, workspace_name, section_title, section_depth,
         content, summary, keywords, hash, importance, token_count,
-        file_type, language, symbol_name, symbol_kind,
+        file_type, language, symbol_name, symbol_kind, parent_symbol,
         created_at, updated_at
       ) VALUES (
         @id, @sourceFile, @layer, @workspaceName, @sectionTitle, @sectionDepth,
         @content, @summary, @keywords, @hash, @importance, @tokenCount,
-        @fileType, @language, @symbolName, @symbolKind,
+        @fileType, @language, @symbolName, @symbolKind, @parentSymbol,
         @createdAt, @updatedAt
       ) ON CONFLICT(id) DO UPDATE SET
         source_file = excluded.source_file,
@@ -81,6 +84,7 @@ export class ChunksRepo {
         language = excluded.language,
         symbol_name = excluded.symbol_name,
         symbol_kind = excluded.symbol_kind,
+        parent_symbol = excluded.parent_symbol,
         updated_at = excluded.updated_at
     `);
     const transaction = this.db.transaction((items: Chunk[]) => {
@@ -91,6 +95,7 @@ export class ChunksRepo {
           language: item.language || null,
           symbolName: item.symbolName || null,
           symbolKind: item.symbolKind || null,
+          parentSymbol: item.parentSymbol || null,
         });
       }
     });
@@ -150,8 +155,64 @@ export class ChunksRepo {
   }
 
   public findBySymbolName(name: string): Chunk[] {
-    const stmt = this.db.prepare('SELECT * FROM chunks WHERE symbol_name = ?');
+    // Exact or prefix match only — avoid '%Session%' hitting createSession via substring
+    const stmt = this.db.prepare(`
+      SELECT * FROM chunks
+      WHERE symbol_name = ? COLLATE NOCASE
+         OR symbol_name LIKE ? ESCAPE '\\'
+      LIMIT 20
+    `);
+    const prefix = name.replace(/[%_\\]/g, '\\$&') + '%';
+    return (stmt.all(name, prefix) as any[]).map(r => this.mapRow(r)) as Chunk[];
+  }
+
+  /** Looser symbol search for concept tokens (e.g. schema → SCHEMA_SQL). */
+  public findBySymbolFuzzy(name: string): Chunk[] {
+    if (!name || name.length < 5) return [];
+    const stmt = this.db.prepare(`
+      SELECT * FROM chunks
+      WHERE lower(symbol_name) LIKE '%' || lower(?) || '%'
+      LIMIT 15
+    `);
     return (stmt.all(name) as any[]).map(r => this.mapRow(r)) as Chunk[];
+  }
+
+  public findByParentSymbol(name: string): Chunk[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM chunks
+      WHERE parent_symbol = ? COLLATE NOCASE
+      LIMIT 30
+    `);
+    return (stmt.all(name) as any[]).map(r => this.mapRow(r)) as Chunk[];
+  }
+
+  /**
+   * Find chunks whose source_file basename stem matches a prompt token
+   * (e.g. "scoring" -> scorer.ts, "schema" -> schema.ts).
+   */
+  public findByFileStem(stem: string, limit: number = 20): Chunk[] {
+    if (!stem || stem.length < 3) return [];
+    const stemLower = stem.toLowerCase();
+    const like = `%${stemLower}%`;
+    const stmt = this.db.prepare(`
+      SELECT * FROM chunks
+      WHERE lower(source_file) LIKE ?
+      LIMIT ?
+    `);
+    const rows = stmt.all(like, limit * 8) as any[];
+    const scored = rows.map(r => {
+      const parts = (r.source_file || '').toLowerCase().split(/[/\\]/);
+      const base = parts[parts.length - 1] || '';
+      const fileStem = base.replace(/\.[^.]+$/, '');
+      let rank = 0;
+      if (fileStem === stemLower) rank = 3;
+      else if (fileStem.includes(stemLower) || stemLower.includes(fileStem)) rank = 2;
+      else if (parts.some((p: string) => p === stemLower)) rank = 1;
+      else rank = 0;
+      return { row: r, rank };
+    }).filter(x => x.rank > 0);
+    scored.sort((a, b) => b.rank - a.rank);
+    return scored.slice(0, limit).map(x => this.mapRow(x.row)) as Chunk[];
   }
 
   public getByIds(ids: string[]): Chunk[] {
@@ -220,6 +281,7 @@ export class ChunksRepo {
       language: row.language,
       symbolName: row.symbol_name,
       symbolKind: row.symbol_kind,
+      parentSymbol: row.parent_symbol ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       score: row.score !== undefined ? Math.abs(row.score) : undefined

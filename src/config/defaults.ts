@@ -66,8 +66,8 @@ export const defaultConfig: ContextOSConfig = {
   ],
   maxChunkTokens: 1500,
   
-  maxRetrievalResults: 15,
-  maxTokenBudget: 4000,
+  maxRetrievalResults: 12,
+  maxTokenBudget: 1200,
   layerBoosts: {
     session: 1.5,
     repo: 1.3,
@@ -80,7 +80,7 @@ export const defaultConfig: ContextOSConfig = {
   diversityDecay: 0.7,
   diversityPenaltyStart: 3,
   
-  ftsLimit: 30,
+  ftsLimit: 15,
   busyTimeout: 5000,
   
   cursor: {

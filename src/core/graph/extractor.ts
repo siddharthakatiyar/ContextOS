@@ -23,6 +23,16 @@ const ENTITY_BLOCKLIST = new Set([
   'mit', 'bsd', 'isc', 'gpl', 'mpl', 'apache',
   'ejson', 'bson', 'tdd', 'dom', 'api', 'url', 'uri',
   'npm', 'cli', 'git', 'ssh', 'ftp', 'wss', 'tcp', 'udp',
+  // SQL / query keywords that leak into Related Entities
+  'select', 'insert', 'update', 'delete', 'create', 'alter', 'drop',
+  'table', 'index', 'where', 'order', 'group', 'limit', 'offset',
+  'values', 'join', 'inner', 'outer', 'asc', 'and', 'or', 'not',
+  'set', 'as', 'on', 'in', 'exists', 'between', 'having', 'union',
+  'distinct', 'primary', 'foreign', 'key', 'references', 'cascade',
+  'virtual', 'trigger', 'begin', 'end', 'pragma', 'conflict',
+  'constructor', 'destructor', 'prototype', 'super', 'extends',
+  'implements', 'interface', 'class', 'function', 'return', 'await',
+  'async', 'export', 'import', 'require', 'module', 'package',
 ]);
 
 const ENTITY_PATTERNS = [

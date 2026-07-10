@@ -128,14 +128,21 @@ export const initCommand = new Command('init')
         config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       }
       
-      const generated = generateCursorConfig({
-        projectRoot: cwd
-      });
+      if (!config.mcpServers) {
+        config.mcpServers = {};
+      }
       
-      config.mcpServers = {
-        ...config.mcpServers,
-        ...generated.mcpServers
-      };
+      // Only inject contexts if it doesn't already exist, so we don't overwrite manual local testing setups
+      if (!config.mcpServers.contextos) {
+        const generated = generateCursorConfig({
+          projectRoot: cwd
+        });
+        
+        config.mcpServers = {
+          ...config.mcpServers,
+          ...generated.mcpServers
+        };
+      }
       
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
       console.log(`Updated Cursor MCP configuration at ${configPath}`);

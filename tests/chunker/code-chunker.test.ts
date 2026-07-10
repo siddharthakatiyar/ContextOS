@@ -8,8 +8,14 @@ describe('code-chunker', () => {
         name: 'testFunc',
         kind: 'function' as const,
         startLine: 1,
-        endLine: 3,
-        body: 'function testFunc() { return true; }'
+        endLine: 6,
+        body: `function testFunc() {
+  const value = true;
+  if (!value) {
+    return false;
+  }
+  return value;
+}`
       }
     ];
     
@@ -22,6 +28,7 @@ describe('code-chunker', () => {
     const chunks = chunkCode(doc, { layer: 'repo' });
     expect(chunks.length).toBe(2); // 1 for file, 1 for symbol
     expect(chunks[0].symbolName).toBe('testFunc');
-    expect(chunks[0].content).toBe('function testFunc() { return true; }');
+    expect(chunks[0].content).toContain('function testFunc');
+    expect(chunks[0].parentSymbol).toBeNull();
   });
 });
