@@ -5,6 +5,8 @@ export interface CompressOptions {
   signalTerms?: string[];
   /** High-precision prompt identifiers — used for exact-symbol leader budget override. */
   identifiers?: string[];
+  /** High-precision intent concepts — bypass weak stop words */
+  concepts?: string[];
 }
 
 function stripComments(code: string): string {
@@ -147,8 +149,8 @@ function toStub(c: ScoredChunk): ScoredChunk {
 }
 
 /** Prefer a tiny snippet over a stub when the body holds query-signal lines. */
-function toStubOrSnippet(c: ScoredChunk, signalTerms?: string[]): ScoredChunk {
-  const signalRe = buildSignalRegex(signalTerms);
+function toStubOrSnippet(c: ScoredChunk, signalTerms?: string[], concepts?: string[]): ScoredChunk {
+  const signalRe = buildSignalRegex(signalTerms, concepts);
   if (!signalRe) return toStub(c);
 
   const lines = c.content.split('\n');
@@ -174,8 +176,9 @@ function pushStubOrMini(
   used: number,
   budget: number,
   signalTerms?: string[],
+  concepts?: string[],
 ): number {
-  const mini = toStubOrSnippet(c, signalTerms);
+  const mini = toStubOrSnippet(c, signalTerms, concepts);
   if (mini.summary !== '[stub]' && used + mini.tokenCount <= budget) {
     full.push(mini);
     return used + mini.tokenCount;
@@ -198,8 +201,11 @@ const WEAK_STOP = new Set([
   'source', 'target', 'start', 'final', 'merge', 'store', 'manager', 'handler',
 ]);
 
-export function collectSignalTerms(signalTerms: string[] | undefined): string[] {
+export function collectSignalTerms(signalTerms: string[] | undefined, concepts?: string[]): string[] {
   const terms = new Set<string>();
+  for (const raw of concepts || []) {
+    if (raw && typeof raw === 'string') terms.add(raw.trim());
+  }
   for (const raw of signalTerms || []) {
     if (!raw || typeof raw !== 'string') continue;
     const t = raw.trim();
@@ -253,8 +259,8 @@ function longestSignalHit(line: string, terms: string[]): number {
   return best;
 }
 
-export function buildSignalRegex(signalTerms: string[] | undefined): RegExp | null {
-  const list = collectSignalTerms(signalTerms);
+export function buildSignalRegex(signalTerms: string[] | undefined, concepts?: string[]): RegExp | null {
+  const list = collectSignalTerms(signalTerms, concepts);
   if (list.length === 0) return null;
   try {
     return new RegExp(list.map(escapeRegExp).join('|'), 'i');
@@ -270,6 +276,7 @@ export function truncatePreservingSignals(
   content: string,
   ratio: number,
   signalTerms?: string[],
+  concepts?: string[],
 ): string {
   const lines = content.split('\n');
   const keep = Math.max(3, Math.floor(lines.length * Math.max(0.05, Math.min(1, ratio))));
@@ -283,7 +290,7 @@ export function truncatePreservingSignals(
       (t.includes('.') ||
         /^(detectIntent|matchChunks|scoreChunks|allChunksMap|containmentDedup)$/i.test(t)),
   );
-  const termList = [...new Set([...forced, ...collectSignalTerms(signalTerms)])];
+  const termList = [...new Set([...forced, ...collectSignalTerms(signalTerms, concepts)])];
   const signalRe = buildSignalRegex(termList);
   const selected = new Set<number>();
 
@@ -357,18 +364,22 @@ export function truncatePreservingSignals(
   }
 
   // Always preserve JSDoc / block-comment and line-comment headers (explanatory signal)
+  let commentLinesKept = 0;
+  const commentCap = 15;
   for (let i = 0; i < lines.length; i++) {
+    if (commentLinesKept >= commentCap) break;
     const line = lines[i];
     if (/^\s*\/\*\*/.test(line) || /^\s*\*/.test(line) || /^\s*\/\//.test(line)) {
-      // Prefer comments that sit near a declaration or branch
+      // Prefer comments that sit near a declaration
       const nearDecl =
         i + 1 < lines.length &&
-        /^\s*(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|if|else|switch|case)\b/.test(
+        /^\s*(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var)\b/.test(
           lines[i + 1],
         );
-      if (nearDecl || /^\s*\/\*\*/.test(line) || /^\s*\*\s/.test(line)) {
+      if (nearDecl) {
         selected.add(i);
         if (i + 1 < lines.length) selected.add(i + 1);
+        commentLinesKept += 2;
       }
     }
   }
@@ -443,17 +454,18 @@ function fitContentToBudget(
   content: string,
   maxTok: number,
   signalTerms?: string[],
+  concepts?: string[],
 ): { content: string; tokenCount: number } {
   let tok = estimateTokens(content);
   if (tok <= maxTok) return { content, tokenCount: tok };
 
   let ratio = Math.max(0.08, Math.min(1, (maxTok / tok) * 0.9));
-  let out = truncatePreservingSignals(content, ratio, signalTerms) + '\n//…';
+  let out = truncatePreservingSignals(content, ratio, signalTerms, concepts) + '\n//…';
   tok = estimateTokens(out);
   let guard = 0;
   while (tok > maxTok && guard++ < 8) {
     ratio = Math.max(0.06, ratio * (maxTok / tok) * 0.85);
-    out = truncatePreservingSignals(content, ratio, signalTerms) + '\n//…';
+    out = truncatePreservingSignals(content, ratio, signalTerms, concepts) + '\n//…';
     tok = estimateTokens(out);
   }
   if (tok > maxTok) {
@@ -499,6 +511,7 @@ export interface CompressCtx {
   symbolNamedInPrompt: (symbol: string | null | undefined) => boolean;
   stemMatch: (c: ScoredChunk) => boolean;
   contentHitsSignal: (c: ScoredChunk) => boolean;
+  opts?: CompressOptions;
 }
 
 function fileStemOf(f: string): string {
@@ -675,19 +688,12 @@ export function pickPrimaries(
       )
       .sort((a, b) => (b.score || 0) - (a.score || 0))
       .slice(0, 3);
-    if (!exactSymbol && wontFit && rankedSegs.length >= 2) {
-      // Only swap when a head slice ranked — mid-body-only swaps drop early calls
-      // like compressChunks at the top of compile().
-      const hasHead = rankedSegs.some(
-        (s) => (s.startLine || 0) <= (giant.startLine || 0) + 25,
-      );
-      if (hasHead) {
-        primary = [
-          ...rankedSegs,
-          giant,
-          ...primary.filter((c) => c.id !== giant.id && !rankedSegs.some((s) => s.id === c.id)),
-        ];
-      }
+    if (!exactSymbol && wontFit && rankedSegs.length >= 1) {
+      primary = [
+        ...rankedSegs,
+        giant,
+        ...primary.filter((c) => c.id !== giant.id && !rankedSegs.some((s) => s.id === c.id)),
+      ];
     }
   }
 
@@ -826,7 +832,7 @@ export function packToBudget(
     const room = budget - used;
 
     if (room < 40) {
-      used = pushStubOrMini(c, full, stubs, used, budget, terms);
+      used = pushStubOrMini(c, full, stubs, used, budget, terms, ctx.opts?.concepts);
       continue;
     }
 
@@ -1037,11 +1043,11 @@ export function packToBudget(
     if (idx < 0) break;
     const target = Math.max(60, full[idx].tokenCount - (sumTok - budget));
     const terms = full[idx].symbolName ? [...truncTerms, full[idx].symbolName!] : truncTerms;
-    const fitted = fitContentToBudget(full[idx].content, target, terms);
+    const fitted = fitContentToBudget(full[idx].content, target, terms, ctx.opts?.concepts);
     if (fitted.tokenCount >= full[idx].tokenCount * 0.98) {
       if (full.length > 1 && idx > 0) {
         sumTok -= full[idx].tokenCount;
-        const mini = toStubOrSnippet(full[idx], terms);
+        const mini = toStubOrSnippet(full[idx], terms, ctx.opts?.concepts);
         if (mini.summary !== '[stub]' && sumTok + mini.tokenCount <= budget) {
           full[idx] = mini;
           sumTok += mini.tokenCount;
@@ -1076,9 +1082,11 @@ export function compressChunks(
 ): ScoredChunk[] {
   const signalTerms = Array.isArray(opts) ? opts : opts?.signalTerms;
   const identifiers = Array.isArray(opts) ? [] : (opts?.identifiers || []);
+  const concepts = Array.isArray(opts) ? [] : (opts?.concepts || []);
   const idSet = new Set(identifiers.map((id) => id.toLowerCase()));
-  const signalList = collectSignalTerms(signalTerms);
+  const signalList = collectSignalTerms(signalTerms, concepts);
   const ctx = buildCompressCtx(signalList, idSet);
+  if (opts && !Array.isArray(opts)) ctx.opts = opts;
 
   let filteredChunks = chunks.slice();
 

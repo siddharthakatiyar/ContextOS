@@ -245,6 +245,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
   const compressedChunks = compressChunks(result.chunks, compressBudget, {
     signalTerms,
     identifiers: result.intent?.identifiers || [],
+    concepts: result.intent?.concepts || [],
   });
   const full = compressedChunks.filter((c) => !isStub(c));
   const stubs = compressedChunks.filter((c) => isStub(c));
