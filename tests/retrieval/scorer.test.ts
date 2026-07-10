@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { scoreChunks } from '../../src/core/retrieval/scorer.js';
+import {
+  scoreChunks,
+  applyPoisonPenalty,
+  applyWorkspacePenalty,
+  applyNoiseDemotion,
+  applyIntentAdjustments,
+} from '../../src/core/retrieval/scorer.js';
 import { ScoredChunk } from '../../src/core/retrieval/types.js';
 
 function chunk(partial: Partial<ScoredChunk> & { id: string }): ScoredChunk {
@@ -21,6 +27,47 @@ function chunk(partial: Partial<ScoredChunk> & { id: string }): ScoredChunk {
     ...partial,
   } as ScoredChunk;
 }
+
+describe('scoreChunks helpers', () => {
+  it('applyPoisonPenalty zeros poison paths', () => {
+    const c = chunk({ id: '1', sourceFile: 'src/foo.ts' });
+    const poisoned = chunk({ id: '1', sourceFile: '/proj/node_modules/pkg/index.js' });
+    expect(applyPoisonPenalty(poisoned, 10)).toBe(-9999);
+    expect(applyPoisonPenalty(c, 10)).toBe(10);
+  });
+
+  it('applyWorkspacePenalty demotes foreign workspaces', () => {
+    const foreign = chunk({
+      id: '1',
+      layer: 'workspace',
+      workspaceName: '/other/project',
+    });
+    const ctx = {
+      repoRoot: '/Volumes/ExtremeSSD/code/contextOS',
+      matchTokens: [] as string[],
+      identifiers: new Set<string>(),
+    };
+    expect(applyWorkspacePenalty(foreign, 10, ctx)).toBeCloseTo(3);
+  });
+
+  it('applyNoiseDemotion demotes tests and README', () => {
+    expect(applyNoiseDemotion(chunk({ id: '1', sourceFile: 'src/foo.test.ts' }), 10)).toBeCloseTo(5.5);
+    expect(applyNoiseDemotion(chunk({ id: '2', sourceFile: 'README.md' }), 10)).toBeCloseTo(4);
+    expect(applyNoiseDemotion(chunk({ id: '3', sectionTitle: 'File Structure' }), 10)).toBeCloseTo(4.5);
+  });
+
+  it('applyIntentAdjustments boosts retrieve on dedup prompts', () => {
+    const ctx = {
+      repoRoot: '/x',
+      matchTokens: ['deduplicate'],
+      identifiers: new Set<string>(),
+    };
+    const retrieve = chunk({ id: '1', symbolName: 'retrieve' });
+    const scorer = chunk({ id: '2', symbolName: 'scoreChunks' });
+    expect(applyIntentAdjustments(retrieve, 10, ctx)).toBeGreaterThan(10);
+    expect(applyIntentAdjustments(scorer, 10, ctx)).toBeLessThan(10);
+  });
+});
 
 describe('scoreChunks', () => {
   it('accepts optional repoRoot instead of process.cwd()', () => {

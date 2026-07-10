@@ -65,6 +65,8 @@ export const defaultConfig: ContextOSConfig = {
     '*.lock',
   ],
   maxChunkTokens: 1500,
+  /** Function/method bodies above this emit additive segment chunks (parent kept). */
+  maxSymbolChunkTokens: 900,
   
   maxRetrievalResults: 12,
   maxTokenBudget: 1200,

@@ -16,11 +16,23 @@ function isInsideWorkspace(resolvedPath: string, root: string): boolean {
 export function registerReadFileTool(server: McpServer) {
   server.tool(
     "ctx_read_file",
-    "CRITICAL: Use this tool to read a full file when get_context truncates it. Reads up to 2000 lines of a file from the filesystem to avoid token limits while still providing deep context.",
+    "Read a file (or a line range) when get_context stubs or truncates. Prefer start_line/end_line from stub paths (e.g. path.ts:12-84) over whole-file reads. Prefer get_symbol when you only need one named symbol. Max 2000 lines per call.",
     {
       filePath: z.string().describe("The absolute or relative path to the file to read"),
+      start_line: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("1-based start line (inclusive). Use with end_line for ranged reads from stubs."),
+      end_line: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("1-based end line (inclusive). Defaults to start_line + 199 if only start_line is set."),
     },
-    async ({ filePath }) => {
+    async ({ filePath, start_line, end_line }) => {
       try {
         const root = getWorkspaceRoot();
         const resolvedPath = path.resolve(root, filePath);
@@ -60,19 +72,45 @@ export function registerReadFileTool(server: McpServer) {
 
         const content = fs.readFileSync(resolvedPath, "utf8");
         const lines = content.split('\n');
-
         const MAX_LINES = 2000;
-        let output = lines.slice(0, MAX_LINES).join('\n');
 
-        if (lines.length > MAX_LINES) {
+        let startIdx = 0;
+        let endIdx = Math.min(lines.length, MAX_LINES);
+        let ranged = false;
+
+        if (start_line != null) {
+          ranged = true;
+          startIdx = Math.max(0, start_line - 1);
+          const defaultEnd = startIdx + MAX_LINES;
+          endIdx = end_line != null ? Math.min(lines.length, end_line) : Math.min(lines.length, defaultEnd);
+          if (endIdx <= startIdx) {
+            return {
+              content: [{ type: "text", text: `Invalid range: start_line=${start_line} end_line=${end_line ?? 'default'}` }],
+              isError: true,
+            };
+          }
+          // Cap ranged reads too
+          if (endIdx - startIdx > MAX_LINES) {
+            endIdx = startIdx + MAX_LINES;
+          }
+        }
+
+        let output = lines.slice(startIdx, endIdx).join('\n');
+        const header = ranged
+          ? `--- From ${resolvedPath} (lines ${startIdx + 1}-${endIdx}) ---`
+          : `--- From ${resolvedPath} ---`;
+
+        if (!ranged && lines.length > MAX_LINES) {
           output += `\n\n[...truncated to ${MAX_LINES} lines]`;
+        } else if (ranged && endIdx < lines.length && end_line != null && endIdx < end_line) {
+          output += `\n\n[...truncated to ${MAX_LINES} lines within requested range]`;
         }
 
         return {
           content: [
             {
               type: "text",
-              text: `--- From ${resolvedPath} ---\n\n${output}`,
+              text: `${header}\n\n${output}`,
             },
           ],
         };

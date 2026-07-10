@@ -2,11 +2,22 @@ import { DetectedIntent } from './types.js';
 import { STOPWORDS } from '../../utils/stopwords.js';
 
 function tokenize(text: string): string[] {
-  return text
+  // Expand common English contractions before splitting so "What's" → "What" "is"
+  // instead of leaving a bare "s" token.
+  const expanded = text
+    .replace(/\b([A-Za-z]+)'(?:s)\b/g, '$1 is')
+    .replace(/\b([A-Za-z]+)'(?:re)\b/gi, '$1 are')
+    .replace(/\b([A-Za-z]+)'(?:ve)\b/gi, '$1 have')
+    .replace(/\b([A-Za-z]+)'(?:ll)\b/gi, '$1 will')
+    .replace(/\b([A-Za-z]+)'(?:d)\b/gi, '$1 would')
+    .replace(/\b([Nn])'t\b/g, '$1ot');
+  return expanded
     .split(/[^\w\d_.-]+/)
     .filter(Boolean)
     // Drop bare punctuation tokens (e.g. "-" from "events - how")
-    .filter(t => !/^[-_.]+$/.test(t));
+    .filter(t => !/^[-_.]+$/.test(t))
+    // Drop leftover single-letter noise from failed contraction splits
+    .filter(t => t.length > 1);
 }
 
 function generateNgrams(words: string[], n: number): string[] {

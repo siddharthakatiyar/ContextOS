@@ -13,6 +13,13 @@ describe('detectIntent', () => {
     expect(intent.quotedTerms).toEqual([]);
   });
 
+  it('expands contractions so bare letter tokens are not left behind', () => {
+    const intent = detectIntent("What's wrong with FTS query sanitization?");
+    expect(intent.concepts).not.toContain('s');
+    expect(intent.concepts).toContain('wrong');
+    expect(intent.concepts).toContain('fts');
+  });
+
   it('only uses balanced straight double-quote pairs', () => {
     const intent = detectIntent('Find "exact phrase" and also \'single\'');
     expect(intent.quotedTerms).toEqual(['exact phrase']);
