@@ -54,32 +54,24 @@ export class SessionManager {
       // not a git repo or git not installed, ignore
     }
     
-    // 2. Recent session events
+    // 2. Recent session events (only actionable ones, ignore prompt/retrieval echo)
     const recentEvents = this.sessionStore.getRecentEvents(this.sessionId, 10);
     if (recentEvents && recentEvents.length > 0) {
-      const eventContent = recentEvents.map(e => `[${e.eventType}]: ${e.content}`).join('\n');
-      chunks.push({
-        id: `session:events:${this.sessionId}`,
-        content: `Recent session context:\n${eventContent}`,
-        layer: 'session',
-        importance: 9,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      });
+      const filteredEvents = recentEvents.filter(e => e.eventType === 'system_response' || e.eventType === 'error');
+      if (filteredEvents.length > 0) {
+        const eventContent = filteredEvents.map(e => `[${e.eventType}]: ${e.content}`).join('\n');
+        chunks.push({
+          id: `session:events:${this.sessionId}`,
+          content: `Recent session context:\n${eventContent}`,
+          layer: 'session',
+          importance: 9,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      }
     }
 
-    // 3. Recent prompts fallback (legacy)
-    const recentPrompts = this.promptsRepo.getRecent(5);
-    if (recentPrompts && recentPrompts.length > 0) {
-      chunks.push({
-        id: `session:history:${this.sessionId}`,
-        content: `Recent tasks in this session:\n${recentPrompts.map(p => `- ${p.prompt}`).join('\n')}`,
-        layer: 'session',
-        importance: 7,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      });
-    }
+    // 3. Recent prompts fallback (legacy) - Removed to save tokens as LLM already has chat history
     
     return chunks;
   }
