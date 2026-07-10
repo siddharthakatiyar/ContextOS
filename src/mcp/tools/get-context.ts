@@ -69,9 +69,9 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           } as any);
         }
 
-        // Add cross-session memory facts
+        // Add cross-session memory facts (limited to 2 to save tokens)
         const knowledgeStore = new KnowledgeStore(primaryDb);
-        const knowledgeFacts = knowledgeStore.searchFacts(prompt, 5);
+        const knowledgeFacts = knowledgeStore.searchFacts(prompt, 2);
         for (const fact of knowledgeFacts) {
           result.chunks.push({
             id: fact.id,
