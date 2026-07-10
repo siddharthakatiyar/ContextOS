@@ -23,9 +23,14 @@ export function scoreChunks(chunks: ScoredChunk[], expandedEntities: ExpandedEnt
     // 1. Hard penalty for poison paths
     if (
       lowerPath.includes('/node_modules/') || 
+      lowerPath.includes('/.git/') ||
       lowerPath.includes('changelog') ||
+      lowerPath.includes('changes.md') ||
+      lowerPath.includes('history.md') ||
       lowerPath.endsWith('.map') ||
-      lowerPath.endsWith('.lock')
+      lowerPath.endsWith('.lock') ||
+      lowerPath.endsWith('.min.js') ||
+      lowerPath.endsWith('.min.css')
     ) {
       finalScore = -9999;
     }
