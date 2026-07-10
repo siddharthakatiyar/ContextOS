@@ -1,4 +1,4 @@
-import { RetrievalResult } from '../retrieval/types.js';
+import { RetrievalResult, ScoredChunk } from '../retrieval/types.js';
 import { CompiledContext, CompilerOptions } from './types.js';
 import { compressChunks } from './compressor.js';
 import { estimateTokens } from '../../utils/tokens.js';
@@ -16,20 +16,44 @@ function escapeXml(unsafe: string | null | undefined): string {
     .replace(/'/g, '&apos;');
 }
 
+function isStub(chunk: ScoredChunk): boolean {
+  return chunk.summary === '[stub]' || (chunk.content.includes(' — ') && chunk.tokenCount <= 40 && !chunk.content.includes('\n'));
+}
+
+function signatureLine(chunk: ScoredChunk): string {
+  const loc = path.basename(chunk.sourceFile);
+  if (chunk.symbolName) {
+    return `\`${chunk.symbolKind || 'symbol'} ${chunk.symbolName}\` — \`${loc}\``;
+  }
+  if (chunk.sectionTitle) {
+    return `**${chunk.sectionTitle}** — \`${loc}\``;
+  }
+  return `\`${loc}\``;
+}
+
+function isIdentifierEntity(name: string): boolean {
+  return /^[a-zA-Z][a-zA-Z0-9_.-]{2,}$/.test(name) && !/^(select|insert|order|desc|limit|values|update|delete|create)$/i.test(name);
+}
+
 export function compile(result: RetrievalResult, opts: CompilerOptions): CompiledContext {
   const compressedChunks = compressChunks(result.chunks, opts.maxTokens);
-  
-  // Group by layer
-  const byLayer: Record<string, typeof compressedChunks> = {
+  const full = compressedChunks.filter(c => !isStub(c));
+  const stubs = compressedChunks.filter(c => isStub(c));
+
+  const byLayer: Record<string, ScoredChunk[]> = {
     session: [],
     repo: [],
     workspace: [],
     global: []
   };
 
-  for (const chunk of compressedChunks) {
-    byLayer[chunk.layer].push(chunk);
+  for (const chunk of full) {
+    byLayer[chunk.layer]?.push(chunk);
   }
+
+  const entities = result.expandedEntities
+    .filter(e => isIdentifierEntity(e.entity))
+    .slice(0, 5);
 
   if (opts.outputFormat === 'xml') {
     let xmlOutput = `<contextos_context>\n`;
@@ -44,29 +68,23 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
       return out;
     };
 
-    if (byLayer.session.length > 0) {
-      xmlOutput += `<layer name="session">\n`;
-      byLayer.session.forEach(c => xmlOutput += formatXmlChunk(c));
-      xmlOutput += `</layer>\n`;
+    for (const layer of ['session', 'repo', 'workspace', 'global'] as const) {
+      if (byLayer[layer].length > 0) {
+        xmlOutput += `<layer name="${layer}">\n`;
+        byLayer[layer].forEach(c => xmlOutput += formatXmlChunk(c));
+        xmlOutput += `</layer>\n`;
+      }
     }
-    if (byLayer.repo.length > 0) {
-      xmlOutput += `<layer name="repo">\n`;
-      byLayer.repo.forEach(c => xmlOutput += formatXmlChunk(c));
-      xmlOutput += `</layer>\n`;
+    if (stubs.length > 0) {
+      xmlOutput += `<stubs>\n`;
+      for (const s of stubs) {
+        xmlOutput += `  <stub source="${escapeXml(path.basename(s.sourceFile))}" symbol="${escapeXml(s.symbolName || '')}" />\n`;
+      }
+      xmlOutput += `</stubs>\n`;
     }
-    if (byLayer.workspace.length > 0) {
-      xmlOutput += `<layer name="workspace">\n`;
-      byLayer.workspace.forEach(c => xmlOutput += formatXmlChunk(c));
-      xmlOutput += `</layer>\n`;
-    }
-    if (byLayer.global.length > 0) {
-      xmlOutput += `<layer name="global">\n`;
-      byLayer.global.forEach(c => xmlOutput += formatXmlChunk(c));
-      xmlOutput += `</layer>\n`;
-    }
-    if (result.expandedEntities.length > 0) {
+    if (entities.length > 0) {
       xmlOutput += `<related_entities>\n`;
-      for (const e of result.expandedEntities) {
+      for (const e of entities) {
         xmlOutput += `  <entity name="${escapeXml(e.entity)}" relationship="${escapeXml(e.relationshipType)}" score="${e.score}" />\n`;
       }
       xmlOutput += `</related_entities>\n`;
@@ -79,29 +97,31 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     };
   }
 
-  // Markdown format (default)
+  // Markdown — framing tokens counted via final estimateTokens(output)
   let output = '## Relevant Context (ContextOS)\n\n';
 
   const formatChunk = (chunk: any) => {
-    let output = '';
+    let out = '';
     
-    // Add title/file context concisely
     if (chunk.symbolName) {
-      output += `\`${chunk.symbolKind} ${chunk.symbolName}\` (in \`${path.basename(chunk.sourceFile)}\`):\n`;
+      if (chunk.parentSymbol) {
+        out += `\`class ${chunk.parentSymbol}\` → \`${chunk.symbolKind} ${chunk.symbolName}\` (in \`${path.basename(chunk.sourceFile)}\`):\n`;
+      } else {
+        out += `\`${chunk.symbolKind} ${chunk.symbolName}\` (in \`${path.basename(chunk.sourceFile)}\`):\n`;
+      }
     } else if (chunk.sectionTitle) {
-      output += `**${chunk.sectionTitle}** (in \`${path.basename(chunk.sourceFile)}\`):\n`;
+      out += `**${chunk.sectionTitle}** (in \`${path.basename(chunk.sourceFile)}\`):\n`;
     } else {
-      output += `File: \`${path.basename(chunk.sourceFile)}\`:\n`;
+      out += `File: \`${path.basename(chunk.sourceFile)}\`:\n`;
     }
 
-    // Wrap in code block if it's code, else plain
     if (chunk.language) {
-      output += `\`\`\`${chunk.language}\n${chunk.content.trim()}\n\`\`\`\n\n`;
+      out += `\`\`\`${chunk.language}\n${chunk.content.trim()}\n\`\`\`\n\n`;
     } else {
-      output += `${chunk.content.trim()}\n\n`;
+      out += `${chunk.content.trim()}\n\n`;
     }
     
-    return output;
+    return out;
   };
 
   if (byLayer.session.length > 0) {
@@ -128,11 +148,17 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     output += '\n';
   }
 
-  if (result.expandedEntities.length > 0) {
-    output += '### Related Entities (Graphify)\n';
-    for (const e of result.expandedEntities) {
-      output += `- \`${e.entity}\` (discovered via \`${e.relationshipType}\`)\n`;
+  if (stubs.length > 0) {
+    output += '### Also relevant\n';
+    for (const s of stubs) {
+      output += `- ${signatureLine(s)}\n`;
     }
+    output += '\n';
+  }
+
+  if (entities.length > 0) {
+    output += '### Related Entities\n';
+    output += entities.map(e => `\`${e.entity}\``).join(', ') + '\n';
   }
 
   return {

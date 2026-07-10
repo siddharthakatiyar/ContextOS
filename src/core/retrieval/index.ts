@@ -4,10 +4,54 @@ import { GraphExpander, ExpandedEntity } from '../graph/expander.js';
 import { detectIntent } from './intent-detector.js';
 import { KeywordMatcher } from './keyword-matcher.js';
 import { scoreChunks } from './scorer.js';
-import { RetrievalOptions, RetrievalResult } from './types.js';
+import { RetrievalOptions, RetrievalResult, ScoredChunk } from './types.js';
 import { loadConfig } from '../../config/index.js';
 
 export * from './types.js';
+
+/**
+ * When a class chunk and its method chunks (same sourceFile, parentSymbol == class name)
+ * both survive, keep whichever scored higher — but always prefer methods over an
+ * oversized class body (which duplicates every method and blows the token budget).
+ */
+function containmentDedup(chunks: ScoredChunk[]): ScoredChunk[] {
+  const drop = new Set<string>();
+
+  const classes = chunks.filter(c => c.symbolKind === 'class' || c.symbolKind === 'struct');
+  const methods = chunks.filter(c => c.parentSymbol && (c.symbolKind === 'function' || c.symbolKind === 'method'));
+
+  for (const parent of classes) {
+    const childMethods = methods.filter(
+      m => m.sourceFile === parent.sourceFile && m.parentSymbol === parent.symbolName
+    );
+    if (childMethods.length === 0) continue;
+
+    // Oversized class bodies are pure duplication — always drop in favor of methods
+    if ((parent.tokenCount || 0) > 500) {
+      const boost = (parent.score || 0) * 0.15;
+      for (const m of childMethods) {
+        m.score = (m.score || 0) + boost / childMethods.length;
+      }
+      drop.add(parent.id);
+      continue;
+    }
+
+    for (const method of childMethods) {
+      if (drop.has(method.id) || drop.has(parent.id)) continue;
+      const methodScore = method.score || 0;
+      const parentScore = parent.score || 0;
+      if (parentScore >= methodScore) {
+        parent.score = parentScore + methodScore * 0.25;
+        drop.add(method.id);
+      } else {
+        method.score = methodScore + parentScore * 0.25;
+        drop.add(parent.id);
+      }
+    }
+  }
+
+  return chunks.filter(c => !drop.has(c.id));
+}
 
 export class RetrievalEngine {
   private matcher: KeywordMatcher;
@@ -64,7 +108,7 @@ export class RetrievalEngine {
       }
     }
     
-    const allChunks = Array.from(allChunksMap.values());
+    let allChunks = Array.from(allChunksMap.values()) as ScoredChunk[];
     const chunkIds = allChunks.map(c => c.id);
     
     // Fetch feedback adjustments if not provided in opts
@@ -73,7 +117,10 @@ export class RetrievalEngine {
       adjustments = this.primaryChunksRepo.getFeedbackAdjustments(chunkIds);
     }
     
-    const scored = scoreChunks(allChunks, expandedEntities, adjustments || {});
+    let scored = scoreChunks(allChunks, expandedEntities, adjustments || {});
+    // Containment dedup after scoring so we keep the higher-scoring class or method
+    scored = containmentDedup(scored);
+    scored.sort((a, b) => (b.score || 0) - (a.score || 0));
     
     // Step 6: Cap and return
     const topChunks = scored.slice(0, opts?.maxChunks ?? config.maxRetrievalResults);

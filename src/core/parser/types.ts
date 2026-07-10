@@ -33,4 +33,6 @@ export interface ParsedCodeDocument {
   filePath: string;
   language: string;
   symbols: CodeSymbol[];
+  /** Original file text — used for whole-file fallback chunks. */
+  rawContent?: string;
 }

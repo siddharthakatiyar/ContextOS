@@ -17,6 +17,8 @@ export interface Chunk {
   language?: string;
   symbolName?: string;
   symbolKind?: string;
+  /** Parent class/struct name when this chunk is a nested method/member. */
+  parentSymbol?: string | null;
   createdAt: number;
   updatedAt: number;
 }

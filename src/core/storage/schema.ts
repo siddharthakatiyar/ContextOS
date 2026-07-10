@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   language TEXT,
   symbol_name TEXT,
   symbol_kind TEXT,
+  parent_symbol TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   FOREIGN KEY(source_file) REFERENCES files(path) ON DELETE CASCADE
@@ -239,6 +240,28 @@ export function applyMigrations(db: Database.Database) {
         db.prepare('UPDATE schema_version SET version = 3').run();
       } catch (e: any) {
         console.error(`Migration to v3 failed: ${e.message}`);
+      }
+    }
+
+    // Refresh version after possible upgrades above
+    const afterRow = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
+    const afterVersion = afterRow ? afterRow.version : 0;
+
+    if (afterVersion === 3) {
+      console.log('Migrating ContextOS database to v0.5.0 (parent_symbol)...');
+      try {
+        db.exec(`ALTER TABLE chunks ADD COLUMN parent_symbol TEXT;`);
+      } catch (e: any) {
+        // column may already exist
+      }
+      try {
+        db.exec(SCHEMA_SQL);
+        const updateStmt = db.prepare('UPDATE schema_version SET version = 4');
+        if (updateStmt.run().changes === 0) {
+          db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (4)').run();
+        }
+      } catch (e: any) {
+        console.error(`Migration to v4 failed: ${e.message}`);
       }
     }
   });

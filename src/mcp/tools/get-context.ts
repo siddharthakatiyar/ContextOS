@@ -113,11 +113,13 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           relatedFiles: null
         });
         
+        const diagnosticHeader = `ContextOS | tokens: ${compiled.tokenCount}/${max_tokens}\n\n`;
+        
         return {
           content: [
             {
               type: "text",
-              text: compiled.output,
+              text: diagnosticHeader + compiled.output,
             },
           ],
         };

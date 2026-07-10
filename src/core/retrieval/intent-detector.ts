@@ -21,11 +21,15 @@ export function detectIntent(prompt: string): DetectedIntent {
   const bigrams = generateNgrams(meaningful, 2).map(t => t.toLowerCase()).slice(0, 5);
   const trigrams = generateNgrams(meaningful, 3).map(t => t.toLowerCase()).slice(0, 3);
   
-  const identifiers = prompt.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g)    // camelCase
-    ?.concat(prompt.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])           // snake_case
-    ?.concat(prompt.match(/\b[a-z]+(?:\.[a-z]+)+\b/g) ?? [])          // dot.notation
-    ?.concat(prompt.match(/\b[A-Z][a-zA-Z0-9]+\b/g) ?? [])            // PascalCase
-    ?.concat(prompt.match(/\b[A-Z_]+\b/g) ?? []) ?? [];               // UPPER_CASE
+  const identifiers = [
+    ...(prompt.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g) ?? []),       // camelCase
+    ...(prompt.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? []),          // snake_case
+    ...(prompt.match(/\b[a-z]+(?:\.[a-z]+)+\b/g) ?? []),         // dot.notation
+    ...(prompt.match(/\b[A-Z][a-zA-Z0-9]+\b/g) ?? []),           // PascalCase
+    ...(prompt.match(/\b[A-Z][A-Z0-9_]{2,}\b/g) ?? []),          // UPPER_CASE / SCHEMA_SQL
+  ]
+    .map(id => id.replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/i, ''))
+    .filter(id => id.length > 1 && !['DB', 'ID', 'API', 'SQL', 'CLI'].includes(id));
   
   const quoted = prompt.match(/"([^"]+)"|'([^']+)'/g)
     ?.map(q => q.replace(/['"]/g, '')) ?? [];

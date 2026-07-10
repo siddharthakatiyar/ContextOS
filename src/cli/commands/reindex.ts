@@ -22,5 +22,5 @@ export const reindexCommand = new Command('reindex')
     console.log(chalk.green('Database cleared. Starting fresh initialization...'));
     
     // Call the init command logic
-    await initCommand.parseAsync(['node', 'contextos', 'init']);
+    await initCommand.parseAsync(['node', 'contextos']);
   });
