@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { DB } from '../../src/core/storage/database.js';
-import fs from 'fs';
-import path from 'path';
 import os from 'os';
 
 describe('database', () => {
@@ -18,6 +16,17 @@ describe('database', () => {
     expect(tableNames).toContain('chunks');
     expect(tableNames).toContain('relationships');
     expect(tableNames).toContain('chunks_fts');
+    expect(tableNames).toContain('chunk_embeddings');
+
+    const version = instance.prepare(
+      'SELECT version FROM schema_version ORDER BY version DESC LIMIT 1'
+    ).get() as { version: number };
+    expect(version.version).toBe(5);
+
+    const cols = (instance.prepare('PRAGMA table_info(chunks)').all() as any[]).map(c => c.name);
+    expect(cols).toContain('start_line');
+    expect(cols).toContain('end_line');
+    expect(cols).toContain('file_stem');
   });
 
   it('should resolve hierarchical databases', () => {

@@ -1,4 +1,13 @@
-export function estimateTokens(text: string): number {
+/**
+ * Exact token counts via gpt-tokenizer when available; heuristic fallback otherwise.
+ * Fallback retains `codeRatio` / `charsPerToken` for callers and e2e markers.
+ *
+ * Note: gpt-tokenizer typically counts ~5–10% higher than the legacy heuristic on code.
+ * We use exact counts when available so budgets and reported sizes stay honest.
+ */
+import { createRequire } from 'module';
+
+function heuristicEstimate(text: string): number {
   if (!text) return 0;
   // Code has ~3.5 chars/token, prose ~4.5, mixed ~4
   // Measure punctuation density to estimate how "code-like" the string is
@@ -8,4 +17,37 @@ export function estimateTokens(text: string): number {
   // Scale from 4.5 (pure text) to 3.0 (dense code) based on punctuation ratio
   const charsPerToken = 4.5 - (clampedRatio * 2 * 1.5);
   return Math.ceil(text.length / charsPerToken);
+}
+
+type EncodeFn = (text: string) => number[];
+
+let encodeFn: EncodeFn | null = null;
+let encodeResolved = false;
+
+function resolveEncode(): EncodeFn | null {
+  if (encodeResolved) return encodeFn;
+  encodeResolved = true;
+  try {
+    const require = createRequire(import.meta.url);
+    const mod = require('gpt-tokenizer') as { encode?: EncodeFn };
+    if (typeof mod.encode === 'function') {
+      encodeFn = (text: string) => mod.encode!(text);
+    }
+  } catch {
+    encodeFn = null;
+  }
+  return encodeFn;
+}
+
+export function estimateTokens(text: string): number {
+  if (!text) return 0;
+  const encode = resolveEncode();
+  if (encode) {
+    try {
+      return encode(text).length;
+    } catch {
+      return heuristicEstimate(text);
+    }
+  }
+  return heuristicEstimate(text);
 }

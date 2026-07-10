@@ -12,7 +12,7 @@ const ENTITY_BLOCKLIST = new Set([
   'post', 'file', 'name', 'path', 'done', 'stop', 'exit', 'open',
   'close', 'push', 'pull', 'send', 'node', 'test', 'mock', 'skip',
   'pass', 'fail', 'socks', 'proxy', 'cert', 'utf8', 'ascii',
-  'with', 'that', 'have', 'will', 'been', 'also', 'does', 'copy',
+  'with', 'that', 'have', 'will', 'props', 'also', 'does', 'copy',
   'free', 'above', 'below', 'used', 'uses', 'using', 'shall',
   'must', 'each', 'form', 'work', 'make', 'like', 'just', 'only',
   'made', 'find', 'give', 'tell', 'call', 'take', 'come', 'want',
@@ -23,7 +23,7 @@ const ENTITY_BLOCKLIST = new Set([
   'mit', 'bsd', 'isc', 'gpl', 'mpl', 'apache',
   'ejson', 'bson', 'tdd', 'dom', 'api', 'url', 'uri',
   'npm', 'cli', 'git', 'ssh', 'ftp', 'wss', 'tcp', 'udp',
-  // SQL / query keywords that leak into Related Entities
+  // SQL / schema keywords that leak into Related Entities
   'select', 'insert', 'update', 'delete', 'create', 'alter', 'drop',
   'table', 'index', 'where', 'order', 'group', 'limit', 'offset',
   'values', 'join', 'inner', 'outer', 'asc', 'and', 'or', 'not',
@@ -44,6 +44,43 @@ const ENTITY_PATTERNS = [
   /\btable:[\w]+/g,
   /redis:[\w:]+/g,
 ];
+
+/** Weight for co-occurrence CamelCase "uses" edges (lower than imports). */
+const USES_WEIGHT = 0.8;
+/** Weight for explicit import-based edges. */
+const IMPORTS_WEIGHT = 2.0;
+
+/**
+ * Build import relationships from parser-extracted import targets.
+ * Source is the file stem or primary symbol; targets are module paths / imported names.
+ */
+export function extractImportRelationships(
+  chunk: Chunk,
+  imports: string[],
+  sourceEntity?: string
+): Relationship[] {
+  if (!imports || imports.length === 0) return [];
+  const source = sourceEntity || chunk.symbolName || chunk.fileStem || chunk.sourceFile;
+  if (!source) return [];
+
+  const relationships: Relationship[] = [];
+  const seen = new Set<string>();
+  for (const target of imports) {
+    const key = `${source}→${target}`;
+    if (seen.has(key) || target === source) continue;
+    seen.add(key);
+    relationships.push({
+      source,
+      target,
+      relationshipType: 'imports',
+      weight: IMPORTS_WEIGHT,
+      sourceChunkId: chunk.id,
+      layer: chunk.layer,
+      createdAt: Date.now(),
+    });
+  }
+  return relationships;
+}
 
 export function extractRelationships(chunk: Chunk): Relationship[] {
   const relationships: Relationship[] = [];
@@ -123,23 +160,36 @@ export function extractRelationships(chunk: Chunk): Relationship[] {
     }
   }
 
-  // 3. Code-specific relationships
+  // 3. Code-specific relationships (co-occurrence CamelCase → lower-weight "uses")
   if (chunk.fileType === 'code' && chunk.symbolName) {
     // Extract potential symbol references (CamelCase or PascalCase names)
     const codeWords = (content + ' ' + title).match(/\b[A-Z][a-zA-Z0-9_]*\b|\b[a-z]+[A-Z][a-zA-Z0-9_]*\b/g) || [];
     const uniqueSymbols = Array.from(new Set(codeWords)).filter(w => w !== chunk.symbolName && w.length > 3 && !ENTITY_STOPWORDS.has(w.toLowerCase()));
     
     for (const sym of uniqueSymbols) {
+      const isImport = chunk.symbolKind === 'import';
       relationships.push({
         source: chunk.symbolName,
         target: sym,
-        relationshipType: chunk.symbolKind === 'import' ? 'imports' : 'uses',
-        weight: 1.5,
+        relationshipType: isImport ? 'imports' : 'uses',
+        weight: isImport ? IMPORTS_WEIGHT : USES_WEIGHT,
         sourceChunkId: chunk.id,
         layer: chunk.layer,
         createdAt: Date.now()
       });
     }
+  }
+
+  // 4. Regex fallback for import statements in content (when parser imports not attached)
+  const importRegex = /(?:import\s+(?:[\w*{}\s,]+\s+from\s+)?['"]([^'"]+)['"]|from\s+([.\w]+)(?:\s+import)|require\s*\(\s*['"]([^'"]+)['"]\s*\))/g;
+  let importMatch;
+  const regexImports: string[] = [];
+  while ((importMatch = importRegex.exec(content)) !== null) {
+    const target = importMatch[1] || importMatch[2] || importMatch[3];
+    if (target) regexImports.push(target);
+  }
+  if (regexImports.length > 0) {
+    relationships.push(...extractImportRelationships(chunk, regexImports));
   }
 
   return relationships;

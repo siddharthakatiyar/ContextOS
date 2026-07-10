@@ -19,6 +19,28 @@ export interface SessionEvent {
   createdAt: number;
 }
 
+/** Default session max age before rotation (B22). */
+export const SESSION_ROTATION_MS = 24 * 60 * 60 * 1000;
+
+export interface PruneOptions {
+  /** Delete rows older than this many days. */
+  maxAgeDays?: number;
+  /** Keep at most this many newest rows (by created_at). */
+  maxCount?: number;
+}
+
+/**
+ * Whether the latest session should be rotated (older than 24h or missing).
+ * SessionManager (Agent C) can call this before reusing a session.
+ */
+export function shouldRotateSession(
+  session: Session | null,
+  maxAgeMs: number = SESSION_ROTATION_MS
+): boolean {
+  if (!session) return true;
+  return Date.now() - session.startedAt > maxAgeMs;
+}
+
 export class SessionStore {
   private db: Database;
 
@@ -126,5 +148,64 @@ export class SessionStore {
       relatedFiles: row.related_files,
       createdAt: row.created_at
     }));
+  }
+
+  /**
+   * Delete prompts older than maxAgeDays and/or over maxCount (B22).
+   * Returns number of rows deleted.
+   */
+  public prunePrompts(opts: PruneOptions = { maxAgeDays: 30, maxCount: 5000 }): number {
+    let deleted = 0;
+    if (opts.maxAgeDays != null && opts.maxAgeDays > 0) {
+      const cutoff = Date.now() - opts.maxAgeDays * 24 * 60 * 60 * 1000;
+      deleted += this.db.prepare('DELETE FROM prompts WHERE created_at < ?').run(cutoff).changes;
+    }
+    if (opts.maxCount != null && opts.maxCount > 0) {
+      const countRow = this.db.prepare('SELECT COUNT(*) as c FROM prompts').get() as { c: number };
+      if (countRow.c > opts.maxCount) {
+        const excess = countRow.c - opts.maxCount;
+        deleted += this.db.prepare(`
+          DELETE FROM prompts WHERE id IN (
+            SELECT id FROM prompts ORDER BY created_at ASC LIMIT ?
+          )
+        `).run(excess).changes;
+      }
+    }
+    return deleted;
+  }
+
+  /**
+   * Delete session_events older than maxAgeDays and/or over maxCount (B22).
+   * Returns number of rows deleted.
+   */
+  public pruneSessionEvents(opts: PruneOptions = { maxAgeDays: 30, maxCount: 20000 }): number {
+    let deleted = 0;
+    if (opts.maxAgeDays != null && opts.maxAgeDays > 0) {
+      const cutoff = Date.now() - opts.maxAgeDays * 24 * 60 * 60 * 1000;
+      deleted += this.db.prepare('DELETE FROM session_events WHERE created_at < ?').run(cutoff).changes;
+    }
+    if (opts.maxCount != null && opts.maxCount > 0) {
+      const countRow = this.db.prepare('SELECT COUNT(*) as c FROM session_events').get() as { c: number };
+      if (countRow.c > opts.maxCount) {
+        const excess = countRow.c - opts.maxCount;
+        deleted += this.db.prepare(`
+          DELETE FROM session_events WHERE id IN (
+            SELECT id FROM session_events ORDER BY created_at ASC LIMIT ?
+          )
+        `).run(excess).changes;
+      }
+    }
+    return deleted;
+  }
+
+  /** Run both prompt and session_event retention prunes. */
+  public pruneRetention(opts?: { prompts?: PruneOptions; events?: PruneOptions }): {
+    promptsDeleted: number;
+    eventsDeleted: number;
+  } {
+    return {
+      promptsDeleted: this.prunePrompts(opts?.prompts),
+      eventsDeleted: this.pruneSessionEvents(opts?.events),
+    };
   }
 }

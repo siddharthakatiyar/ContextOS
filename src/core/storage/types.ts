@@ -19,6 +19,10 @@ export interface Chunk {
   symbolKind?: string;
   /** Parent class/struct name when this chunk is a nested method/member. */
   parentSymbol?: string | null;
+  startLine?: number | null;
+  endLine?: number | null;
+  /** Basename of source_file without extension (e.g. "schema" for schema.ts). */
+  fileStem?: string | null;
   createdAt: number;
   updatedAt: number;
 }

@@ -75,9 +75,12 @@ function createChunk(content: string, titleContext: string, depth: number, fileP
   }
 
   const contentHashVal = hashContent(content);
-  const idStr = `${filePath}:${titleContext}:${contentHashVal}`;
-  const id = crypto.createHash('md5').update(idStr).digest('hex');
-  
+  // Stable ID: survives content edits (B7). hash field still tracks content changes.
+  const id = crypto.createHash('md5').update(`${filePath}:${titleContext}`).digest('hex');
+
+  const base = filePath.replace(/\\/g, '/').split('/').pop() || filePath;
+  const fileStem = base.includes('.') ? base.replace(/\.[^.]+$/, '') : base;
+
   return {
     id,
     sourceFile: filePath,
@@ -92,6 +95,7 @@ function createChunk(content: string, titleContext: string, depth: number, fileP
     importance: options.importance ?? 5,
     tokenCount: estimateTokens(content),
     fileType: 'markdown',
+    fileStem,
     createdAt: Date.now(),
     updatedAt: Date.now()
   };

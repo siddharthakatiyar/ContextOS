@@ -17,9 +17,10 @@ import { registerReadTopicTool } from "../../mcp/tools/read-topic.js";
 import { registerKnowledgeTools } from "../../mcp/tools/knowledge.js";
 import { registerFeedbackTools } from "../../mcp/tools/feedback.js";
 import { startWatcher } from '../watcher/index.js';
+import { SessionStore } from '../session/session-store.js';
 
 import { fileURLToPath } from "url";
-import chokidar, { FSWatcher } from "chokidar";
+import type { FSWatcher } from "chokidar";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -100,6 +101,22 @@ export class ContextOSDaemon {
 
     // Initialize core services ONCE
     this.dbs = DB.resolveDatabases(this.projectDir);
+
+    // Lightweight startup: PRAGMA optimize + optional retention prune (B22)
+    for (const db of this.dbs) {
+      try {
+        db.getInstance().pragma('optimize');
+      } catch {
+        // ignore optimize failures
+      }
+      try {
+        const store = new SessionStore(db);
+        store.pruneRetention();
+      } catch {
+        // retention is best-effort
+      }
+    }
+
     this.watcher = startWatcher(this.dbs[0], this.projectDir);
 
     return new Promise((resolve, reject) => {

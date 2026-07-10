@@ -2,6 +2,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import fs from "fs";
 import path from "path";
+import { onFileRead } from "./feedback.js";
+
+function getWorkspaceRoot(): string {
+  return process.env.CONTEXTOS_REPO_ROOT || process.cwd();
+}
+
+function isInsideWorkspace(resolvedPath: string, root: string): boolean {
+  const rootResolved = path.resolve(root);
+  return resolvedPath === rootResolved || resolvedPath.startsWith(rootResolved + path.sep);
+}
 
 export function registerReadFileTool(server: McpServer) {
   server.tool(
@@ -12,8 +22,16 @@ export function registerReadFileTool(server: McpServer) {
     },
     async ({ filePath }) => {
       try {
-        const resolvedPath = path.resolve(process.cwd(), filePath);
-        
+        const root = getWorkspaceRoot();
+        const resolvedPath = path.resolve(root, filePath);
+
+        if (!isInsideWorkspace(resolvedPath, root)) {
+          return {
+            content: [{ type: "text", text: `Access denied: path is outside workspace root (${root}).` }],
+            isError: true,
+          };
+        }
+
         if (!fs.existsSync(resolvedPath)) {
           return {
             content: [{ type: "text", text: `File not found: ${resolvedPath}` }],
@@ -37,12 +55,15 @@ export function registerReadFileTool(server: McpServer) {
           };
         }
 
+        // B7: implicit positive feedback for chunks from this file after recent get_context
+        onFileRead(resolvedPath);
+
         const content = fs.readFileSync(resolvedPath, "utf8");
         const lines = content.split('\n');
-        
+
         const MAX_LINES = 2000;
         let output = lines.slice(0, MAX_LINES).join('\n');
-        
+
         if (lines.length > MAX_LINES) {
           output += `\n\n[...truncated to ${MAX_LINES} lines]`;
         }

@@ -9,20 +9,127 @@ import { PromptsRepo } from "../../core/storage/prompts-repo.js";
 import { SessionStore } from "../../core/session/session-store.js";
 import { SessionManager } from "../../core/session/index.js";
 import { KnowledgeStore } from "../../core/memory/knowledge-store.js";
+import { estimateTokens } from "../../utils/tokens.js";
+import { recordRetrievedChunks } from "./feedback.js";
 import crypto from "crypto";
 import { loadConfig } from "../../config/index.js";
+import type { ScoredChunk } from "../../core/retrieval/types.js";
+
+const MEMORY_CHUNK_CAP = 3;
+const PROMPT_CACHE_TTL_MS = 30_000;
+const PROMPT_CACHE_SIZE = 8;
+
+type CacheEntry = { at: number; text: string };
+const promptCache = new Map<string, CacheEntry>();
+
+function cacheGet(key: string): string | null {
+  const e = promptCache.get(key);
+  if (!e) return null;
+  if (Date.now() - e.at > PROMPT_CACHE_TTL_MS) {
+    promptCache.delete(key);
+    return null;
+  }
+  // LRU touch
+  promptCache.delete(key);
+  promptCache.set(key, e);
+  return e.text;
+}
+
+function cacheSet(key: string, text: string): void {
+  if (promptCache.has(key)) promptCache.delete(key);
+  promptCache.set(key, { at: Date.now(), text });
+  while (promptCache.size > PROMPT_CACHE_SIZE) {
+    const oldest = promptCache.keys().next().value;
+    if (oldest === undefined) break;
+    promptCache.delete(oldest);
+  }
+}
+
+function contentHash(content: string): string {
+  return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
+}
+
+/**
+ * Merge session + knowledge into retrieval chunks with real hashes/tokenCounts,
+ * capped so memory cannot crowd out code (B2).
+ */
+function mergeMemoryPipeline(
+  codeChunks: ScoredChunk[],
+  sessionChunks: Array<{ id: string; content: string; layer: string; importance: number }>,
+  knowledgeFacts: Array<{ id: string; fact: string; category: string; confidence: number }>,
+): ScoredChunk[] {
+  const memory: ScoredChunk[] = [];
+
+  for (const sc of sessionChunks) {
+    const content = sc.content;
+    memory.push({
+      id: sc.id,
+      content,
+      sourceFile: 'session',
+      layer: 'session',
+      workspaceName: null,
+      sectionTitle: null,
+      sectionDepth: 0,
+      summary: null,
+      keywords: null,
+      hash: contentHash(content),
+      importance: sc.importance,
+      tokenCount: estimateTokens(content),
+      score: sc.importance,
+      fileType: 'text',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as ScoredChunk);
+  }
+
+  for (const fact of knowledgeFacts) {
+    const content = `**[${fact.category.toUpperCase()}]**: ${fact.fact}`;
+    memory.push({
+      id: fact.id,
+      content,
+      sourceFile: 'memory.fact',
+      layer: 'global',
+      workspaceName: null,
+      sectionTitle: 'Cross-Session Knowledge Fact',
+      sectionDepth: 1,
+      summary: null,
+      keywords: null,
+      hash: contentHash(content),
+      importance: Math.round(fact.confidence * 10),
+      tokenCount: estimateTokens(content),
+      score: fact.confidence * 10,
+      fileType: 'text',
+      language: undefined,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as ScoredChunk);
+  }
+
+  // Cap memory so it cannot crowd out all code; keep highest-scoring memory
+  const cappedMemory = memory
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, MEMORY_CHUNK_CAP);
+
+  // Ensure code stays in the candidate set: merge then re-sort by score
+  return [...codeChunks, ...cappedMemory].sort(
+    (a, b) => (b.score || 0) - (a.score || 0),
+  );
+}
 
 export function registerGetContextTool(server: McpServer, dbs: DB[]) {
   const chunksRepos = dbs.map(db => new ChunksRepo(db.getInstance()));
   const relsRepos = dbs.map(db => new RelationshipsRepo(db.getInstance()));
-  
+
   // Session tracking strictly uses the primary DB
   const primaryDb = dbs[0];
   const promptsRepo = new PromptsRepo(primaryDb.getInstance());
   const sessionStore = new SessionStore(primaryDb);
+  // B21: single SessionManager — do not reconstruct per request
   const sessionManager = new SessionManager(promptsRepo, sessionStore);
-  
+
   const engine = new RetrievalEngine(chunksRepos, relsRepos);
+  const knowledgeStore = new KnowledgeStore(primaryDb);
+  const repoRoot = process.env.CONTEXTOS_REPO_ROOT || process.cwd();
 
   server.tool(
     "get_context",
@@ -37,8 +144,15 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
       output_format: z.enum(["markdown", "xml"]).optional().default("markdown").describe("Format of the compiled context. Use XML if you are Claude or similar LLM that prefers XML."),
     },
     async ({ prompt, max_tokens, layers, output_format }) => {
-      const sessionManager = new SessionManager(promptsRepo, sessionStore);
       try {
+        const cacheKey = `${output_format}|${max_tokens}|${(layers || []).join(',')}|${prompt}`;
+        const cached = cacheGet(cacheKey);
+        if (cached) {
+          return {
+            content: [{ type: "text", text: cached }],
+          };
+        }
+
         // Record user prompt event
         sessionStore.addEvent({
           sessionId: sessionManager.getSessionId(),
@@ -50,50 +164,26 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         const result = await engine.retrieve(prompt, {
           maxChunks: loadConfig().maxRetrievalResults,
           layers: layers as string[],
+          repoRoot,
         });
-        
-        // Add session context
+
+        // B2: memory pipeline — real hashes, tokenCounts, scores; capped; re-sorted
         const sessionChunks = await sessionManager.getSessionContext();
-        
-        // Push session chunks into result
-        for (const sc of sessionChunks) {
-          result.chunks.push({
-            ...sc,
-            sourceFile: 'session',
-            sectionTitle: null,
-            sectionDepth: 0,
-            summary: null,
-            keywords: null,
-            hash: '',
-            tokenCount: 0, // estimated in compile
-            score: sc.importance
-          } as any);
-        }
-
-        // Add cross-session memory facts (limited to 2 to save tokens)
-        const knowledgeStore = new KnowledgeStore(primaryDb);
         const knowledgeFacts = knowledgeStore.searchFacts(prompt, 2);
-        for (const fact of knowledgeFacts) {
-          result.chunks.push({
-            id: fact.id,
-            content: `**[${fact.category.toUpperCase()}]**: ${fact.fact}`,
-            sourceFile: 'memory.fact',
-            layer: 'global',
-            workspaceName: null,
-            sectionTitle: 'Cross-Session Knowledge Fact',
-            sectionDepth: 1,
-            summary: null,
-            keywords: null,
-            hash: '',
-            tokenCount: 0, // estimated in compile
-            score: fact.confidence * 10,
-            fileType: 'text',
-            language: undefined
-          } as any);
-        }
+        result.chunks = mergeMemoryPipeline(result.chunks, sessionChunks, knowledgeFacts);
 
-        const compiled = compile(result, { maxTokens: max_tokens, outputFormat: output_format as any });
-        
+        const compiled = compile(result, {
+          maxTokens: max_tokens,
+          outputFormat: output_format as any,
+          signalTerms: [
+            ...(result.intent?.identifiers || []),
+            ...(result.intent?.concepts || []),
+          ],
+        });
+
+        // Implicit feedback tracking (no chunk IDs in output)
+        recordRetrievedChunks(result.chunks);
+
         // Log to prompt history
         promptsRepo.insert({
           id: crypto.randomUUID(),
@@ -112,14 +202,16 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           content: `Retrieved ${result.chunks.length} chunks. Token count: ${compiled.tokenCount}.`,
           relatedFiles: null
         });
-        
+
         const diagnosticHeader = `ContextOS | tokens: ${compiled.tokenCount}/${max_tokens}\n\n`;
-        
+        const text = diagnosticHeader + compiled.output;
+        cacheSet(cacheKey, text);
+
         return {
           content: [
             {
               type: "text",
-              text: diagnosticHeader + compiled.output,
+              text,
             },
           ],
         };
