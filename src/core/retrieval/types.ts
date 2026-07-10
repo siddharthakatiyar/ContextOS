@@ -14,6 +14,8 @@ export interface RetrievalOptions {
   maxChunks?: number;
   layers?: string[];
   feedbackAdjustments?: Record<string, number>;
+  /** Explicit repo root for foreign-workspace scoring (B27). Defaults to process.cwd(). */
+  repoRoot?: string;
 }
 
 export interface ScoredChunk extends Chunk {
@@ -25,4 +27,12 @@ export interface RetrievalResult {
   intent: DetectedIntent;
   expandedEntities: ExpandedEntity[];
   latencyMs: number;
+}
+
+export interface ScoreChunksOptions {
+  repoRoot?: string;
+  /** Prompt identifiers + concept unigrams for generic symbol fuzzy boost. */
+  matchTokens?: string[];
+  /** High-precision identifiers (stronger boost than concepts). */
+  identifiers?: string[];
 }

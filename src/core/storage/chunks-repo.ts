@@ -1,7 +1,6 @@
 import { Database } from 'better-sqlite3';
 import { Chunk, Layer, ChunkStats } from './types.js';
-import { sanitizeFTSQuery } from './fts-sanitizer.js';
-import path from 'path';
+import { sanitizeFTSQuery, sanitizeFTSTerm } from './fts-sanitizer.js';
 
 export interface ScoredChunk extends Chunk {
   score: number;
@@ -9,11 +8,22 @@ export interface ScoredChunk extends Chunk {
 
 export interface SearchOpts {
   layer?: Layer;
+  layers?: string[];
+  limit?: number;
+}
+
+export interface QueryFilterOpts {
+  layers?: string[];
   limit?: number;
 }
 
 export class ChunksRepo {
   constructor(private db: Database) {}
+
+  /** Expose the underlying DB for embeddings / cross-repo helpers. */
+  public getDatabase(): Database {
+    return this.db;
+  }
 
   public upsert(chunk: Chunk): void {
     const stmt = this.db.prepare(`
@@ -21,11 +31,13 @@ export class ChunksRepo {
         id, source_file, layer, workspace_name, section_title, section_depth,
         content, summary, keywords, hash, importance, token_count,
         file_type, language, symbol_name, symbol_kind, parent_symbol,
+        start_line, end_line, file_stem,
         created_at, updated_at
       ) VALUES (
         @id, @sourceFile, @layer, @workspaceName, @sectionTitle, @sectionDepth,
         @content, @summary, @keywords, @hash, @importance, @tokenCount,
         @fileType, @language, @symbolName, @symbolKind, @parentSymbol,
+        @startLine, @endLine, @fileStem,
         @createdAt, @updatedAt
       ) ON CONFLICT(id) DO UPDATE SET
         source_file = excluded.source_file,
@@ -44,6 +56,9 @@ export class ChunksRepo {
         symbol_name = excluded.symbol_name,
         symbol_kind = excluded.symbol_kind,
         parent_symbol = excluded.parent_symbol,
+        start_line = excluded.start_line,
+        end_line = excluded.end_line,
+        file_stem = excluded.file_stem,
         updated_at = excluded.updated_at
     `);
     stmt.run({
@@ -53,6 +68,9 @@ export class ChunksRepo {
       symbolName: chunk.symbolName || null,
       symbolKind: chunk.symbolKind || null,
       parentSymbol: chunk.parentSymbol || null,
+      startLine: chunk.startLine ?? null,
+      endLine: chunk.endLine ?? null,
+      fileStem: chunk.fileStem || null,
     });
   }
 
@@ -62,11 +80,13 @@ export class ChunksRepo {
         id, source_file, layer, workspace_name, section_title, section_depth,
         content, summary, keywords, hash, importance, token_count,
         file_type, language, symbol_name, symbol_kind, parent_symbol,
+        start_line, end_line, file_stem,
         created_at, updated_at
       ) VALUES (
         @id, @sourceFile, @layer, @workspaceName, @sectionTitle, @sectionDepth,
         @content, @summary, @keywords, @hash, @importance, @tokenCount,
         @fileType, @language, @symbolName, @symbolKind, @parentSymbol,
+        @startLine, @endLine, @fileStem,
         @createdAt, @updatedAt
       ) ON CONFLICT(id) DO UPDATE SET
         source_file = excluded.source_file,
@@ -85,6 +105,9 @@ export class ChunksRepo {
         symbol_name = excluded.symbol_name,
         symbol_kind = excluded.symbol_kind,
         parent_symbol = excluded.parent_symbol,
+        start_line = excluded.start_line,
+        end_line = excluded.end_line,
+        file_stem = excluded.file_stem,
         updated_at = excluded.updated_at
     `);
     const transaction = this.db.transaction((items: Chunk[]) => {
@@ -96,6 +119,9 @@ export class ChunksRepo {
           symbolName: item.symbolName || null,
           symbolKind: item.symbolKind || null,
           parentSymbol: item.parentSymbol || null,
+          startLine: item.startLine ?? null,
+          endLine: item.endLine ?? null,
+          fileStem: item.fileStem || null,
         });
       }
     });
@@ -119,100 +145,163 @@ export class ChunksRepo {
       JOIN chunks c ON chunks_fts.rowid = c.rowid
       WHERE chunks_fts MATCH ?
     `;
-    const sanitizedQuery = sanitizeFTSQuery(query);
+    // Preserve caller-built OR/AND/NOT; sanitize only inside quoted terms
+    const sanitizedQuery = sanitizeFTSQuery(query, { preserveOperators: true });
     const params: any[] = [sanitizedQuery];
-    
+
     if (opts?.layer) {
       sql += ` AND c.layer = ?`;
       params.push(opts.layer);
+    } else if (opts?.layers && opts.layers.length > 0) {
+      sql += ` AND c.layer IN (${opts.layers.map(() => '?').join(',')})`;
+      params.push(...opts.layers);
     }
-    
+
     sql += ` ORDER BY score LIMIT ?`;
     params.push(opts?.limit ?? 30);
-    
+
     const stmt = this.db.prepare(sql);
     const rows = stmt.all(...params) as any[];
     return rows.map(r => this.mapRow(r)) as ScoredChunk[];
   }
 
-  public findByKeyword(keyword: string): Chunk[] {
-    const sql = `
+  public findByKeyword(keyword: string, opts?: QueryFilterOpts): Chunk[] {
+    let sql = `
       SELECT c.*, bm25(chunks_fts, 10.0, 1.0, 20.0, 8.0) AS score
       FROM chunks_fts
       JOIN chunks c ON chunks_fts.rowid = c.rowid
       WHERE chunks_fts MATCH 'keywords:' || ?
-      ORDER BY score LIMIT 20
     `;
+    const sanitizedKeyword = sanitizeFTSTerm(keyword);
+    const params: any[] = [`"${sanitizedKeyword.replace(/"/g, '""')}"`];
+
+    if (opts?.layers && opts.layers.length > 0) {
+      sql += ` AND c.layer IN (${opts.layers.map(() => '?').join(',')})`;
+      params.push(...opts.layers);
+    }
+
+    sql += ` ORDER BY score LIMIT ?`;
+    params.push(opts?.limit ?? 20);
+
     const stmt = this.db.prepare(sql);
-    const sanitizedKeyword = sanitizeFTSQuery(keyword);
-    const rows = stmt.all(`"${sanitizedKeyword.replace(/"/g, '""')}"`) as any[];
+    const rows = stmt.all(...params) as any[];
     return rows.map(r => this.mapRow(r)) as Chunk[];
   }
 
-  public findByTitleMatch(concept: string): Chunk[] {
-    const stmt = this.db.prepare(`SELECT * FROM chunks WHERE section_title LIKE ? LIMIT 20`);
-    return (stmt.all(`%${concept}%`) as any[]).map(r => this.mapRow(r)) as Chunk[];
+  public findByTitleMatch(concept: string, opts?: QueryFilterOpts): Chunk[] {
+    let sql = `SELECT * FROM chunks WHERE section_title LIKE ?`;
+    const params: any[] = [`%${concept}%`];
+    if (opts?.layers && opts.layers.length > 0) {
+      sql += ` AND layer IN (${opts.layers.map(() => '?').join(',')})`;
+      params.push(...opts.layers);
+    }
+    sql += ` LIMIT ?`;
+    params.push(opts?.limit ?? 20);
+    return (this.db.prepare(sql).all(...params) as any[]).map(r => this.mapRow(r)) as Chunk[];
   }
 
-  public findBySymbolName(name: string): Chunk[] {
+  public findBySymbolName(name: string, opts?: QueryFilterOpts): Chunk[] {
     // Exact or prefix match only — avoid '%Session%' hitting createSession via substring
-    const stmt = this.db.prepare(`
+    let sql = `
       SELECT * FROM chunks
-      WHERE symbol_name = ? COLLATE NOCASE
-         OR symbol_name LIKE ? ESCAPE '\\'
-      LIMIT 20
-    `);
+      WHERE (symbol_name = ? COLLATE NOCASE
+         OR symbol_name LIKE ? ESCAPE '\\')
+    `;
     const prefix = name.replace(/[%_\\]/g, '\\$&') + '%';
-    return (stmt.all(name, prefix) as any[]).map(r => this.mapRow(r)) as Chunk[];
+    const params: any[] = [name, prefix];
+    if (opts?.layers && opts.layers.length > 0) {
+      sql += ` AND layer IN (${opts.layers.map(() => '?').join(',')})`;
+      params.push(...opts.layers);
+    }
+    sql += ` LIMIT ?`;
+    params.push(opts?.limit ?? 20);
+    return (this.db.prepare(sql).all(...params) as any[]).map(r => this.mapRow(r)) as Chunk[];
   }
 
   /** Looser symbol search for concept tokens (e.g. schema → SCHEMA_SQL). */
-  public findBySymbolFuzzy(name: string): Chunk[] {
+  public findBySymbolFuzzy(name: string, opts?: QueryFilterOpts): Chunk[] {
     if (!name || name.length < 5) return [];
-    const stmt = this.db.prepare(`
+    let sql = `
       SELECT * FROM chunks
       WHERE lower(symbol_name) LIKE '%' || lower(?) || '%'
-      LIMIT 15
-    `);
-    return (stmt.all(name) as any[]).map(r => this.mapRow(r)) as Chunk[];
+    `;
+    const params: any[] = [name];
+    if (opts?.layers && opts.layers.length > 0) {
+      sql += ` AND layer IN (${opts.layers.map(() => '?').join(',')})`;
+      params.push(...opts.layers);
+    }
+    sql += ` LIMIT ?`;
+    params.push(opts?.limit ?? 15);
+    return (this.db.prepare(sql).all(...params) as any[]).map(r => this.mapRow(r)) as Chunk[];
   }
 
-  public findByParentSymbol(name: string): Chunk[] {
-    const stmt = this.db.prepare(`
+  public findByParentSymbol(name: string, opts?: QueryFilterOpts): Chunk[] {
+    let sql = `
       SELECT * FROM chunks
       WHERE parent_symbol = ? COLLATE NOCASE
-      LIMIT 30
-    `);
-    return (stmt.all(name) as any[]).map(r => this.mapRow(r)) as Chunk[];
+    `;
+    const params: any[] = [name];
+    if (opts?.layers && opts.layers.length > 0) {
+      sql += ` AND layer IN (${opts.layers.map(() => '?').join(',')})`;
+      params.push(...opts.layers);
+    }
+    sql += ` LIMIT ?`;
+    params.push(opts?.limit ?? 30);
+    return (this.db.prepare(sql).all(...params) as any[]).map(r => this.mapRow(r)) as Chunk[];
   }
 
   /**
-   * Find chunks whose source_file basename stem matches a prompt token
-   * (e.g. "scoring" -> scorer.ts, "schema" -> schema.ts).
+   * Find chunks whose indexed file_stem matches a prompt token
+   * (exact / prefix / contains), plus path-segment directory matches.
+   * Ranks in SQL before LIMIT — no LIMIT-before-rank on full-path LIKE.
    */
-  public findByFileStem(stem: string, limit: number = 20): Chunk[] {
+  public findByFileStem(stem: string, limit: number = 20, opts?: QueryFilterOpts): Chunk[] {
     if (!stem || stem.length < 3) return [];
     const stemLower = stem.toLowerCase();
-    const like = `%${stemLower}%`;
-    const stmt = this.db.prepare(`
-      SELECT * FROM chunks
-      WHERE lower(source_file) LIKE ?
-      LIMIT ?
-    `);
-    const rows = stmt.all(like, limit * 8) as any[];
-    const scored = rows.map(r => {
-      const parts = (r.source_file || '').toLowerCase().split(/[/\\]/);
-      const base = parts[parts.length - 1] || '';
-      const fileStem = base.replace(/\.[^.]+$/, '');
-      let rank = 0;
-      if (fileStem === stemLower) rank = 3;
-      else if (fileStem.includes(stemLower) || stemLower.includes(fileStem)) rank = 2;
-      else if (parts.some((p: string) => p === stemLower)) rank = 1;
-      else rank = 0;
-      return { row: r, rank };
-    }).filter(x => x.rank > 0);
-    scored.sort((a, b) => b.rank - a.rank);
-    return scored.slice(0, limit).map(x => this.mapRow(x.row)) as Chunk[];
+    const prefix = `${stemLower}%`;
+    const contains = `%${stemLower}%`;
+    const dirUnix = `%/${stemLower}/%`;
+    const dirWin = `%\\${stemLower}\\%`;
+
+    let sql = `
+      SELECT *,
+        CASE
+          WHEN lower(file_stem) = ? THEN 3
+          WHEN lower(file_stem) LIKE ? THEN 2
+          WHEN lower(file_stem) LIKE ? THEN 1
+          WHEN lower(source_file) LIKE ? OR lower(source_file) LIKE ? THEN 1
+          ELSE 0
+        END AS stem_rank,
+        CASE
+          WHEN source_file LIKE '%.test.%' OR source_file LIKE '%.spec.%' OR source_file LIKE '%/tests/%' THEN 0
+          WHEN symbol_kind IN ('function', 'method', 'class', 'struct') THEN 2
+          WHEN symbol_kind = 'file' THEN 1
+          ELSE 1
+        END AS kind_rank
+      FROM chunks
+      WHERE (
+        lower(file_stem) = ?
+        OR lower(file_stem) LIKE ?
+        OR lower(file_stem) LIKE ?
+        OR lower(source_file) LIKE ?
+        OR lower(source_file) LIKE ?
+      )
+    `;
+    const params: any[] = [
+      stemLower, prefix, contains, dirUnix, dirWin,
+      stemLower, prefix, contains, dirUnix, dirWin,
+    ];
+
+    const layers = opts?.layers;
+    if (layers && layers.length > 0) {
+      sql += ` AND layer IN (${layers.map(() => '?').join(',')})`;
+      params.push(...layers);
+    }
+
+    sql += ` ORDER BY stem_rank DESC, kind_rank DESC LIMIT ?`;
+    params.push(opts?.limit ?? limit);
+
+    return (this.db.prepare(sql).all(...params) as any[]).map(r => this.mapRow(r)) as Chunk[];
   }
 
   public getByIds(ids: string[]): Chunk[] {
@@ -282,6 +371,9 @@ export class ChunksRepo {
       symbolName: row.symbol_name,
       symbolKind: row.symbol_kind,
       parentSymbol: row.parent_symbol ?? null,
+      startLine: row.start_line ?? null,
+      endLine: row.end_line ?? null,
+      fileStem: row.file_stem ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       score: row.score !== undefined ? Math.abs(row.score) : undefined

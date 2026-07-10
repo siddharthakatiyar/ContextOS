@@ -82,6 +82,10 @@ export const defaultConfig: ContextOSConfig = {
   
   ftsLimit: 15,
   busyTimeout: 5000,
+
+  embeddingsEnabled: true,
+  /** When true, fuse embedding kNN into retrieval. Default false — keyword path is the accuracy baseline. */
+  embeddingsRetrieval: false,
   
   cursor: {
     autoGenerateConfig: true

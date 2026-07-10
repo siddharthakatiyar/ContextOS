@@ -13,7 +13,11 @@ export interface KnowledgeFact {
   access_count: number;
 }
 
+const DECAY_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
 export class KnowledgeStore {
+  private lastDecayAt = 0;
+
   constructor(private db: DB) {}
 
   public learnFact(fact: string, category: string = 'general'): string {
@@ -51,39 +55,40 @@ export class KnowledgeStore {
 
   public searchFacts(query: string, limit: number = 10): KnowledgeFact[] {
     const now = Date.now();
-    // Decay confidence of all facts slightly on read to implement forgetting curve
-    this.applyDecay(now);
+    // Decay is throttled — not on every search (B28)
+    this.runPeriodicDecay();
 
     // Escape query for FTS
     const safeQuery = query.replace(/["']/g, '').split(/\s+/).map(w => `"${w}"*`).join(' OR ');
     
     if (!safeQuery.trim()) return [];
 
+    // FTS5 rank is more-negative = better match (B3)
     const facts = this.db.getInstance().prepare(`
       SELECT k.*, f.rank 
       FROM knowledge_facts_fts f
       JOIN knowledge_facts k ON f.rowid = k.rowid
       WHERE knowledge_facts_fts MATCH ?
-      ORDER BY k.confidence * f.rank DESC, k.updated_at DESC
+      ORDER BY f.rank ASC, k.confidence DESC, k.updated_at DESC
       LIMIT ?
     `).all(safeQuery, limit) as KnowledgeFact[];
 
     if (facts.length > 0) {
-      // Update access stats for retrieved facts
-      const ids = facts.map(f => `'${f.id}'`).join(',');
+      // Parameterized ID updates — no string interpolation (B3)
+      const placeholders = facts.map(() => '?').join(',');
+      const ids = facts.map(f => f.id);
       this.db.getInstance().prepare(`
         UPDATE knowledge_facts 
         SET last_accessed = ?, access_count = access_count + 1 
-        WHERE id IN (${ids})
-      `).run(now);
+        WHERE id IN (${placeholders})
+      `).run(now, ...ids);
     }
 
     return facts;
   }
   
   public getRelevantFactsByCategory(category: string, limit: number = 5): KnowledgeFact[] {
-    const now = Date.now();
-    this.applyDecay(now);
+    this.runPeriodicDecay();
     
     return this.db.getInstance().prepare(`
       SELECT * FROM knowledge_facts 
@@ -99,6 +104,19 @@ export class KnowledgeStore {
       ORDER BY confidence DESC 
       LIMIT ?
     `).all(limit) as KnowledgeFact[];
+  }
+
+  /**
+   * Run confidence decay at most once per hour (B28).
+   * Safe to call from search paths or daemon startup.
+   */
+  public runPeriodicDecay(force = false): void {
+    const now = Date.now();
+    if (!force && now - this.lastDecayAt < DECAY_INTERVAL_MS) {
+      return;
+    }
+    this.lastDecayAt = now;
+    this.applyDecay(now);
   }
 
   private applyDecay(now: number) {

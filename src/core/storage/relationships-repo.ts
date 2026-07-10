@@ -10,9 +10,8 @@ export class RelationshipsRepo {
         source, target, relationship_type, weight, source_chunk_id, layer, created_at
       ) VALUES (
         @source, @target, @relationshipType, @weight, @sourceChunkId, @layer, @createdAt
-      ) ON CONFLICT(source, target, relationship_type) DO UPDATE SET
+      ) ON CONFLICT(source, target, relationship_type, source_chunk_id) DO UPDATE SET
         weight = excluded.weight,
-        source_chunk_id = excluded.source_chunk_id,
         layer = excluded.layer
     `);
     stmt.run(rel);
@@ -24,9 +23,8 @@ export class RelationshipsRepo {
         source, target, relationship_type, weight, source_chunk_id, layer, created_at
       ) VALUES (
         @source, @target, @relationshipType, @weight, @sourceChunkId, @layer, @createdAt
-      ) ON CONFLICT(source, target, relationship_type) DO UPDATE SET
+      ) ON CONFLICT(source, target, relationship_type, source_chunk_id) DO UPDATE SET
         weight = excluded.weight,
-        source_chunk_id = excluded.source_chunk_id,
         layer = excluded.layer
     `);
     const transaction = this.db.transaction((items: Relationship[]) => {

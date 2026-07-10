@@ -6,6 +6,31 @@ import path from "path";
 
 const execFileAsync = promisify(execFile);
 
+/** Dangerous find(1) predicates that can execute commands or delete files. */
+const FIND_DANGEROUS_FLAGS = new Set([
+  '-exec', '-execdir', '-delete', '-ok', '-okdir',
+]);
+
+function hasDangerousFindFlag(args: string[]): boolean {
+  return args.some(arg => FIND_DANGEROUS_FLAGS.has(arg.toLowerCase()));
+}
+
+/** Block git flags that write output to an arbitrary file. */
+function hasDangerousGitOutputFlag(args: string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    const lower = arg.toLowerCase();
+    if (lower === '--output' || lower.startsWith('--output=')) {
+      return true;
+    }
+    // `-o` as output-redirect style (standalone or `-o<path>`)
+    if (lower === '-o' || (lower.startsWith('-o') && lower.length > 2 && !lower.startsWith('--'))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function registerExecuteTool(server: McpServer) {
   server.tool(
     "ctx_execute",
@@ -37,6 +62,13 @@ export function registerExecuteTool(server: McpServer) {
         if (!allowedCommands.includes(exe)) {
           return {
             content: [{ type: "text", text: `Command not allowed. Allowed executables are: ${allowedCommands.join(', ')}` }],
+            isError: true,
+          };
+        }
+
+        if (exe === 'find' && hasDangerousFindFlag(args)) {
+          return {
+            content: [{ type: "text", text: "Dangerous find flags (-exec, -execdir, -delete, -ok, -okdir) are not allowed." }],
             isError: true,
           };
         }
@@ -77,6 +109,12 @@ export function registerExecuteTool(server: McpServer) {
               isError: true,
             };
           }
+          if (hasDangerousGitOutputFlag(args)) {
+            return {
+              content: [{ type: "text", text: "Git output-redirect flags (--output, -o) are not allowed." }],
+              isError: true,
+            };
+          }
         }
 
         for (const arg of args) {
@@ -97,7 +135,8 @@ export function registerExecuteTool(server: McpServer) {
         const targetCwd = cwd || process.cwd();
         const root = process.env.CONTEXTOS_REPO_ROOT || process.cwd();
         const resolvedCwd = path.resolve(targetCwd);
-        if (!resolvedCwd.startsWith(path.resolve(root))) {
+        const rootResolved = path.resolve(root);
+        if (resolvedCwd !== rootResolved && !resolvedCwd.startsWith(rootResolved + path.sep)) {
           return {
             content: [{ type: "text", text: `Execution outside workspace root (${root}) is not allowed.` }],
             isError: true,

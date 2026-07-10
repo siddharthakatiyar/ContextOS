@@ -8,6 +8,16 @@ import { loadConfig } from '../../config/index.js';
 import { hashContent } from '../../utils/hash.js';
 import { extractKeywords } from './index.js';
 
+function fileStemFromPath(filePath: string): string {
+  const base = path.basename(filePath);
+  return base.includes('.') ? base.replace(/\.[^.]+$/, '') : base;
+}
+
+/** Stable chunk ID: survives content edits (B7). Hash field still tracks content changes. */
+function stableChunkId(filePath: string, symbolPathOrTitle: string): string {
+  return crypto.createHash('md5').update(`${filePath}:${symbolPathOrTitle}`).digest('hex');
+}
+
 function isJunkSymbol(symbol: CodeSymbol): boolean {
   // Anonymous / trivial lambdas pollute ranking (e.g. function c, function w)
   if (!symbol.name || symbol.name.length <= 2) return true;
@@ -22,13 +32,14 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
   const chunks: Chunk[] = [];
   const config = loadConfig();
   const maxTokens = options.maxChunkTokens || config.maxChunkTokens;
+  const stem = fileStemFromPath(doc.filePath);
 
   for (const symbol of doc.symbols) {
     if (['import', 'variable'].includes(symbol.kind) && doc.symbols.length > 50) {
       // In large files, maybe skip individual imports, but for now we keep them
     }
 
-    if (symbol.kind === 'function' && isJunkSymbol(symbol)) {
+    if ((symbol.kind === 'function' || symbol.kind === 'method') && isJunkSymbol(symbol)) {
       continue;
     }
 
@@ -37,10 +48,15 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
       continue;
     }
 
+    // Import symbols are used for graph edges; skip as content chunks
+    if (symbol.kind === 'import') {
+      continue;
+    }
+
     let emitSymbol = symbol;
     // Avoid double-indexing: class body duplicates all methods. Emit a compact
     // outline (declaration + member list) when the class has nested symbols.
-    if (symbol.kind === 'class' || symbol.kind === 'struct') {
+    if (symbol.kind === 'class' || symbol.kind === 'struct' || symbol.kind === 'interface') {
       const children = doc.symbols.filter(s => s.parent === symbol.name);
       if (children.length > 0) {
         const firstLine = symbol.body.split('\n').find(l => l.trim().length > 0) || `${symbol.kind} ${symbol.name}`;
@@ -53,17 +69,20 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
     }
 
     const titleContext = emitSymbol.parent ? `${emitSymbol.parent} > ${emitSymbol.name}` : emitSymbol.name;
-    chunks.push(createCodeChunk(emitSymbol, titleContext, doc.filePath, doc.language, options));
+    chunks.push(createCodeChunk(emitSymbol, titleContext, doc.filePath, doc.language, options, stem));
   }
 
   // Also create a "File Summary" chunk that lists all symbols for high-level graph
-  const meaningful = doc.symbols.filter(s => !(s.kind === 'function' && isJunkSymbol(s)));
+  const meaningful = doc.symbols.filter(s =>
+    s.kind !== 'import' &&
+    !((s.kind === 'function' || s.kind === 'method') && isJunkSymbol(s))
+  );
   const summaryContent = meaningful.map(s => `- [${s.kind}] ${s.name}`).join('\n');
   if (summaryContent.trim().length > 0) {
-    const summaryHashVal = hashContent(summaryContent);
-    const idStr = `${doc.filePath}:File Summary:${summaryHashVal}`;
-    const id = crypto.createHash('md5').update(idStr).digest('hex');
-    
+    const storedContent = `File: ${doc.filePath}\nLanguage: ${doc.language}\n\nSymbols:\n${summaryContent}`;
+    const summaryHashVal = hashContent(storedContent);
+    const id = stableChunkId(doc.filePath, 'File Summary');
+
     chunks.push({
       id,
       sourceFile: doc.filePath,
@@ -71,26 +90,27 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
       workspaceName: options.workspaceName || null,
       sectionTitle: 'File Structure',
       sectionDepth: 1,
-      content: `File: ${doc.filePath}\nLanguage: ${doc.language}\n\nSymbols:\n${summaryContent}`,
+      content: storedContent,
       summary: null,
       keywords: extractKeywords(summaryContent, 'File Structure').join(', '),
       hash: summaryHashVal,
       importance: options.importance ?? 5,
-      tokenCount: estimateTokens(summaryContent),
+      tokenCount: estimateTokens(storedContent),
       fileType: 'code',
       language: doc.language,
       parentSymbol: null,
+      fileStem: stem,
       createdAt: Date.now(),
       updatedAt: Date.now()
     });
   }
 
-  // Whole-file fallback for scripts with few extractable symbols (e.g. CLI entrypoints)
+  // Whole-file fallback only when no real symbol chunks exist (B26)
   const realSymbolChunks = chunks.filter(c => c.sectionTitle !== 'File Structure');
-  if (realSymbolChunks.length < 2 && doc.rawContent && doc.rawContent.trim().length > 40) {
+  if (realSymbolChunks.length === 0 && doc.rawContent && doc.rawContent.trim().length > 40) {
     const body = doc.rawContent.length > 8000 ? doc.rawContent.slice(0, 8000) : doc.rawContent;
     const contentHashVal = hashContent(body);
-    const id = crypto.createHash('md5').update(`${doc.filePath}:whole:${contentHashVal}`).digest('hex');
+    const id = stableChunkId(doc.filePath, 'whole');
     chunks.push({
       id,
       sourceFile: doc.filePath,
@@ -109,6 +129,9 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
       symbolName: path.basename(doc.filePath),
       symbolKind: 'file',
       parentSymbol: null,
+      fileStem: stem,
+      startLine: 1,
+      endLine: body.split('\n').length,
       createdAt: Date.now(),
       updatedAt: Date.now()
     });
@@ -117,17 +140,23 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
   return chunks;
 }
 
-function createCodeChunk(symbol: CodeSymbol, titleContext: string, filePath: string, language: string, options: ChunkCreationOptions): Chunk {
+function createCodeChunk(
+  symbol: CodeSymbol,
+  titleContext: string,
+  filePath: string,
+  language: string,
+  options: ChunkCreationOptions,
+  stem: string
+): Chunk {
   const keywords = extractKeywords(symbol.body, titleContext);
   // Add full symbol name itself as a keyword
   if (symbol.name.length > 2) keywords.push(symbol.name.toLowerCase());
   // And also its parts
   keywords.push(...symbol.name.split(/(?=[A-Z])|_|-|\./).map(s => s.toLowerCase()).filter(s => s.length > 2));
-  
+
   const contentHashVal = hashContent(symbol.body);
-  const idStr = `${filePath}:${titleContext}:${contentHashVal}`;
-  const id = crypto.createHash('md5').update(idStr).digest('hex');
-  
+  const id = stableChunkId(filePath, titleContext);
+
   return {
     id,
     sourceFile: filePath,
@@ -140,12 +169,15 @@ function createCodeChunk(symbol: CodeSymbol, titleContext: string, filePath: str
     keywords: Array.from(new Set(keywords)).join(', '),
     hash: contentHashVal,
     importance: options.importance ?? 5,
-    tokenCount: estimateTokens(`File: ${filePath}\n` + symbol.body),
+    tokenCount: estimateTokens(symbol.body),
     fileType: 'code',
     language,
     symbolName: symbol.name,
     symbolKind: symbol.kind,
     parentSymbol: symbol.parent || null,
+    startLine: symbol.startLine,
+    endLine: symbol.endLine,
+    fileStem: stem,
     createdAt: Date.now(),
     updatedAt: Date.now()
   };

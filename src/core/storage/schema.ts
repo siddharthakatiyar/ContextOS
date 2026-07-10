@@ -33,36 +33,13 @@ CREATE TABLE IF NOT EXISTS chunks (
   symbol_name TEXT,
   symbol_kind TEXT,
   parent_symbol TEXT,
+  start_line INTEGER,
+  end_line INTEGER,
+  file_stem TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   FOREIGN KEY(source_file) REFERENCES files(path) ON DELETE CASCADE
 );
-
-CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-  content,
-  summary,
-  keywords,
-  section_title,
-  content=chunks,
-  content_rowid=rowid
-);
-
-CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
-  INSERT INTO chunks_fts(rowid, content, summary, keywords, section_title)
-  VALUES (new.rowid, new.content, new.summary, new.keywords, new.section_title);
-END;
-
-CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
-  INSERT INTO chunks_fts(chunks_fts, rowid, content, summary, keywords, section_title)
-  VALUES ('delete', old.rowid, old.content, old.summary, old.keywords, old.section_title);
-END;
-
-CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
-  INSERT INTO chunks_fts(chunks_fts, rowid, content, summary, keywords, section_title)
-  VALUES ('delete', old.rowid, old.content, old.summary, old.keywords, old.section_title);
-  INSERT INTO chunks_fts(rowid, content, summary, keywords, section_title)
-  VALUES (new.rowid, new.content, new.summary, new.keywords, new.section_title);
-END;
 
 CREATE TABLE IF NOT EXISTS relationships (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +51,7 @@ CREATE TABLE IF NOT EXISTS relationships (
   layer TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   FOREIGN KEY(source_chunk_id) REFERENCES chunks(id) ON DELETE CASCADE,
-  UNIQUE(source, target, relationship_type)
+  UNIQUE(source, target, relationship_type, source_chunk_id)
 );
 
 CREATE TABLE IF NOT EXISTS prompts (
@@ -171,32 +148,258 @@ CREATE TABLE IF NOT EXISTS feedback_signals (
   FOREIGN KEY(chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS chunk_embeddings (
+  chunk_id TEXT PRIMARY KEY,
+  embedding BLOB NOT NULL,
+  dims INTEGER NOT NULL,
+  model TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+  content,
+  summary,
+  keywords,
+  section_title,
+  content=chunks,
+  content_rowid=rowid
+);
+
+CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
+  INSERT INTO chunks_fts(rowid, content, summary, keywords, section_title)
+  VALUES (new.rowid, new.content, new.summary, new.keywords, new.section_title);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
+  INSERT INTO chunks_fts(chunks_fts, rowid, content, summary, keywords, section_title)
+  VALUES ('delete', old.rowid, old.content, old.summary, old.keywords, old.section_title);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+  INSERT INTO chunks_fts(chunks_fts, rowid, content, summary, keywords, section_title)
+  VALUES ('delete', old.rowid, old.content, old.summary, old.keywords, old.section_title);
+  INSERT INTO chunks_fts(rowid, content, summary, keywords, section_title)
+  VALUES (new.rowid, new.content, new.summary, new.keywords, new.section_title);
+END;
+
 CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks(source_file);
 CREATE INDEX IF NOT EXISTS idx_chunks_layer ON chunks(layer);
 CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(hash);
+CREATE INDEX IF NOT EXISTS idx_chunks_file_stem ON chunks(file_stem);
+CREATE INDEX IF NOT EXISTS idx_chunks_symbol_name ON chunks(symbol_name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_chunks_parent_symbol ON chunks(parent_symbol);
 CREATE INDEX IF NOT EXISTS idx_relationships_source ON relationships(source);
 CREATE INDEX IF NOT EXISTS idx_relationships_target ON relationships(target);
 CREATE INDEX IF NOT EXISTS idx_knowledge_facts_category ON knowledge_facts(category);
 CREATE INDEX IF NOT EXISTS idx_feedback_chunk ON feedback_signals(chunk_id);
 `;
 
+function getSchemaVersion(db: Database.Database): number {
+  const versionRow = db.prepare(
+    'SELECT version FROM schema_version ORDER BY version DESC LIMIT 1'
+  ).get() as { version: number } | undefined;
+  return versionRow ? versionRow.version : 0;
+}
+
+function setSchemaVersion(db: Database.Database, version: number): void {
+  const updateStmt = db.prepare('UPDATE schema_version SET version = ?');
+  if (updateStmt.run(version).changes === 0) {
+    db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (?)').run(version);
+  }
+}
+
+/** Triggers for chunks_fts — kept as a function so the SQL is not indexed as a top-level const. */
+function chunksFtsTriggersSql(): string {
+  return `
+CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
+  INSERT INTO chunks_fts(rowid, content, summary, keywords, section_title)
+  VALUES (new.rowid, new.content, new.summary, new.keywords, new.section_title);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
+  INSERT INTO chunks_fts(chunks_fts, rowid, content, summary, keywords, section_title)
+  VALUES ('delete', old.rowid, old.content, old.summary, old.keywords, old.section_title);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+  INSERT INTO chunks_fts(chunks_fts, rowid, content, summary, keywords, section_title)
+  VALUES ('delete', old.rowid, old.content, old.summary, old.keywords, old.section_title);
+  INSERT INTO chunks_fts(rowid, content, summary, keywords, section_title)
+  VALUES (new.rowid, new.content, new.summary, new.keywords, new.section_title);
+END;
+`;
+}
+
+/** Create or recreate chunks_fts with porter+prefix, falling back to unicode61+prefix. */
+function ensureChunksFts(db: Database.Database, rebuild: boolean): void {
+  const hasFts = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_fts'"
+  ).get();
+
+  if (hasFts && !rebuild) {
+    // Ensure triggers exist for existing FTS table
+    db.exec(chunksFtsTriggersSql());
+    return;
+  }
+
+  db.exec(`
+    DROP TRIGGER IF EXISTS chunks_ai;
+    DROP TRIGGER IF EXISTS chunks_ad;
+    DROP TRIGGER IF EXISTS chunks_au;
+    DROP TABLE IF EXISTS chunks_fts;
+  `);
+
+  const createWithPorter = `
+    CREATE VIRTUAL TABLE chunks_fts USING fts5(
+      content,
+      summary,
+      keywords,
+      section_title,
+      content=chunks,
+      content_rowid=rowid,
+      tokenize='porter unicode61',
+      prefix='2 3'
+    );
+  `;
+  const createUnicode61 = `
+    CREATE VIRTUAL TABLE chunks_fts USING fts5(
+      content,
+      summary,
+      keywords,
+      section_title,
+      content=chunks,
+      content_rowid=rowid,
+      tokenize='unicode61',
+      prefix='2 3'
+    );
+  `;
+
+  try {
+    db.exec(createWithPorter);
+  } catch {
+    console.error('FTS porter tokenizer unavailable; falling back to unicode61 with prefix');
+    db.exec(createUnicode61);
+  }
+
+  db.exec(chunksFtsTriggersSql());
+
+  if (rebuild) {
+    db.exec(`INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild');`);
+  }
+}
+
+/** Migrate relationships UNIQUE to include source_chunk_id (B9). */
+function migrateRelationshipsUnique(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS relationships_v5 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL,
+      target TEXT NOT NULL,
+      relationship_type TEXT NOT NULL,
+      weight REAL DEFAULT 1.0,
+      source_chunk_id TEXT NOT NULL,
+      layer TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY(source_chunk_id) REFERENCES chunks(id) ON DELETE CASCADE,
+      UNIQUE(source, target, relationship_type, source_chunk_id)
+    );
+  `);
+
+  db.exec(`
+    INSERT OR IGNORE INTO relationships_v5
+      (id, source, target, relationship_type, weight, source_chunk_id, layer, created_at)
+    SELECT id, source, target, relationship_type, weight, source_chunk_id, layer, created_at
+    FROM relationships;
+  `);
+
+  db.exec(`DROP TABLE relationships;`);
+  db.exec(`ALTER TABLE relationships_v5 RENAME TO relationships;`);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_relationships_source ON relationships(source);
+    CREATE INDEX IF NOT EXISTS idx_relationships_target ON relationships(target);
+  `);
+}
+
+function migrateToV5(db: Database.Database): void {
+  console.error('Migrating ContextOS database to v0.6.0 (schema v5)...');
+
+  // Chunk columns
+  for (const col of [
+    'ALTER TABLE chunks ADD COLUMN start_line INTEGER',
+    'ALTER TABLE chunks ADD COLUMN end_line INTEGER',
+    'ALTER TABLE chunks ADD COLUMN file_stem TEXT',
+  ]) {
+    try {
+      db.exec(col);
+    } catch {
+      // column may already exist
+    }
+  }
+
+  // Backfill file_stem from source_file basename
+  try {
+    const rows = db.prepare(
+      `SELECT id, source_file FROM chunks WHERE file_stem IS NULL OR file_stem = ''`
+    ).all() as { id: string; source_file: string }[];
+    const update = db.prepare('UPDATE chunks SET file_stem = ? WHERE id = ?');
+    for (const row of rows) {
+      const base = row.source_file.replace(/\\/g, '/').split('/').pop() || row.source_file;
+      const stem = base.includes('.') ? base.replace(/\.[^.]+$/, '') : base;
+      update.run(stem, row.id);
+    }
+  } catch {
+    // Best-effort; indexer will set file_stem on reindex
+  }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_chunks_file_stem ON chunks(file_stem);
+    CREATE INDEX IF NOT EXISTS idx_chunks_symbol_name ON chunks(symbol_name COLLATE NOCASE);
+    CREATE INDEX IF NOT EXISTS idx_chunks_parent_symbol ON chunks(parent_symbol);
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chunk_embeddings (
+      chunk_id TEXT PRIMARY KEY,
+      embedding BLOB NOT NULL,
+      dims INTEGER NOT NULL,
+      model TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY(chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
+    );
+  `);
+
+  try {
+    migrateRelationshipsUnique(db);
+  } catch (e: any) {
+    console.error(`Relationship UNIQUE migration failed: ${e.message}`);
+  }
+
+  try {
+    ensureChunksFts(db, true);
+  } catch (e: any) {
+    console.error(`FTS rebuild failed: ${e.message}`);
+  }
+
+  setSchemaVersion(db, 5);
+}
+
 export function applyMigrations(db: Database.Database) {
   // First ensure schema_version table exists
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
   `);
-  
+
   const runMigrations = db.transaction(() => {
-    const versionRow = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
-    const currentVersion = versionRow ? versionRow.version : 0;
+    const currentVersion = getSchemaVersion(db);
 
     if (currentVersion === 0) {
       // We are either a new database or upgrading from 0.1.0 where schema_version didn't exist
       // If files table exists, it's an upgrade
       const hasFiles = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='files'").get();
-      
+
       if (hasFiles) {
-        console.log('Migrating ContextOS database to v0.2.0...');
+        console.error('Migrating ContextOS database to v0.2.0...');
         try {
           db.exec(`
             ALTER TABLE chunks ADD COLUMN file_type TEXT;
@@ -204,36 +407,35 @@ export function applyMigrations(db: Database.Database) {
             ALTER TABLE chunks ADD COLUMN symbol_name TEXT;
             ALTER TABLE chunks ADD COLUMN symbol_kind TEXT;
           `);
-        } catch (e: any) {
+        } catch {
           // columns might already exist if migration partially failed
         }
       }
-      
+
       // Run the full schema SQL to ensure all tables (like sessions) exist
       db.exec(SCHEMA_SQL);
-      
+      ensureChunksFts(db, !!hasFiles);
+
       if (hasFiles) {
-        const updateStmt = db.prepare('UPDATE schema_version SET version = 3');
-        if (updateStmt.run().changes === 0) {
-          db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (3)').run();
-        }
+        setSchemaVersion(db, 3);
       } else {
-        db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (3)').run();
+        // Fresh DB: SCHEMA_SQL already has v5 shape; stamp as 5
+        db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (5)').run();
       }
     } else if (currentVersion === 1) {
-      console.log('Migrating ContextOS database to v0.3.0 (Cross-Session Memory)...');
+      console.error('Migrating ContextOS database to v0.3.0 (Cross-Session Memory)...');
       try {
         // Version 2 adds knowledge_facts
         db.exec(SCHEMA_SQL);
         db.prepare('UPDATE schema_version SET version = 2').run();
-        
+
         // Upgrade straight to version 3
         db.prepare('UPDATE schema_version SET version = 3').run();
       } catch (e: any) {
         console.error(`Migration from v1 failed: ${e.message}`);
       }
     } else if (currentVersion === 2) {
-      console.log('Migrating ContextOS database to v0.4.0 (Adaptive Scoring)...');
+      console.error('Migrating ContextOS database to v0.4.0 (Adaptive Scoring)...');
       try {
         // Version 3 adds feedback_signals
         db.exec(SCHEMA_SQL);
@@ -244,24 +446,51 @@ export function applyMigrations(db: Database.Database) {
     }
 
     // Refresh version after possible upgrades above
-    const afterRow = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
-    const afterVersion = afterRow ? afterRow.version : 0;
+    let afterVersion = getSchemaVersion(db);
 
     if (afterVersion === 3) {
-      console.log('Migrating ContextOS database to v0.5.0 (parent_symbol)...');
+      console.error('Migrating ContextOS database to v0.5.0 (parent_symbol)...');
       try {
         db.exec(`ALTER TABLE chunks ADD COLUMN parent_symbol TEXT;`);
-      } catch (e: any) {
+      } catch {
         // column may already exist
       }
       try {
         db.exec(SCHEMA_SQL);
-        const updateStmt = db.prepare('UPDATE schema_version SET version = 4');
-        if (updateStmt.run().changes === 0) {
-          db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (4)').run();
-        }
+        setSchemaVersion(db, 4);
       } catch (e: any) {
         console.error(`Migration to v4 failed: ${e.message}`);
+      }
+    }
+
+    afterVersion = getSchemaVersion(db);
+
+    if (afterVersion === 4) {
+      try {
+        migrateToV5(db);
+      } catch (e: any) {
+        console.error(`Migration to v5 failed: ${e.message}`);
+      }
+    }
+
+    // Legacy path: upgraded from pre-schema_version with hasFiles stamped to 3,
+    // then v4, then need v5. Also handle DBs that somehow sit at 3 after fresh SCHEMA_SQL
+    // that already includes v5 tables — still run column/FTS migration if needed.
+    afterVersion = getSchemaVersion(db);
+    if (afterVersion < 5 && afterVersion > 0) {
+      // Catch-up: if we're at 3 and SCHEMA_SQL created v5-shaped tables on a partial upgrade
+      if (afterVersion === 3) {
+        try {
+          db.exec(`ALTER TABLE chunks ADD COLUMN parent_symbol TEXT;`);
+        } catch { /* exists */ }
+        setSchemaVersion(db, 4);
+      }
+      if (getSchemaVersion(db) === 4) {
+        try {
+          migrateToV5(db);
+        } catch (e: any) {
+          console.error(`Migration to v5 failed: ${e.message}`);
+        }
       }
     }
   });

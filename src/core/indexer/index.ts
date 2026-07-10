@@ -7,10 +7,14 @@ import { RelationshipsRepo } from '../storage/relationships-repo.js';
 import { parseMarkdown, parseText, parseCode, detectLanguage, parseConfig } from '../parser/index.js';
 import { chunkDocument } from '../chunker/index.js';
 import { chunkCode } from '../chunker/code-chunker.js';
-import { extractRelationships } from '../graph/extractor.js';
+import { extractRelationships, extractImportRelationships } from '../graph/extractor.js';
 import { scoreFileImportance } from './importance-scorer.js';
 import { hashContent } from '../../utils/hash.js';
 import { Layer, Chunk } from '../storage/types.js';
+import { indexChunkEmbeddings } from '../embeddings/index.js';
+
+/** Skip files larger than this before reading (B25). */
+const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
 
 export interface IndexStats {
   filesProcessed: number;
@@ -49,6 +53,16 @@ export class Indexer {
       };
     }
 
+    // Cap file size before read (B25)
+    if (stat.size > MAX_FILE_BYTES) {
+      return {
+        filesProcessed: 0,
+        chunksCreated: 0,
+        relationshipsFound: 0,
+        durationMs: Date.now() - startTime
+      };
+    }
+
     const content = fs.readFileSync(filePath, 'utf8');
     const hash = hashContent(content);
 
@@ -79,10 +93,12 @@ export class Indexer {
     const isConfig = ['json', 'yaml', 'yml', 'toml', 'ini'].includes(ext.slice(1));
 
     let chunks: Chunk[] = [];
+    let imports: string[] = [];
 
     // Parse and chunk based on file type
     if (isCode) {
       const parsed = await parseCode(filePath, content);
+      imports = parsed.imports || [];
       chunks = chunkCode(parsed, { layer, workspaceName });
     } else if (isConfig) {
       const parsed = parseConfig(filePath, content);
@@ -115,18 +131,34 @@ export class Indexer {
       chunkCount: chunks.length
     });
 
-    // Cleanup old chunks and relationships for this file
+    // Cleanup old chunks and relationships for this file (FK cascade deletes relationships)
     this.chunksRepo.deleteBySource(filePath);
 
     // Upsert new chunks
     this.chunksRepo.bulkUpsert(chunks);
     chunksCreated = chunks.length;
 
+    // Embeddings are retrieval-side only — never block indexing on model failures
+    try {
+      await indexChunkEmbeddings(this.chunksRepo.getDatabase(), chunks);
+    } catch {
+      // continue without embeddings
+    }
+
     // Extract and upsert relationships
     const allRels = [];
     for (const chunk of chunks) {
       const rels = extractRelationships(chunk);
       allRels.push(...rels);
+    }
+
+    // File-level import edges attached to the File Structure (or first) chunk
+    if (imports.length > 0 && chunks.length > 0) {
+      const anchor =
+        chunks.find(c => c.sectionTitle === 'File Structure') ||
+        chunks[0];
+      const fileStem = path.basename(filePath).replace(/\.[^.]+$/, '');
+      allRels.push(...extractImportRelationships(anchor, imports, fileStem));
     }
     
     if (allRels.length > 0) {
