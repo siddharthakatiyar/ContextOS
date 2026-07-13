@@ -244,12 +244,13 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
           return;
         }
         if (nameNode) {
+          const isExport = node.parent?.type === 'export_statement';
           symbols.push({
             name: nameNode.text,
             kind: symbolKindForNode(node.type),
-            startLine: node.startPosition.row + 1,
-            endLine: node.endPosition.row + 1,
-            body: node.text,
+            startLine: (isExport ? node.parent! : node).startPosition.row + 1,
+            endLine: (isExport ? node.parent! : node).endPosition.row + 1,
+            body: isExport ? node.parent!.text : node.text,
             parent: currentParent
           });
         }
@@ -261,15 +262,38 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
         const nameNode = node.childForFieldName('name') || node.children.find((c: any) => c.type === 'identifier' || c.type === 'type_identifier' || c.type === 'name');
         if (nameNode) {
           const className = nameNode.text;
+          const isExport = node.parent?.type === 'export_statement';
           symbols.push({
             name: className,
             kind: symbolKindForNode(node.type),
-            startLine: node.startPosition.row + 1,
-            endLine: node.endPosition.row + 1,
-            body: node.text,
+            startLine: (isExport ? node.parent! : node).startPosition.row + 1,
+            endLine: (isExport ? node.parent! : node).endPosition.row + 1,
+            body: isExport ? node.parent!.text : node.text,
             parent: currentParent
           });
           currentParent = className;
+        }
+      }
+
+      if ((node.type === 'lexical_declaration' || node.type === 'variable_declaration') && !parentName && !insideFunction) {
+        for (let j = 0; j < node.childCount; j++) {
+          const child = node.child(j);
+          if (child?.type === 'variable_declarator') {
+            const nameNode = child.childForFieldName('name') ||
+              child.children?.find((c: any) => c.type === 'identifier');
+            if (nameNode) {
+              const isExport = node.parent?.type === 'export_statement';
+              const emitNode = isExport ? node.parent! : node;
+              symbols.push({
+                name: nameNode.text,
+                kind: 'variable',
+                startLine: emitNode.startPosition.row + 1,
+                endLine: emitNode.endPosition.row + 1,
+                body: emitNode.text,
+                parent: currentParent
+              });
+            }
+          }
         }
       }
 
@@ -279,10 +303,6 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
     }
 
     traverse(tree.rootNode);
-
-    // Index top-level template-literal / large string constants (e.g. SQL DDL schemas)
-    // that tree-sitter would otherwise leave as unchunked lexical content.
-    extractTopLevelStringConsts(tree.rootNode, rawContent, symbols);
   } finally {
     // Free WASM tree memory (B13)
     try {
@@ -301,51 +321,3 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
   };
 }
 
-/**
- * Emit variable symbols for top-level const/let/var declarations whose
- * initializer is a large template literal or string (>~200 chars).
- */
-function extractTopLevelStringConsts(root: any, rawContent: string, symbols: CodeSymbol[]) {
-  const existing = new Set(symbols.map(s => s.name));
-  for (let i = 0; i < root.childCount; i++) {
-    const node = root.child(i);
-    if (!node) continue;
-    // lexical_declaration / variable_declaration / export_statement wrapping them
-    let decl = node;
-    if (node.type === 'export_statement') {
-      decl = node.children?.find((c: any) =>
-        c.type === 'lexical_declaration' || c.type === 'variable_declaration'
-      );
-      if (!decl) continue;
-    }
-    if (decl.type !== 'lexical_declaration' && decl.type !== 'variable_declaration') continue;
-
-    for (let j = 0; j < decl.childCount; j++) {
-      const child = decl.child(j);
-      if (!child || child.type !== 'variable_declarator') continue;
-      const nameNode = child.childForFieldName('name')
-        || child.children?.find((c: any) => c.type === 'identifier');
-      const valueNode = child.childForFieldName('value')
-        || child.children?.find((c: any) =>
-          c.type === 'template_string' || c.type === 'string' || c.type === 'string_fragment'
-        );
-      if (!nameNode || !valueNode) continue;
-      const name = nameNode.text;
-      if (!name || existing.has(name)) continue;
-      const body = valueNode.text || '';
-      if (body.length < 200) continue;
-      // Prefer template strings / multi-line strings
-      const isTemplate = valueNode.type === 'template_string' || body.includes('\n');
-      if (!isTemplate && body.length < 400) continue;
-      symbols.push({
-        name,
-        kind: 'variable',
-        startLine: (node.type === 'export_statement' ? node : decl).startPosition.row + 1,
-        endLine: (node.type === 'export_statement' ? node : decl).endPosition.row + 1,
-        // Prefer full export_statement text so markers like `export const X` survive
-        body: (node.type === 'export_statement' ? node.text : null) || decl.text || child.text,
-      });
-      existing.add(name);
-    }
-  }
-}

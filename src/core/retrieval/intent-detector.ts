@@ -137,6 +137,19 @@ export function detectIntent(prompt: string): DetectedIntent {
     }
   }
 
+  // Extract explicit function calls like compile() or myMethod() and backticks like `foo`
+  const explicitFuncs: string[] = [];
+  const funcCallRe = /\b([a-zA-Z0-9_]+)\(\)/g;
+  let fm: RegExpExecArray | null;
+  while ((fm = funcCallRe.exec(prompt)) !== null) {
+    if (!STOPWORDS.has(fm[1].toLowerCase())) explicitFuncs.push(fm[1]);
+  }
+  const backtickRe = /`([a-zA-Z0-9_]+)`/g;
+  let bm: RegExpExecArray | null;
+  while ((bm = backtickRe.exec(prompt)) !== null) {
+    if (!STOPWORDS.has(bm[1].toLowerCase())) explicitFuncs.push(bm[1]);
+  }
+
   // Keep multi-token / clearly-identifier shapes; drop leftover stopword-ish singles
   const identifiers = [...new Set([...rawIds, ...synthesized])].filter(id => {
     if (STOPWORDS.has(id.toLowerCase())) return false;
@@ -144,14 +157,22 @@ export function detectIntent(prompt: string): DetectedIntent {
     if (/^[A-Z][a-z]+$/.test(id) && id.length >= 4) return true;
     if (/^[a-z]+[A-Z][a-zA-Z]+$/.test(id)) return true; // synthesized camelCase
     return false;
-  }).slice(0, 30); // cap to keep Strategy 2 bounded
+  });
+
+  // Explicit functions and backtick identifiers bypass shape filters unconditionally
+  for (const ef of explicitFuncs) {
+    identifiers.push(ef);
+  }
+
+  // Cap to keep Strategy 2 bounded
+  const cappedIdentifiers = identifiers.slice(0, 30);
 
   const quoted = extractQuotedTerms(prompt);
   const intentType = classifyIntentType(prompt);
 
   return {
     concepts: [...new Set([...unigrams, ...bigrams, ...trigrams])],
-    identifiers: [...new Set(identifiers)],
+    identifiers: [...new Set(cappedIdentifiers)],
     quotedTerms: [...new Set(quoted)],
     intentType,
     rawPrompt: prompt,

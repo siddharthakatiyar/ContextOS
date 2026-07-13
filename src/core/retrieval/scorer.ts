@@ -134,15 +134,22 @@ export function applyIntentAdjustments(
     }
   }
 
-  // When prompt identifier matches file stem (get_context → get-context.ts), prefer that file's bodies
-  if (identifiers.size > 0) {
+  // When prompt identifier or token matches file stem (get_context → get-context.ts), prefer that file's bodies.
+  // This explicitly boosts all chunks (including helpers) from a file named in the prompt.
+  const allTokens = [...identifiers, ...matchTokens];
+  if (allTokens.length > 0) {
     const fsCompact = fileStemLower.replace(/[_-]/g, '');
-    for (const id of identifiers) {
-      const idc = id.replace(/[_-]/g, '');
-      if (idc.length >= 6 && fsCompact === idc) {
-        finalScore *= 2.0;
+    let fileNamedInPrompt = false;
+    for (const t of allTokens) {
+      const tc = t.replace(/[_-]/g, '');
+      // Ensure it's a substantive match (e.g., intentdetector)
+      if (tc.length >= 6 && (fsCompact === tc || (fsCompact.includes(tc) && tc.length >= 8))) {
+        fileNamedInPrompt = true;
         break;
       }
+    }
+    if (fileNamedInPrompt) {
+      finalScore *= 2.5; // Aggressive boost so local helpers rank above unrelated high-score chunks
     }
   }
 

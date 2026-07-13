@@ -212,6 +212,36 @@ export const initCommand = new Command('init')
     fs.writeFileSync(claudeConfigPath, JSON.stringify(claudeConfig, null, 2));
     console.log(`Updated Claude Code MCP configuration at ${claudeConfigPath}`);
 
+    // Generate VS Code MCP configs (Cline and Roo Code)
+    const vscodeDir = path.join(cwd, '.vscode');
+    if (!fs.existsSync(vscodeDir)) {
+      fs.mkdirSync(vscodeDir, { recursive: true });
+    }
+    
+    const vscodeMcpConfigs = [
+      { name: 'Cline', file: 'cline_mcp_settings.json' },
+      { name: 'Roo Code', file: 'roo_mcp_settings.json' }
+    ];
+
+    for (const { name, file } of vscodeMcpConfigs) {
+      const configPath = path.join(vscodeDir, file);
+      let vsConfig: any = {};
+      if (fs.existsSync(configPath)) {
+        try {
+          vsConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        } catch (e) {}
+      }
+      if (!vsConfig.mcpServers) {
+        vsConfig.mcpServers = {};
+      }
+      vsConfig.mcpServers = {
+        ...vsConfig.mcpServers,
+        ...generated.mcpServers
+      };
+      fs.writeFileSync(configPath, JSON.stringify(vsConfig, null, 2));
+      console.log(`Updated ${name} (VS Code) MCP configuration at ${configPath}`);
+    }
+
     // Generate Codex CLI config if .codex exists
     if (fs.existsSync(path.join(cwd, '.codex'))) {
       const codexConfigPath = path.join(cwd, '.codex', 'config.toml');

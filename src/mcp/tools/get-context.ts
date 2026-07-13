@@ -203,8 +203,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           relatedFiles: null
         });
 
-        const diagnosticHeader = `ContextOS | tokens: ${compiled.tokenCount}/${max_tokens}\n\n`;
-        const text = diagnosticHeader + compiled.output;
+        const text = compiled.output;
         cacheSet(cacheKey, text);
 
         return {

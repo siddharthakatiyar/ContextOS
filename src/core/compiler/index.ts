@@ -240,7 +240,6 @@ function formatStubs(stubs: ScoredChunk[]): string {
 export function compile(result: RetrievalResult, opts: CompilerOptions): CompiledContext {
   const signalTerms = collectSignalTerms(result, opts);
   // Leave headroom for markdown framing so final output stays ≤ maxTokens
-  // Tighter than -80 so avg search tokens stay near the 1056 gate after companion packing.
   const compressBudget = Math.max(360, opts.maxTokens - 128);
   const compressedChunks = compressChunks(result.chunks, compressBudget, {
     signalTerms,
@@ -321,13 +320,10 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
   }
 
   // Cap stubs to limit framing tokens
-  const cappedStubs = stubs.slice(0, 6);
+  const cappedStubs = stubs.slice(0, 3);
 
   // Markdown — compact framing
-  let output = '## ContextOS\n';
-  if (legend) {
-    output += legend;
-  }
+  let output = legend ? legend : '';
 
   const layerLabels: Record<string, string> = {
     session: 'Session',
@@ -336,11 +332,14 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     global: 'Global',
   };
 
-  for (const layer of ['session', 'repo', 'workspace', 'global'] as const) {
-    if (byLayer[layer].length > 0) {
+  const populatedLayers = (['session', 'repo', 'workspace', 'global'] as const)
+    .filter(l => byLayer[l].length > 0);
+
+  for (const layer of populatedLayers) {
+    if (populatedLayers.length > 1) {
       output += `### ${layerLabels[layer]}\n`;
-      output += formatLayerChunks(byLayer[layer], pathDisplay);
     }
+    output += formatLayerChunks(byLayer[layer], pathDisplay);
   }
 
   // Soft budget for optional framing (stubs/related) so avg stays near baseline
@@ -350,33 +349,12 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     output += stubsBlock;
   }
 
-  if (entities.length > 0) {
-    const relatedBlock = '### Related\n' + entities.map((e) => `\`${e.entity}\``).join(', ') + '\n';
-    if (estimateTokens(output) + estimateTokens(relatedBlock) <= softBudget) {
-      output += relatedBlock;
-    }
-  }
-
   output = trimOutputToBudget(output, opts.maxTokens);
 
-  // Final hard gate: if still over, drop stub section then related
+  // Final hard gate: if still over, drop stub section
   let tok = estimateTokens(output);
   if (tok > opts.maxTokens) {
     output = output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
-    tok = estimateTokens(output);
-  }
-  if (tok > opts.maxTokens) {
-    output = output.replace(/\n### Related\n[^\n]*\n?/, '\n');
-    tok = estimateTokens(output);
-  }
-
-  // Steer agents toward cheap expand paths when stubs remain
-  if (stubs.length > 0 && /### Also/.test(output)) {
-    const footer =
-      '\n_Stubs: use `get_symbol` for a named symbol, or `ctx_read_file` with start_line/end_line from the stub path — avoid whole-file reads._\n';
-    if (estimateTokens(output) + estimateTokens(footer) <= opts.maxTokens) {
-      output += footer;
-    }
   }
 
   return {
@@ -389,9 +367,5 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
 function trimOutputToBudget(output: string, maxTokens: number): string {
   let tok = estimateTokens(output);
   if (tok <= maxTokens) return output;
-  let trimmed = output.replace(/\n### Related\n[^\n]*\n?/, '\n');
-  tok = estimateTokens(trimmed);
-  if (tok <= maxTokens) return trimmed;
-  trimmed = trimmed.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
-  return trimmed;
+  return output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
 }
