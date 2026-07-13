@@ -240,10 +240,7 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
       continue;
     }
 
-    // Skip tiny variable symbols unless they are large template literals (DDL etc.)
-    if (symbol.kind === 'variable' && estimateTokens(symbol.body) < 50) {
-      continue;
-    }
+    // All top-level variables (even small constants) are now indexed
 
     // Import symbols are used for graph edges; skip as content chunks
     if (symbol.kind === 'import') {

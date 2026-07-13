@@ -95,10 +95,31 @@ export function canonicalizeWhitespace(content: string): string {
   }
   if (minIndent > 0 && minIndent < Infinity) {
     return collapsed
-      .map((l) => (l.length >= minIndent ? l.slice(minIndent) : l))
+      .map((l) => {
+        let dedented = l.length >= minIndent ? l.slice(minIndent) : l;
+        const m = dedented.match(/^[ \t]+/);
+        if (m) {
+          const indentStr = m[0];
+          const spaces = indentStr.replace(/\t/g, '    ').length;
+          const newIndent = ' '.repeat(Math.floor(spaces / 2) + (spaces % 2));
+          dedented = newIndent + dedented.slice(indentStr.length);
+        }
+        return dedented;
+      })
       .join('\n');
   }
-  return collapsed.join('\n');
+  return collapsed
+    .map((l) => {
+      const m = l.match(/^[ \t]+/);
+      if (m) {
+        const indentStr = m[0];
+        const spaces = indentStr.replace(/\t/g, '    ').length;
+        const newIndent = ' '.repeat(Math.floor(spaces / 2) + (spaces % 2));
+        return newIndent + l.slice(indentStr.length);
+      }
+      return l;
+    })
+    .join('\n');
 }
 
 /** Safe JSON minify; light YAML blank/trailing cleanup only. */

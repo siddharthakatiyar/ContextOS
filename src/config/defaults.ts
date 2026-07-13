@@ -68,7 +68,7 @@ export const defaultConfig: ContextOSConfig = {
   /** Function/method bodies above this emit additive segment chunks (parent kept). */
   maxSymbolChunkTokens: 900,
   
-  maxRetrievalResults: 12,
+  maxRetrievalResults: 25,
   maxTokenBudget: 1200,
   layerBoosts: {
     session: 1.5,
