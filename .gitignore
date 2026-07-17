@@ -8,4 +8,5 @@ dist/
 test-wasm.*
 contextos-graph.html
 daemon.log
-scripts/
+scripts/results/
+scripts/bench/fixtures/
