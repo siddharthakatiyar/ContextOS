@@ -29,7 +29,8 @@ import {
   GENERIC_TOPICS,
   TOPIC_DEFS,
   SESSION_TOPIC_IDS,
-} from "./ab-topics.mjs";
+} from "../topics/contextos.mjs";
+import { checkOracle, isComplete } from "../lib/oracle.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -75,10 +76,7 @@ function contentHash(content) {
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
-function isComplete(accumulated, markers) {
-  const missing = markers.filter((m) => !accumulated.includes(m));
-  return { ok: missing.length === 0, missing };
-}
+
 
 function runGrep(pattern, glob) {
   const globArg = glob ? `--glob '${glob}'` : "";
@@ -357,57 +355,55 @@ async function runContextOSFlow(topic) {
       ...(result.intent?.concepts || []),
     ],
   });
-  const output = `ContextOS | tokens: ${compiled.tokenCount}/${MAX_TOKENS}\n\n${compiled.output}`;
-  const searchTokens = compiled.tokenCount;
+  const output = compiled.output;
+  const searchTokens = tok(output);
   calls.push({ tool: "get_context", tokens: searchTokens });
 
   let accumulated = output;
-  let { ok, missing } = isComplete(accumulated, topic.requiredMarkers);
-  const oneShot = ok;
+  const oneShot = isComplete(accumulated, topic.requiredMarkers).ok;
   const filesRead = [];
-  if (!ok) {
-    for (const rel of topic.requiredFiles) {
-      ({ ok, missing } = isComplete(accumulated, topic.requiredMarkers));
-      if (ok) break;
-      const range = stubRangeForFile(output, rel);
-      let read = readFileRel(rel, range?.start, range?.end);
-      if (!read.exists) continue;
-      let fileHasMissing = missing.some((m) => read.text.includes(m));
-      if (!fileHasMissing && range) {
-        read = readFileRel(rel);
-        fileHasMissing = missing.some((m) => read.text.includes(m));
-      }
-      if (!fileHasMissing && filesRead.length > 0) continue;
-      const label = read.ranged ? `${rel}:${read.range}` : rel;
-      accumulated += `\n\n----- READ ${label} -----\n` + read.text;
-      calls.push({ tool: read.ranged ? "ctx_read_file" : "Read", tokens: read.tokens, path: label });
-      filesRead.push(label);
-
-      // After a ranged read, check if markers are STILL missing in the same file.
-      // If so, do a full file read to catch markers outside the stub range
-      // (e.g., top-level constants at line 6 when stub pointed to lines 138-384).
-      if (read.ranged) {
-        ({ ok, missing } = isComplete(accumulated, topic.requiredMarkers));
-        if (!ok) {
-          const fullRead = readFileRel(rel);
-          const stillMissing = missing.some((m) => fullRead.text.includes(m));
-          if (stillMissing) {
-            accumulated += `\n\n----- READ ${rel} (full) -----\n` + fullRead.text;
-            calls.push({ tool: "Read", tokens: fullRead.tokens, path: rel });
-            filesRead.push(rel);
-          }
-        }
-      }
+  
+  // Extract all stubs from output
+  // e.g. "src/mcp/tools/get-context-core.ts:40-80"
+  // Assuming stubRangeForFile is still used, or we just parse all ranges from output.
+  const allStubs = [];
+  const re = /(?:[\w./-]+/)?([\w.-]+(?:ts|js|tsx|jsx|json|md|py))(?::(\d+)-(\d+))?/g;
+  let mMatch;
+  while ((mMatch = re.exec(output)) !== null) {
+    const fileBase = mMatch[1];
+    const start = mMatch[2] ? Number(mMatch[2]) : null;
+    const end = mMatch[3] ? Number(mMatch[3]) : null;
+    
+    // Find matching relative path from requiredFiles just for testing simulation
+    const rel = topic.requiredFiles.find(f => path.basename(f) === fileBase) || fileBase;
+    
+    if (start && end) {
+      allStubs.push({ rel, start, end });
     }
   }
-  ({ ok, missing } = isComplete(accumulated, topic.requiredMarkers));
+
+  // 1. Stub-range parse -> read
+  for (const stub of allStubs) {
+    if (filesRead.includes(stub.rel)) continue;
+    const read = readFileRel(stub.rel, stub.start, stub.end);
+    if (!read.exists) continue;
+    const label = `${stub.rel}:${read.range}`;
+    accumulated += `\n\n----- READ ${label} -----\n` + read.text;
+    calls.push({ tool: "ctx_read_file", tokens: read.tokens, path: label });
+    filesRead.push(stub.rel);
+  }
+
+  // 2. Oracle-free: we do NOT fall back to reading requiredFiles.
+  // If the agent didn't figure out what to read from the stubs, it fails.
+
+  const { ok, missing } = isComplete(accumulated, topic.requiredMarkers);
   for (const db of dbs) {
     try {
       db.close();
     } catch {}
   }
   const totalTokens = calls.reduce((s, c) => s + c.tokens, 0);
-  return {
+  const resultObj = {
     side: "contextos",
     totalTokens,
     searchTokens,
@@ -419,6 +415,7 @@ async function runContextOSFlow(topic) {
     filesRead,
     calls,
   };
+  return checkOracle(resultObj, false); // false = oracle-free
 }
 
 function runBuiltInFair(topic) {

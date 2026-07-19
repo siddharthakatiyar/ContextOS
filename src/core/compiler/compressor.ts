@@ -1,5 +1,7 @@
 import { ScoredChunk } from '../retrieval/types.js';
 import { estimateTokens } from '../../utils/tokens.js';
+import { loadConfig } from '../../config/index.js';
+import { globalSentRegistry } from '../session/sent-registry.js';
 
 export interface CompressOptions {
   signalTerms?: string[];
@@ -7,6 +9,7 @@ export interface CompressOptions {
   identifiers?: string[];
   /** High-precision intent concepts — bypass weak stop words */
   concepts?: string[];
+  tier?: 'explore' | 'file' | 'exact' | 'exact-implementation';
 }
 
 function stripComments(code: string): string {
@@ -155,11 +158,33 @@ export function stubLocLabel(c: ScoredChunk): string {
   return display;
 }
 
+function extractCompactSignature(c: ScoredChunk): string | null {
+  if (!c.content || !c.symbolName) return null;
+  const lines = c.content.split('\n');
+  const sigLines = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) continue;
+    if (trimmed.startsWith('@')) continue; // skip decorators
+    sigLines.push(trimmed);
+    if (trimmed.includes('{')) break;
+    if (sigLines.length > 4) break;
+  }
+  let sig = sigLines.join(' ').replace(/\s*\{.*$/, '').trim();
+  if (sig.length > 120) sig = sig.slice(0, 117) + '...';
+  return sig;
+}
+
 function toStub(c: ScoredChunk): ScoredChunk {
   const loc = stubLocLabel(c);
-  const sig = c.symbolName
+  let sig = c.symbolName
     ? `${c.symbolKind || 'symbol'} ${c.symbolName}`
     : (c.sectionTitle || loc);
+  
+  const extracted = extractCompactSignature(c);
+  if (extracted && extracted.includes(c.symbolName!)) {
+    sig = extracted;
+  }
   const content = `${sig} — ${loc}`;
   return {
     ...c,
@@ -176,9 +201,14 @@ function toStubOrSnippet(c: ScoredChunk, signalTerms?: string[], concepts?: stri
 
   const lines = c.content.split('\n');
   const signalLines = lines.filter((l) => l.length < 200 && signalRe.test(l));
-  if (signalLines.length >= 1 && signalLines.length <= 16) {
+  if (signalLines.length >= 1) {
     const head = lines[0] || '';
-    const content = [head, ...signalLines.filter((l) => l !== head)].join('\n');
+    const slice = signalLines.filter((l) => l !== head).slice(0, 15);
+    const content = [
+      head,
+      ...slice,
+      ...(signalLines.length > 16 ? ['// [...truncated]'] : []),
+    ].join('\n');
     return {
       ...c,
       content,
@@ -306,10 +336,7 @@ export function truncatePreservingSignals(
   // Force-keep dotted call sites / pipeline markers — collectSignalTerms caps at 40 and
   // can drop short-but-critical terms like expander.expand under noisy prompts.
   const forced = (signalTerms || []).filter(
-    (t) =>
-      typeof t === 'string' &&
-      (t.includes('.') ||
-        /^(detectIntent|matchChunks|scoreChunks|allChunksMap|containmentDedup)$/i.test(t)),
+    (t) => typeof t === 'string' && t.includes('.')
   );
   const termList = [...new Set([...forced, ...collectSignalTerms(signalTerms, concepts)])];
   const signalRe = buildSignalRegex(termList);
@@ -509,6 +536,15 @@ function fitContentToBudget(
     out = [...keepIdx].sort((a, b) => a - b).map((i) => lines[i]).join('\n') + '\n//…';
     tok = estimateTokens(out);
   }
+  if (tok > maxTok) {
+    // Strict hard cutoff at max-budget
+    // 1 token ~= 3.5 chars on average
+    const charBudget = Math.max(40, Math.floor(maxTok * 3.5));
+    if (out.length > charBudget) {
+      out = out.slice(0, charBudget) + '\n//… [truncated]';
+      tok = estimateTokens(out);
+    }
+  }
   return { content: out, tokenCount: tok };
 }
 
@@ -603,6 +639,37 @@ export function buildCompressCtx(
   return { signalList, idSet, symbolNamedInPrompt, stemMatch, contentHitsSignal };
 }
 
+export function deriveChunkSignalTerms(deduped: ScoredChunk[]): string[] {
+  const terms = new Set<string>();
+  const callTargets = new Map<string, number>();
+
+  for (let i = 0; i < Math.min(10, deduped.length); i++) {
+    const c = deduped[i];
+    if (c.symbolName) terms.add(c.symbolName);
+    if (c.parentSymbol) terms.add(c.parentSymbol);
+  }
+
+  for (const c of deduped) {
+    const matches = c.content.match(/\b([a-zA-Z_]\w*)\s*\(/g);
+    if (matches) {
+      for (const m of matches) {
+        const target = m.replace(/\s*\($/, '');
+        if (target.length >= 4) {
+          callTargets.set(target, (callTargets.get(target) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  for (const [target, count] of callTargets.entries()) {
+    if (count >= 2) terms.add(target);
+  }
+
+  return [...terms]
+    .filter((t) => typeof t === 'string' && t.length >= 4)
+    .slice(0, 16);
+}
+
 /** Leader selection, dedup-prompt leader, segment-vs-parent preference. */
 export function pickPrimaries(
   deduped: ScoredChunk[],
@@ -611,87 +678,48 @@ export function pickPrimaries(
 ): ScoredChunk[] {
   const { signalList, idSet, symbolNamedInPrompt, stemMatch } = ctx;
 
-  // Primary picks (skip test files unless nothing else)
+  const candidates = deduped.filter((c) => !isTestFile(c));
+  if (candidates.length === 0) return deduped.slice(0, 3);
+
+  const maxScore = Math.max(...candidates.map((c) => c.score || 0), 1);
+  const approxBudget = Math.max(380, maxTokens - 140);
+  
+  const termRegexes = signalList.map(t => new RegExp(escapeRegExp(t), 'i'));
+  const getCoverage = (content: string) => {
+    let coverCount = 0;
+    for (const re of termRegexes) {
+      if (re.test(content)) coverCount++;
+    }
+    return signalList.length > 0 ? (coverCount / signalList.length) : 0;
+  };
+
+  const scoredCandidates = candidates.map(c => {
+    const normScore = (c.score || 0) / maxScore;
+    const coverage = getCoverage(c.content);
+    const hasSymbolNamed = symbolNamedInPrompt(c.symbolName) ? 1.0 : 0.0;
+    const hasStemMatch = stemMatch(c) ? 1.0 : 0.0;
+    const wontFit = ((c.tokenCount || 0) > approxBudget * 0.92) ? 1.0 : 0.0;
+    
+    // leadScore = normScore + 1.5·coverage + 1.0·symbolNamed + 0.5·stemMatch − 0.4·wontFit
+    const leadScore = normScore + (1.5 * coverage) + (1.0 * hasSymbolNamed) + (0.5 * hasStemMatch) - (0.4 * wontFit);
+    return { chunk: c, leadScore };
+  });
+
+  scoredCandidates.sort((a, b) => b.leadScore - a.leadScore);
+
   const byFile = new Map<string, number>();
   let primary: ScoredChunk[] = [];
-  for (const c of deduped) {
-    if (isTestFile(c)) continue;
+  for (const sc of scoredCandidates) {
     if (primary.length >= Math.min(5, deduped.length)) break;
-    const count = byFile.get(c.sourceFile) || 0;
+    const count = byFile.get(sc.chunk.sourceFile) || 0;
     if (count >= 2) continue;
-    primary.push(c);
-    byFile.set(c.sourceFile, count + 1);
-  }
-  if (primary.length === 0) primary.push(...deduped.slice(0, 3));
-
-  // Prefer chunks whose filename stem or symbol matches a strong signal term
-  const preferred = deduped
-    .filter((c) => !isTestFile(c) && stemMatch(c))
-    .sort((a, b) => (b.score || 0) - (a.score || 0));
-  if (preferred.length > 0) {
-    for (const p of preferred.slice(0, 2).reverse()) {
-      primary.unshift(p);
-    }
-    // Keep first occurrence so unshifted preferred leaders stay at the front
-    const seenP = new Set<string>();
-    primary = primary.filter((c) => {
-      if (seenP.has(c.id)) return false;
-      seenP.add(c.id);
-      return true;
-    });
-  }
-
-  // Dedup prompts: lead with retrieve() so the merge-map body gets the leader budget
-  if (signalList.some((t) => /dedup|deduplicat/i.test(t))) {
-    const retrieveHit = deduped.find((c) => c.symbolName === 'retrieve');
-    if (retrieveHit) {
-      primary = [retrieveHit, ...primary.filter((c) => c.id !== retrieveHit.id)];
-    }
-  }
-
-  // Prefer a substantial same-file body over a compact class/struct outline as leader
-  if (
-    primary[0] &&
-    (primary[0].symbolKind === 'class' || primary[0].symbolKind === 'struct') &&
-    (primary[0].tokenCount || 0) < 80
-  ) {
-    const outline = primary[0];
-    const bodies = deduped.filter((c) => {
-      if (c.id === outline.id || c.sourceFile !== outline.sourceFile) return false;
-      if ((c.tokenCount || 0) < 200) return false;
-      if (c.parentSymbol === outline.symbolName) return true;
-      if (c.symbolName && idSet.has(c.symbolName.toLowerCase())) return true;
-      const sym = (c.symbolName || '').toLowerCase();
-      if (sym && signalList.some((t) => {
-        const tl = t.toLowerCase();
-        return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
-      })) return true;
-      return false;
-    });
-    // Prefer signal-named methods (retrieve) over incidental helpers (applyEmbeddingFusion)
-    bodies.sort((a, b) => {
-      const scoreBody = (c: ScoredChunk): number => {
-        const sym = (c.symbolName || '').toLowerCase();
-        let s = c.score || 0;
-        if (sym && idSet.has(sym)) s += 1000;
-        if (sym && signalList.some((t) => t.toLowerCase() === sym)) s += 500;
-        if (c.parentSymbol === outline.symbolName && (c.symbolKind === 'method' || c.symbolKind === 'function')) {
-          s += Math.min(c.tokenCount || 0, 800) / 10;
-        }
-        return s;
-      };
-      return scoreBody(b) - scoreBody(a);
-    });
-    const body = bodies[0];
-    if (body) {
-      primary = [body, ...primary.filter((c) => c.id !== body.id)];
-    }
+    primary.push(sc.chunk);
+    byFile.set(sc.chunk.sourceFile, count + 1);
   }
 
   // Prefer intact segments over a truncated giant parent ONLY when segments
   // already ranked into the result set (natural FTS) and the prompt does not
   // name the function exactly. Never invent segment preference without hits.
-  const approxBudget = Math.max(380, maxTokens - 140);
   if (
     primary[0] &&
     (primary[0].symbolKind === 'function' || primary[0].symbolKind === 'method') &&
@@ -760,7 +788,8 @@ export function collectCompanions(
     sameFile.sort((a, b) => Number(contentHitsSignal(b)) - Number(contentHitsSignal(a)));
     for (const s of sameFile) {
       tryPushCompanion(s);
-      if (companions.length >= 5) break;
+      const limit = ctx.opts?.tier === 'exact' ? 2 : 5;
+      if (companions.length >= limit) break;
     }
   }
 
@@ -775,7 +804,8 @@ export function collectCompanions(
         break;
       }
     }
-    if (companions.length >= 8) break;
+    const limit = ctx.opts?.tier === 'exact' ? 3 : 8;
+    if (companions.length >= limit) break;
   }
 
   return companions;
@@ -791,10 +821,12 @@ export function orderForPacking(
   const leaderFile = primary[0]?.sourceFile;
   const candidates: ScoredChunk[] = [];
   const seen = new Set<string>();
+
+  const leader = primary[0];
+
   // Leader first, then compact / exact / segment primary siblings (must pack before
   // companions), then companions, then oversized non-exact primary bodies last.
-  const leader = primary[0];
-  const restPrimary = primary.slice(1);
+  const restPrimary = primary.filter((c) => c !== leader);
   const restHot = restPrimary.filter(
     (c) =>
       c.symbolKind === 'segment' ||
@@ -829,26 +861,36 @@ export function packToBudget(
   ctx: CompressCtx,
 ): ScoredChunk[] {
   const { signalList, idSet, symbolNamedInPrompt, contentHitsSignal } = ctx;
+  const isExactTier = ctx.opts?.tier === 'exact' || ctx.opts?.tier === 'exact-implementation';
 
-  const truncTerms = [...signalList];
-  // Dedup prompts: preserve merge-map markers when truncating retrieve()
-  if (signalList.some((t) => /dedup|deduplicat/i.test(t))) {
-    truncTerms.push('deduplicate', 'allChunksMap', 'score +=', 'containmentDedup');
-  }
-  // Retrieval pipeline prompts: keep the retrieve() call chain intact under truncation
-  if (
-    signalList.some((t) => /retrieval|retrieve|detectintent|matchchunks|scorechunks/i.test(t)) ||
-    [...idSet].some((id) => /retrieval|retrieve/i.test(id))
-  ) {
-    truncTerms.push('detectIntent', 'matchChunks', 'expander.expand', 'scoreChunks');
-  }
+  const derived = deriveChunkSignalTerms([...candidates, ...remainder]);
+  const truncTerms = [...new Set([...signalList, ...derived])];
   const full: ScoredChunk[] = [];
   const stubs: ScoredChunk[] = [];
   let used = 0;
 
+  const config = loadConfig();
+  const suppressSent = config.memoryInjection !== 'off';
+
+  const finalCandidates: ScoredChunk[] = [];
+  if (candidates.length > 0) finalCandidates.push(candidates[0]);
+  
+  if (suppressSent) {
+    for (let i = 1; i < candidates.length; i++) {
+      const c = candidates[i];
+      if (c.hash && globalSentRegistry.hasBeenSent(c.hash)) {
+        stubs.push(toStub(c));
+      } else {
+        finalCandidates.push(c);
+      }
+    }
+  } else {
+    finalCandidates.push(...candidates.slice(1));
+  }
+
   // Fit: leader first, then companions (small intact), then rest
-  for (let i = 0; i < candidates.length; i++) {
-    const c = candidates[i];
+  for (let i = 0; i < finalCandidates.length; i++) {
+    const c = finalCandidates[i];
     const terms = c.symbolName ? [...truncTerms, c.symbolName] : truncTerms;
     const room = budget - used;
 
@@ -880,16 +922,18 @@ export function packToBudget(
       // symbol (or its parent class) exactly, then prefer a near-full body.
       const exactSymbolLeader =
         symbolNamedInPrompt(c.symbolName) ||
-        (!!c.parentSymbol && idSet.has(c.parentSymbol.toLowerCase())) ||
-        // Dedup prompts: retrieve's merge map is the answer — give it near-full budget
-        (c.symbolName?.toLowerCase() === 'retrieve' &&
-          signalList.some((t) => /dedup|deduplicat/i.test(t)));
+        (!!c.parentSymbol && idSet.has(c.parentSymbol.toLowerCase()));
       if (c.tokenCount > 800 && !exactSymbolLeader) {
         leaderBudget = Math.min(leaderBudget, Math.floor(budget * 0.65));
       } else if ((c.tokenCount > 800 || exactSymbolLeader) && exactSymbolLeader) {
         leaderBudget = Math.min(leaderBudget, Math.floor(budget * 0.92));
       }
-      leaderBudget = Math.min(leaderBudget, budget - 60);
+      
+      if (ctx.opts?.tier === 'exact-implementation' && exactSymbolLeader) {
+        leaderBudget = Math.max(leaderBudget, c.tokenCount + 100);
+      } else {
+        leaderBudget = Math.min(leaderBudget, budget - 60);
+      }
 
       if (c.tokenCount <= leaderBudget) {
         full.push(c);
@@ -996,6 +1040,11 @@ export function packToBudget(
     } else {
       used = pushStubOrMini(c, full, stubs, used, budget, terms);
     }
+    
+    if (isExactTier && used >= budget && full.length > 0) {
+      // Don't fill budget with distant companions if we have the exact hit
+      break;
+    }
   }
 
   for (const c of remainder) stubs.push(toStub(c));
@@ -1084,12 +1133,33 @@ export function packToBudget(
     full[idx] = { ...full[idx], content: fitted.content, tokenCount: fitted.tokenCount };
   }
 
-  // Reconcile: ensure stored tokenCounts match content
+  // Interval-overlap test: if parent is intact, drop overlapping segments
+  const intactParentKeys = new Set(
+    full
+      .filter(c => c.symbolKind !== 'segment' && !c.content.includes('[...truncated]'))
+      .map(c => `${c.sourceFile}::${c.symbolName}`)
+  );
+  
+  const finalFull: ScoredChunk[] = [];
   for (const c of full) {
-    c.tokenCount = estimateTokens(c.content);
+    if (c.symbolKind === 'segment' && c.parentSymbol) {
+      if (intactParentKeys.has(`${c.sourceFile}::${c.parentSymbol}`)) {
+        stubs.push(toStub(c));
+        continue;
+      }
+    }
+    finalFull.push(c);
   }
 
-  return [...full, ...stubs];
+  // Reconcile: ensure stored tokenCounts match content
+  for (const c of finalFull) {
+    c.tokenCount = estimateTokens(c.content);
+    if (c.hash && suppressSent) {
+      globalSentRegistry.markSent(c.hash);
+    }
+  }
+
+  return [...finalFull, ...stubs];
 }
 
 /**
@@ -1115,16 +1185,13 @@ export function compressChunks(
     const topScore = filteredChunks[0].score || 0;
     const cutoff = Math.max(5.0, topScore * 0.35);
     const mustKeep = new Set(filteredChunks.slice(0, 5).map((c) => c.id));
-    const cliIntent = signalList.some(
-      (t) => /^(cli|command|bin|registration)$/i.test(t) || /registration/i.test(t),
-    );
     const keepChunks = filteredChunks.slice();
     filteredChunks = filteredChunks.filter((c) => {
       if (mustKeep.has(c.id) || (c.score || 0) >= cutoff) return true;
       // Keep exact identifier hits even when far below the leader
       if (c.symbolName && idSet.has(c.symbolName.toLowerCase())) return true;
-      // CLI registration prompts: keep bin/cli entrypoints that would otherwise be cut
-      if (cliIntent && /(?:^|[/\\])(?:bin|cli)[/\\]/i.test(c.sourceFile)) return true;
+      // Cheap-chunk pre-admission: Keep tiny chunks even if score is a bit low
+      if ((c.tokenCount || 0) < 60 && (c.score || 0) >= cutoff * 0.4) return true;
       const sym = (c.symbolName || '').toLowerCase();
       if (!sym) return false;
       if (signalList.some((t) => {
@@ -1176,10 +1243,8 @@ export function compressChunks(
   const candidateIds = new Set(candidates.map((c) => c.id));
   const remainder = deduped.filter((c) => !candidateIds.has(c.id));
 
-  // B19: stub reserve — leave room for markdown framing so final output ≤ maxTokens
-  const framingReserve = 90;
-  const stubReserve = Math.min(50, remainder.length * 6 + 10);
-  const budget = Math.max(380, maxTokens - framingReserve - stubReserve);
+  // B19: The caller (compile) now handles framing reserve and two-pass repacking.
+  const budget = Math.max(380, maxTokens);
 
   return packToBudget(candidates, remainder, budget, primary[0]?.sourceFile, ctx);
 }

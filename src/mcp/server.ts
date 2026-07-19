@@ -1,16 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerGetContextTool } from "./tools/get-context.js";
+import { loadConfig } from "../config/index.js";
 import { registerSaveContextTool } from "./tools/save-context.js";
 import { registerIndexFilesTool } from "./tools/index-files.js";
 import { registerGetStatusTool } from "./tools/get-status.js";
 import { registerGetGraphTools } from "./tools/get-graph.js";
 import { registerExecuteTool } from "./tools/execute.js";
 import { registerListTopicsTool } from "./tools/list-topics.js";
-import { registerReadTopicTool } from "./tools/read-topic.js";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerFeedbackTools } from "./tools/feedback.js";
 import { registerReadFileTool } from "./tools/read-file.js";
+import { registerExpandTool } from "./tools/expand.js";
 import { DB } from "../core/storage/database.js";
 import { checkForUpdates } from "../core/updater/index.js";
 import fs from "fs";
@@ -61,17 +62,35 @@ export async function startMcpServer(dbs: DB[]) {
     version: version,
   });
 
+  const config = loadConfig();
+
   registerGetContextTool(server, dbs);
-  registerSaveContextTool(server, dbs[0]);
   registerIndexFilesTool(server, dbs[0]);
   registerGetStatusTool(server, dbs[0]);
-  registerGetGraphTools(server, dbs[0]);
   registerExecuteTool(server);
-  registerListTopicsTool(server, dbs[0]);
-  registerReadTopicTool(server, dbs[0]);
-  registerKnowledgeTools(server, dbs);
-  registerFeedbackTools(server, dbs);
   registerReadFileTool(server);
+  registerExpandTool(server, dbs);
+  
+  if (config.legacyTools) {
+    const { registerSaveContextTool } = await import("./tools/save-context.js");
+    const { registerLegacyListTopicsTool } = await import("./tools/list-topics.js");
+    const { registerLegacyReadTopicTool } = await import("./tools/read-topic.js");
+    const { registerLegacyKnowledgeTools } = await import("./tools/knowledge.js");
+    const { registerLegacyFeedbackTools } = await import("./tools/feedback.js");
+    const { registerLegacyGetGraphTools } = await import("./tools/get-graph.js");
+    
+    registerSaveContextTool(server, dbs[0]);
+    registerLegacyListTopicsTool(server, dbs[0]);
+    registerLegacyReadTopicTool(server, dbs[0]);
+    registerLegacyKnowledgeTools(server, dbs);
+    registerLegacyFeedbackTools(server, dbs);
+    registerLegacyGetGraphTools(server, dbs[0]);
+  } else {
+    registerListTopicsTool(server, dbs[0]);
+    registerKnowledgeTools(server, dbs);
+    registerFeedbackTools(server, dbs);
+    registerGetGraphTools(server, dbs[0]);
+  }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

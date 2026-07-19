@@ -7,16 +7,22 @@ const RRF_K = 60;
 /** Max classes whose children are expanded per identifier (Strategy 2). */
 const MAX_CLASS_EXPAND_PER_ID = 3;
 
+export interface WeightedList {
+  list: ScoredChunk[];
+  weight: number;
+}
+
 /**
  * Reciprocal Rank Fusion across per-strategy ranked lists.
- * score(d) = Σ 1/(k + rank_i(d))
+ * score(d) = Σ (weight_i * 1/(k + rank_i(d)))
  */
-export function reciprocalRankFusion(lists: ScoredChunk[][], k: number = RRF_K): ScoredChunk[] {
+export function reciprocalRankFusion(weightedLists: WeightedList[], k: number = RRF_K): ScoredChunk[] {
   const fused = new Map<string, ScoredChunk>();
 
-  for (const list of lists) {
+  for (const { list, weight } of weightedLists) {
+    if (weight <= 0) continue;
     list.forEach((chunk, rank) => {
-      const contrib = 1 / (k + rank + 1);
+      const contrib = weight * (1 / (k + rank + 1));
       const existing = fused.get(chunk.id);
       if (existing) {
         existing.score += contrib;
@@ -55,12 +61,10 @@ function mergeUnique(chunks: any[]): any[] {
   return Array.from(map.values());
 }
 
-function pushList(lists: ScoredChunk[][], hits: any[], weight: number = 1): void {
-  if (hits.length === 0) return;
+function pushList(lists: WeightedList[], hits: any[], weight: number = 1): void {
+  if (hits.length === 0 || weight <= 0) return;
   const ranked = rankByBm25(mergeUnique(hits));
-  for (let i = 0; i < weight; i++) {
-    lists.push(ranked);
-  }
+  lists.push({ list: ranked, weight });
 }
 
 function stemVariants(stem: string): string[] {
@@ -135,8 +139,8 @@ export class KeywordMatcher {
   }
 
   /** Strategy 1: FTS5 OR (recall) + AND (precision) — double-weighted for content markers */
-  private strategyFts(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): ScoredChunk[][] {
-    const lists: ScoredChunk[][] = [];
+  private strategyFts(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): WeightedList[] {
+    const lists: WeightedList[] = [];
     const searchTerms = intent.concepts.slice(0, 15);
     if (searchTerms.length === 0) return lists;
 
@@ -153,15 +157,17 @@ export class KeywordMatcher {
     // Per-term FTS for longer concepts — surfaces content-only anchors (allChunksMap, etc.)
     for (const term of searchTerms) {
       if (term.length < 6 || term.includes(' ')) continue;
-      const hits = this.runFTS(`"${term.replace(/"/g, '""')}"`, opts, ftsLimit);
-      pushList(lists, hits, 2);
+      if (/^(function|method|string|number|object|return|const|import|export|class|boolean|array)$/i.test(term)) continue;
+      const limit = Math.min(ftsLimit || 30, 8);
+      const hits = this.runFTS(`"${term.replace(/"/g, '""')}"`, opts, limit);
+      pushList(lists, hits, 0.4); // Reduced weight so generic unigrams don't wash out multi-term exact matches
     }
     return lists;
   }
 
   /** Strategy 2: identifiers → keyword / symbol / parent children */
-  private strategyIdentifiers(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): ScoredChunk[][] {
-    const lists: ScoredChunk[][] = [];
+  private strategyIdentifiers(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): WeightedList[] {
+    const lists: WeightedList[] = [];
     if (intent.identifiers.length === 0) return lists;
     const layerOpts = opts?.layers && opts.layers.length > 0 ? { layers: opts.layers } : undefined;
     const idHits: any[] = [];
@@ -222,8 +228,10 @@ export class KeywordMatcher {
     const unigrams = intent.concepts.filter(c => c.split(' ').length === 1);
     const titleHits: any[] = [];
     for (const concept of unigrams) {
+      // Penalize/skip extremely generic words that drown out structural intent
+      if (/^(file|structure|data|type|name|code|system|component)$/i.test(concept)) continue;
       for (const repo of this.chunksRepos) {
-        titleHits.push(...repo.findByTitleMatch(concept, layerOpts));
+        titleHits.push(...repo.findByTitleMatch(concept, layerOpts).slice(0, 5));
       }
     }
     return titleHits;
@@ -234,12 +242,13 @@ export class KeywordMatcher {
    * Routes error/fix/implement/pr queries via semantic FTS expansions.
    */
   private strategyIntentAware(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): any[] {
+    const limit = Math.min(ftsLimit || 30, 8); // strict limit for generic intent words
     if (intent.intentType === 'fix') {
-      return this.runFTS('"error" OR "bug" OR "exception" OR "fix"', opts, ftsLimit);
+      return this.runFTS('"error" OR "bug" OR "exception" OR "fix"', opts, limit);
     } else if (intent.intentType === 'implement') {
-      return this.runFTS('"api" OR "interface" OR "spec" OR "implement"', opts, ftsLimit);
+      return this.runFTS('"api" OR "interface" OR "spec" OR "implement"', opts, limit);
     } else if (intent.intentType === 'pr') {
-      return this.runFTS('"pr" OR "pull request" OR "rules" OR "guidelines"', opts, ftsLimit);
+      return this.runFTS('"pr" OR "pull request" OR "rules" OR "guidelines"', opts, limit);
     }
     return [];
   }
@@ -248,8 +257,8 @@ export class KeywordMatcher {
    * Strategy 5: Filename / path stem matching
    * e.g. scoring → scorer.ts via findByFileStem variants.
    */
-  private strategyFileStem(intent: DetectedIntent, opts?: RetrievalOptions): ScoredChunk[][] {
-    const lists: ScoredChunk[][] = [];
+  private strategyFileStem(intent: DetectedIntent, opts?: RetrievalOptions): WeightedList[] {
+    const lists: WeightedList[] = [];
     const layerOpts = opts?.layers && opts.layers.length > 0 ? { layers: opts.layers } : undefined;
     const stemCandidates = new Set<string>([
       ...intent.concepts.filter(c => c.split(' ').length === 1 && c.length >= 3),
@@ -264,7 +273,7 @@ export class KeywordMatcher {
         // Short generic stems (chunk, file, path) are noisy unless from an identifier
         const weak = v.length < 5 && ![...idLower].some(i => i.includes(v.toLowerCase()));
         for (const repo of this.chunksRepos) {
-          const fileHits = repo.findByFileStem(v, weak ? 5 : 20, layerOpts);
+          const fileHits = repo.findByFileStem(v, weak ? 8 : 20, layerOpts);
           for (const h of fileHits) {
             const base = (h.sourceFile.split(/[/\\]/).pop() || '').toLowerCase();
             const fileStem = (h.fileStem || base.replace(/\.[^.]+$/, '')).toLowerCase();
@@ -294,7 +303,7 @@ export class KeywordMatcher {
         const stem = h.fileStem || path.basename(h.sourceFile).replace(/\.[^.]+$/, '');
         if (!stem || stem.length < 3) continue;
         siblingHits.push(
-          ...repo.findByFileStem(stem, 15, layerOpts)
+          ...repo.findByFileStem(stem, 8, layerOpts)
             .filter((s: any) => s.sourceFile === h.sourceFile)
             .map((s: any) => ({ ...s, score: 12 }))
         );
@@ -305,8 +314,8 @@ export class KeywordMatcher {
   }
 
   /** Strategy 6: concept → symbol_name (prefix + fuzzy); expands class children */
-  private strategyConceptSymbols(intent: DetectedIntent, opts?: RetrievalOptions): ScoredChunk[][] {
-    const lists: ScoredChunk[][] = [];
+  private strategyConceptSymbols(intent: DetectedIntent, opts?: RetrievalOptions): WeightedList[] {
+    const lists: WeightedList[] = [];
     const layerOpts = opts?.layers && opts.layers.length > 0 ? { layers: opts.layers } : undefined;
     const symbolHits: any[] = [];
     const exactHits: any[] = [];
@@ -346,16 +355,24 @@ export class KeywordMatcher {
   }
 
   public matchChunks(intent: DetectedIntent, opts?: RetrievalOptions): ScoredChunk[] {
-    const config = loadConfig();
-    const ftsLimit = opts?.limit ?? config.ftsLimit;
-    const strategyLists: ScoredChunk[][] = [];
+    const ftsLimit = opts?.limit ?? loadConfig().ftsLimit;
+    const strategyLists: WeightedList[] = [];
 
+    // Strategy 0: Exact match for quoted terms
     pushList(strategyLists, this.strategyQuoted(intent, opts, ftsLimit));
+    
+    // Strategy 1: FTS5 OR (recall) + AND (precision) — double-weighted for content markers
     strategyLists.push(...this.strategyFts(intent, opts, ftsLimit));
+    
+    // Strategy 2: Identifiers
     strategyLists.push(...this.strategyIdentifiers(intent, opts, ftsLimit));
-    pushList(strategyLists, this.strategyTitleMatch(intent, opts));
+    
+    // Strategy 3: Section title exact match (unigrams only)
+    pushList(strategyLists, this.strategyTitleMatch(intent, opts), 0.5); // reduced weight
+    
     // Strategy 4: Intent-aware boosting (intentType === 'fix' | implement | pr)
-    pushList(strategyLists, this.strategyIntentAware(intent, opts, ftsLimit));
+    pushList(strategyLists, this.strategyIntentAware(intent, opts, ftsLimit), 1);
+    
     // Strategy 5: Filename / path stem matching via findByFileStem
     strategyLists.push(...this.strategyFileStem(intent, opts));
     strategyLists.push(...this.strategyConceptSymbols(intent, opts));

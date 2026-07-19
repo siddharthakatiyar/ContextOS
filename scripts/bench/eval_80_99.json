@@ -1,0 +1,102 @@
+[
+  {
+    "id": "generic_31",
+    "isAccurate": true,
+    "reason": "Mentions RM_BlockClient and blockClient which are relevant to blocking clients."
+  },
+  {
+    "id": "generic_32",
+    "isAccurate": false,
+    "reason": "Only shows LRU list logic and package.json scripts, missing lua execution logic entirely."
+  },
+  {
+    "id": "generic_33",
+    "isAccurate": false,
+    "reason": "No information about transaction atomicity or thread blocking for scripts."
+  },
+  {
+    "id": "generic_34",
+    "isAccurate": true,
+    "reason": "Shows addReplyPubsubMessage and addReplyPubsubPatMessage which explain message broadcasting."
+  },
+  {
+    "id": "generic_35",
+    "isAccurate": true,
+    "reason": "Lists blpopCommand from t_list.c which implements BLPOP."
+  },
+  {
+    "id": "generic_36",
+    "isAccurate": true,
+    "reason": "Shows initClientMultiState and execCommandAbort which identify MULTI/EXEC states."
+  },
+  {
+    "id": "generic_37",
+    "isAccurate": true,
+    "reason": "Lists watchCommand in multi.c, relevant for transaction watches."
+  },
+  {
+    "id": "generic_38",
+    "isAccurate": true,
+    "reason": "Shows lazyfreeFreeObject, lazyFreeErrors, and background_work thread logic."
+  },
+  {
+    "id": "generic_39",
+    "isAccurate": true,
+    "reason": "Lists bioInit and jemalloc background thread work."
+  },
+  {
+    "id": "generic_40",
+    "isAccurate": true,
+    "reason": "Mentions zmalloc_register_reserved_slot and zmalloc_default_oom."
+  },
+  {
+    "id": "generic_41",
+    "isAccurate": true,
+    "reason": "Shows trackingRememberKeys and disableTracking which is the caching implementation."
+  },
+  {
+    "id": "generic_42",
+    "isAccurate": true,
+    "reason": "Shows ACLSelectorHasUnrestrictedKeyAccess which implements ACL pattern matching and validation."
+  },
+  {
+    "id": "generic_43",
+    "isAccurate": false,
+    "reason": "Only shows crash debug info and lua error buffering, misses core serverLog."
+  },
+  {
+    "id": "generic_44",
+    "isAccurate": true,
+    "reason": "Mentions prepareForShutdown and cancelShutdown functions."
+  },
+  {
+    "id": "generic_45",
+    "isAccurate": false,
+    "reason": "Only shows network timeout handling, misses key expiration mechanisms entirely."
+  },
+  {
+    "id": "generic_46",
+    "isAccurate": true,
+    "reason": "Shows slowlogCommand, slowlogPushEntryIfNeeded and slowlogPushCurrentCommand."
+  },
+  {
+    "id": "generic_47",
+    "isAccurate": false,
+    "reason": "Misses epoll/kqueue network events and ae.c, just shows cluster read/write and hiredis async read."
+  },
+  {
+    "id": "generic_48",
+    "isAccurate": false,
+    "reason": "Missing redis.conf loading/parsing logic, only shows config types for another project."
+  },
+  {
+    "id": "generic_49",
+    "isAccurate": true,
+    "reason": "Shows connectionTypeTls and cliSecureConnection."
+  },
+  {
+    "id": "generic_50",
+    "isAccurate": true,
+    "reason": "Shows activeDefragHfieldDictCallback and isValidActiveDefrag sweeps."
+  }
+]

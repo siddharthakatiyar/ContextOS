@@ -91,5 +91,12 @@ export const defaultConfig: ContextOSConfig = {
   
   cursor: {
     autoGenerateConfig: true
-  }
+  },
+  
+  memoryInjection: 'relevant',
+  sentDedupEnabled: true,
+  legacyTools: false,
+  tokenCalibration: 1.0,
+  framingReserve: 48,
+  adaptiveResponse: true,
 };

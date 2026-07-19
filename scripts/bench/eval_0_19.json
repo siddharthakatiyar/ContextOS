@@ -1,0 +1,102 @@
+[
+  {
+    "id": "targeted_1",
+    "isAccurate": false,
+    "reason": "Shows the wrapper function delegating to _sdsMakeRoomFor, but lacks the actual allocation logic."
+  },
+  {
+    "id": "targeted_2",
+    "isAccurate": false,
+    "reason": "Only shows the struct forward declaration without its fields."
+  },
+  {
+    "id": "targeted_3",
+    "isAccurate": true,
+    "reason": "Contains the complete dictRehash implementation with the rehashing loop."
+  },
+  {
+    "id": "targeted_4",
+    "isAccurate": false,
+    "reason": "Shows a Lua resize function instead of the Redis dictionary resize logic."
+  },
+  {
+    "id": "targeted_5",
+    "isAccurate": true,
+    "reason": "Shows the linked list traversal resolving hash collisions in dictFind."
+  },
+  {
+    "id": "targeted_6",
+    "isAccurate": true,
+    "reason": "Provides the complete aeProcessEvents loop."
+  },
+  {
+    "id": "targeted_7",
+    "isAccurate": true,
+    "reason": "Shows time event allocation and insertion at the head of the list."
+  },
+  {
+    "id": "targeted_8",
+    "isAccurate": true,
+    "reason": "Provides the aeApiPoll implementation for kqueue."
+  },
+  {
+    "id": "targeted_9",
+    "isAccurate": true,
+    "reason": "Fully explains reading from the socket into the query buffer in readQueryFromClient."
+  },
+  {
+    "id": "targeted_10",
+    "isAccurate": true,
+    "reason": "Shows the parsing loop handling multiple commands in processInputBuffer."
+  },
+  {
+    "id": "targeted_11",
+    "isAccurate": false,
+    "reason": "Shows only delegation to slave/non-slave functions without the underlying logic."
+  },
+  {
+    "id": "targeted_12",
+    "isAccurate": true,
+    "reason": "Contains a comprehensive portion of initServer establishing configurations and state."
+  },
+  {
+    "id": "targeted_13",
+    "isAccurate": true,
+    "reason": "Shows the serverCron function handling background tasks."
+  },
+  {
+    "id": "targeted_14",
+    "isAccurate": true,
+    "reason": "Fully explains tasks run before sleeping in the event loop."
+  },
+  {
+    "id": "targeted_15",
+    "isAccurate": true,
+    "reason": "Shows argument parsing and dispatching to setGenericCommand."
+  },
+  {
+    "id": "targeted_16",
+    "isAccurate": true,
+    "reason": "Displays the exact key lookup and reply generation for GET requests."
+  },
+  {
+    "id": "targeted_17",
+    "isAccurate": true,
+    "reason": "Explains the listpack optimization path in hsetCommand."
+  },
+  {
+    "id": "targeted_18",
+    "isAccurate": false,
+    "reason": "Shows value retrieval but lacks any logic regarding transitioning encodings."
+  },
+  {
+    "id": "targeted_19",
+    "isAccurate": false,
+    "reason": "Only shows a one-line delegation to pushGenericCommand without quicklist logic."
+  },
+  {
+    "id": "targeted_20",
+    "isAccurate": true,
+    "reason": "Demonstrates the blocking logic triggering blockForKeys when keys are missing."
+  }
+]

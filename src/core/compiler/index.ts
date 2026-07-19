@@ -1,6 +1,7 @@
 import { RetrievalResult, ScoredChunk } from '../retrieval/types.js';
 import { CompiledContext, CompilerOptions } from './types.js';
 import { compressChunks, stubLocLabel } from './compressor.js';
+import { assessTier } from './tier.js';
 import { estimateTokens } from '../../utils/tokens.js';
 import path from 'path';
 
@@ -63,15 +64,20 @@ function collectSignalTerms(result: RetrievalResult, opts: CompilerOptions): str
   return [...new Set(terms.filter(Boolean))];
 }
 
-function locLabel(chunk: ScoredChunk, displayPath: string): string {
-  if (chunk.startLine != null && chunk.endLine != null) {
-    return `${displayPath}:${chunk.startLine}-${chunk.endLine}`;
+function locLabel(chunk: ScoredChunk, displayPath: string, repoRoot?: string): string {
+  let label = displayPath;
+  if (repoRoot && chunk.sourceFile.startsWith(repoRoot)) {
+    const rel = chunk.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
+    if (rel) label = rel;
   }
-  return displayPath;
+  if (chunk.startLine != null && chunk.endLine != null) {
+    return `${label}:${chunk.startLine}-${chunk.endLine}`;
+  }
+  return label;
 }
 
-function chunkHeader(chunk: ScoredChunk, displayPath: string): string {
-  const loc = locLabel(chunk, displayPath);
+function chunkHeader(chunk: ScoredChunk, displayPath: string, repoRoot?: string): string {
+  const loc = locLabel(chunk, displayPath, repoRoot);
   if (chunk.symbolName) {
     if (chunk.parentSymbol) {
       return `\`${chunk.parentSymbol}.${chunk.symbolName}\` (\`${loc}\`):`;
@@ -139,11 +145,11 @@ function buildPathAliases(chunks: ScoredChunk[]): {
 }
 
 /** Merge same-file full-body code chunks into one fence where possible. */
-function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string): string {
+function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string, repoRoot?: string): string {
   if (chunks.length === 0) return '';
   if (chunks.length === 1) {
     const chunk = chunks[0];
-    let out = chunkHeader(chunk, displayPath) + '\n';
+    let out = chunkHeader(chunk, displayPath, repoRoot) + '\n';
     if (chunk.language) {
       out += `\`\`\`${chunk.language}\n${chunk.content.trim()}\n\`\`\`\n`;
     } else {
@@ -157,7 +163,7 @@ function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string): stri
   const canMerge = langs.size === 1 && [...langs][0] !== '';
   if (!canMerge) {
     return chunks.map((c) => {
-      let out = chunkHeader(c, displayPath) + '\n';
+      let out = chunkHeader(c, displayPath, repoRoot) + '\n';
       if (c.language) out += `\`\`\`${c.language}\n${c.content.trim()}\n\`\`\`\n`;
       else out += `${c.content.trim()}\n`;
       return out;
@@ -181,6 +187,7 @@ function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string): stri
       endLine: chunks[chunks.length - 1].endLine ?? chunks[0].endLine,
     },
     displayPath,
+    repoRoot,
   );
   let out = labels ? `\`${labels}\` (\`${loc}\`):\n` : `\`${loc}\`:\n`;
   out += `\`\`\`${lang}\n`;
@@ -189,7 +196,7 @@ function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string): stri
   return out;
 }
 
-function formatLayerChunks(chunks: ScoredChunk[], pathDisplay: Map<string, string>): string {
+function formatLayerChunks(chunks: ScoredChunk[], pathDisplay: Map<string, string>, repoRoot?: string): string {
   // Group consecutive same-file chunks
   const groups: ScoredChunk[][] = [];
   for (const c of chunks) {
@@ -203,7 +210,7 @@ function formatLayerChunks(chunks: ScoredChunk[], pathDisplay: Map<string, strin
   let out = '';
   for (const g of groups) {
     const display = pathDisplay.get(g[0].sourceFile) || path.basename(g[0].sourceFile);
-    out += formatMergedFileGroup(g, display);
+    out += formatMergedFileGroup(g, display, repoRoot);
   }
   return out;
 }
@@ -233,21 +240,18 @@ function formatStubs(stubs: ScoredChunk[]): string {
       out += `- \`${fileKey}\`: ${parts.map((p) => `\`${p}\``).join(', ')}\n`;
     }
   }
-  out += '\n';
+  out += '\n> Use `ctx_expand` to extract query-centered windows from these files without flooding your context.\n\n';
   return out;
 }
 
-export function compile(result: RetrievalResult, opts: CompilerOptions): CompiledContext {
-  const signalTerms = collectSignalTerms(result, opts);
-  // Leave headroom for markdown framing so final output stays ≤ maxTokens
-  const compressBudget = Math.max(360, opts.maxTokens - 128);
-  const compressedChunks = compressChunks(result.chunks, compressBudget, {
-    signalTerms,
-    identifiers: result.intent?.identifiers || [],
-    concepts: result.intent?.concepts || [],
-  });
+function renderPass(
+  compressedChunks: ScoredChunk[],
+  result: RetrievalResult,
+  opts: CompilerOptions,
+): { output: string; tokenCount: number; stubs: ScoredChunk[] } {
   const full = compressedChunks.filter((c) => !isStub(c));
   const stubs = compressedChunks.filter((c) => isStub(c));
+  const repoRoot = (opts as any).repoRoot;
 
   const byLayer: Record<string, ScoredChunk[]> = {
     session: [],
@@ -270,7 +274,11 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     let xmlOutput = `<contextos_context>\n`;
 
     const formatXmlChunk = (chunk: ScoredChunk) => {
-      const src = pathDisplay.get(chunk.sourceFile) || path.basename(chunk.sourceFile);
+      let src = pathDisplay.get(chunk.sourceFile) || path.basename(chunk.sourceFile);
+      if (repoRoot && chunk.sourceFile.startsWith(repoRoot)) {
+        const rel = chunk.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
+        if (rel) src = rel;
+      }
       let out = `<chunk id="${escapeXml(chunk.id)}" layer="${escapeXml(chunk.layer)}" source="${escapeXml(src)}"`;
       if (chunk.symbolName) out += ` symbol="${escapeXml(chunk.symbolName)}" kind="${escapeXml(chunk.symbolKind)}"`;
       if (chunk.sectionTitle) out += ` section="${escapeXml(chunk.sectionTitle)}"`;
@@ -296,7 +304,11 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     if (stubs.length > 0) {
       xmlOutput += `<stubs>\n`;
       for (const s of stubs) {
-        const src = stubLocLabel(s);
+        let src = stubLocLabel(s);
+        if (repoRoot && s.sourceFile.startsWith(repoRoot)) {
+           const rel = s.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
+           if (rel) src = rel + (s.startLine != null && s.endLine != null ? `:${s.startLine}-${s.endLine}` : '');
+        }
         xmlOutput += `  <stub source="${escapeXml(src)}" symbol="${escapeXml(s.symbolName || '')}"`;
         if (s.startLine != null) xmlOutput += ` start="${s.startLine}"`;
         if (s.endLine != null) xmlOutput += ` end="${s.endLine}"`;
@@ -316,6 +328,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     return {
       output: xmlOutput,
       tokenCount: estimateTokens(xmlOutput),
+      stubs,
     };
   }
 
@@ -339,27 +352,62 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     if (populatedLayers.length > 1) {
       output += `### ${layerLabels[layer]}\n`;
     }
-    output += formatLayerChunks(byLayer[layer], pathDisplay);
+    output += formatLayerChunks(byLayer[layer], pathDisplay, repoRoot);
   }
 
-  // Soft budget for optional framing (stubs/related) so avg stays near baseline
-  const softBudget = Math.floor(opts.maxTokens * 0.86);
   const stubsBlock = formatStubs(cappedStubs);
-  if (stubsBlock && estimateTokens(output) + estimateTokens(stubsBlock) <= softBudget) {
+  if (stubsBlock) {
     output += stubsBlock;
-  }
-
-  output = trimOutputToBudget(output, opts.maxTokens);
-
-  // Final hard gate: if still over, drop stub section
-  let tok = estimateTokens(output);
-  if (tok > opts.maxTokens) {
-    output = output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
   }
 
   return {
     output,
     tokenCount: estimateTokens(output),
+    stubs,
+  };
+}
+
+export function compile(result: RetrievalResult, opts: CompilerOptions): CompiledContext {
+  const signalTerms = collectSignalTerms(result, opts);
+  const tier = opts.tier || assessTier(result);
+  const ctxOpts = {
+    signalTerms,
+    identifiers: result.intent?.identifiers || [],
+    concepts: result.intent?.concepts || [],
+    tier,
+  };
+
+  let activeMaxTokens = opts.maxTokens;
+  if (tier === 'exact' || tier === 'exact-implementation') {
+    activeMaxTokens = Math.max(activeMaxTokens, 8000);
+  }
+
+  const framingFloor = (opts as any).framingReserve ?? 48;
+  const firstPassBudget = Math.max(380, activeMaxTokens - framingFloor);
+  
+  let compressedChunks = compressChunks(result.chunks, firstPassBudget, ctxOpts);
+  let renderResult = renderPass(compressedChunks, result, opts);
+
+  if (renderResult.tokenCount > activeMaxTokens) {
+    const deficit = renderResult.tokenCount - activeMaxTokens;
+    const repackBudget = Math.max(380, firstPassBudget - deficit - 15);
+    compressedChunks = compressChunks(result.chunks, repackBudget, ctxOpts);
+    renderResult = renderPass(compressedChunks, result, opts);
+  }
+
+  let { output, tokenCount } = renderResult;
+
+  output = trimOutputToBudget(output, activeMaxTokens);
+
+  tokenCount = estimateTokens(output);
+  if (tokenCount > activeMaxTokens) {
+    output = output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
+    tokenCount = estimateTokens(output);
+  }
+
+  return {
+    output,
+    tokenCount,
   };
 }
 

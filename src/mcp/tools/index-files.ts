@@ -3,6 +3,7 @@ import { z } from "zod";
 import { DB } from "../../core/storage/database.js";
 import { Indexer } from "../../core/indexer/index.js";
 import path from "path";
+import { globalSentRegistry } from "../../core/session/sent-registry.js";
 
 export function registerIndexFilesTool(server: McpServer, db: DB) {
   const indexer = new Indexer(db);
@@ -34,6 +35,7 @@ export function registerIndexFilesTool(server: McpServer, db: DB) {
         }
 
         const stats = await indexer.indexFile(resolvedPath, layer as any, workspaceName);
+        globalSentRegistry.invalidate();
         return {
           content: [{
             type: "text",

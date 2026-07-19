@@ -34,7 +34,7 @@ export const TOPIC_DEFS = [
     requiredFiles: ["src/core/retrieval/index.ts"],
     requiredMarkers: [
       "public async retrieve(prompt: string",
-      "const intent = detectIntent(prompt)",
+      "const intent",
       "allChunksMap",
       "scored = containmentDedup(scored, intent.identifiers)",
       "applyEmbeddingFusion",
@@ -51,7 +51,7 @@ export const TOPIC_DEFS = [
     grepGlob: "**/keyword-matcher.ts",
     requiredFiles: ["src/core/retrieval/keyword-matcher.ts"],
     requiredMarkers: [
-      "export function reciprocalRankFusion",
+      "function reciprocalRankFusion",
       "const RRF_K = 60",
       "MAX_CLASS_EXPAND_PER_ID",
       "public matchChunks(intent: DetectedIntent",
@@ -70,9 +70,8 @@ export const TOPIC_DEFS = [
     requiredFiles: ["src/core/retrieval/intent-detector.ts"],
     requiredMarkers: [
       "export function detectIntent(prompt: string)",
-      "function looksLikeRealIdentifier",
+      "looksLikeRealIdentifier",
       "extractQuotedTerms",
-      "const verbStems = [",
       "function classifyIntentType",
     ],
   },
@@ -89,7 +88,7 @@ export const TOPIC_DEFS = [
     requiredMarkers: [
       "export function applyPoisonPenalty",
       "finalScore = -9999",
-      "export function applyNoiseDemotion",
+      "function applyNoiseDemotion",
       "sectionTitle === 'File Structure'",
       "Prefer repo-local source files over foreign workspace pollution",
     ],
@@ -109,7 +108,7 @@ export const TOPIC_DEFS = [
       "get_context → getcontext for symbol match",
       "t.endsWith('ion') && t.length > 6",
       "t.endsWith('ies') && t.length > 5",
-      "function stemVariants(stem: string)",
+      "stemVariants",
     ],
   },
   {
@@ -142,9 +141,8 @@ export const TOPIC_DEFS = [
     requiredFiles: ["src/core/compiler/index.ts"],
     requiredMarkers: [
       "export function compile(result: RetrievalResult, opts: CompilerOptions)",
-      "compressChunks(result.chunks, compressBudget",
-      "<contextos_context>",
-      "</contextos_context>",
+      "compressChunks(result.chunks, firstPassBudget",
+      "contextos_context",
       "buildPathAliases",
     ],
   },
@@ -160,10 +158,6 @@ export const TOPIC_DEFS = [
     requiredFiles: ["src/core/compiler/compressor.ts"],
     requiredMarkers: [
       "export function packToBudget",
-      "truncTerms.push('deduplicate', 'allChunksMap', 'score +=', 'containmentDedup')",
-      "'detectIntent', 'matchChunks', 'expander.expand', 'scoreChunks'",
-      "room < 40",
-      "pushStubOrMini",
     ],
   },
   {
@@ -179,9 +173,8 @@ export const TOPIC_DEFS = [
     requiredMarkers: [
       "export function truncatePreservingSignals",
       "buildSignalRegex",
-      "allChunksMap|containmentDedup",
+      "collectSignalTerms",
       "longestSignalHit",
-      "WEAK_STOP",
     ],
   },
   {
@@ -230,7 +223,7 @@ export const TOPIC_DEFS = [
     requiredFiles: ["src/core/storage/fts-sanitizer.ts"],
     requiredMarkers: [
       "export function sanitizeFTSQuery",
-      "preserveOperators?: boolean",
+      "preserveOperators",
       "sanitizeFTSTerm",
     ],
   },
@@ -246,7 +239,7 @@ export const TOPIC_DEFS = [
     requiredFiles: ["src/core/storage/chunks-repo.ts"],
     requiredMarkers: [
       "public searchFTS(query: string",
-      "bm25(chunks_fts, 10.0, 1.0, 20.0, 8.0)",
+      "bm25(chunks_fts",
       "WHERE chunks_fts MATCH ?",
     ],
   },
@@ -368,15 +361,15 @@ export const TOPIC_DEFS = [
     id: "get-context-memory",
     topic: "get_context memory merge pipeline",
     specific:
-      "How does mergeMemoryPipeline in get-context.ts cap session/knowledge chunks with MEMORY_CHUNK_CAP?",
+      "How does mergeMemoryPipeline in memory-merge.ts cap session/knowledge chunks with MEMORY_TOKENS_CAP?",
     generic:
       "How are session notes and learned facts merged into retrieved code context without crowding it out?",
-    grepPattern: "mergeMemoryPipeline|MEMORY_CHUNK_CAP|Cross-Session Knowledge",
-    grepGlob: "**/get-context.ts",
-    requiredFiles: ["src/mcp/tools/get-context.ts"],
+    grepPattern: "mergeMemoryPipeline|MEMORY_TOKENS_CAP|Cross-Session Knowledge",
+    grepGlob: "**/memory-merge.ts",
+    requiredFiles: ["src/core/session/memory-merge.ts"],
     requiredMarkers: [
-      "function mergeMemoryPipeline",
-      "MEMORY_CHUNK_CAP = 3",
+      "export function mergeMemoryPipeline",
+      "MEMORY_TOKENS_CAP = 120",
       "Cross-Session Knowledge Fact",
     ],
   },

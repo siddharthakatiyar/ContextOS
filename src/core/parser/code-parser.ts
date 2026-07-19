@@ -81,14 +81,19 @@ const INTERFACE_TYPES = new Set([
   'interface_declaration',
   'interface_type',
   'trait_item',
+  'type_alias_declaration',
 ]);
 
 const CLASS_TYPES = new Set([
   'class_declaration',
   'class_definition',
   'type_declaration',
+  'type_definition',
   'struct',
+  'struct_specifier',
   'type_spec',
+  'enum_declaration',
+  'enum_specifier',
 ]);
 
 const IMPORT_TYPES = new Set([
@@ -108,6 +113,36 @@ function symbolKindForNode(nodeType: string): CodeSymbol['kind'] {
     return 'class';
   }
   return 'function';
+}
+
+function extractDocstring(node: any, isExport: boolean): string | undefined {
+  const target = isExport ? node.parent : node;
+  let prev = target?.previousSibling;
+  
+  if (node.type === 'function_definition' || node.type === 'class_definition') {
+    const body = node.childForFieldName('body');
+    if (body) {
+      const firstExpr = body.children?.find((c: any) => c.type === 'expression_statement');
+      if (firstExpr && firstExpr.child(0)?.type === 'string') {
+        return firstExpr.child(0).text;
+      }
+    }
+  }
+  
+  const comments: string[] = [];
+  while (prev && prev.type === 'comment') {
+    comments.unshift(prev.text);
+    prev = prev.previousSibling;
+  }
+  
+  if (comments.length > 0) {
+    const raw = comments.join('\n');
+    const lines = raw.split('\n')
+      .map(l => l.replace(/^\s*\/\*\*?/, '').replace(/\*\/$/, '').replace(/^\s*\*/, '').replace(/^\s*\/\/\/?/, '').trim())
+      .filter(l => l.length > 0);
+    return lines.join(' ').replace(/\s+/g, ' ').slice(0, 300) || undefined;
+  }
+  return undefined;
 }
 
 /** Extract module/path targets from an import AST node. */
@@ -237,8 +272,32 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
           }
           // else leave unnamed (anonymous callback) — skipped below
         } else if (!nameNode) {
-          nameNode = node.children?.find((c: any) => c.type === 'identifier' || c.type === 'name');
+          nameNode = node.childForFieldName?.('declarator');
+          if (!nameNode) nameNode = node.children?.find((c: any) => c.type === 'function_declarator' || c.type === 'pointer_declarator' || c.type === 'array_declarator' || c.type === 'init_declarator');
+          if (!nameNode) nameNode = node.children?.find((c: any) => c.type === 'identifier' || c.type === 'name' || c.type === 'type_identifier');
         }
+
+        // C/C++ AST: function identifier is often inside a nested declarator (e.g. function_declarator)
+        if (nameNode && (nameNode.type === 'function_declarator' || nameNode.type === 'pointer_declarator' || nameNode.type === 'array_declarator' || nameNode.type === 'init_declarator' || nameNode.type === 'type_definition')) {
+          let current = nameNode;
+          let iterCount = 0;
+          while (current && current.type !== 'identifier' && current.type !== 'type_identifier' && current.type !== 'field_identifier') {
+            iterCount++;
+            if (iterCount > 50) {
+               console.error("INFINITE LOOP in AST parser near", current.type);
+               break;
+            }
+            let next = current.childForFieldName?.('declarator');
+            if (!next) next = current.children?.find((c: any) => c.type === 'identifier' || c.type === 'type_identifier' || c.type === 'field_identifier');
+            if (!next && current.childCount > 0) next = current.child(0);
+            if (!next || next === current) break;
+            current = next;
+          }
+          if (current && (current.type === 'identifier' || current.type === 'type_identifier' || current.type === 'field_identifier')) {
+            nameNode = current;
+          }
+        }
+
         // Skip nested helpers inside another function (e.g. const runFTS = () => inside matchChunks)
         if (insideFunction && node.type === 'arrow_function') {
           return;
@@ -251,7 +310,8 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
             startLine: (isExport ? node.parent! : node).startPosition.row + 1,
             endLine: (isExport ? node.parent! : node).endPosition.row + 1,
             body: isExport ? node.parent!.text : node.text,
-            parent: currentParent
+            parent: currentParent,
+            docstring: extractDocstring(node, isExport)
           });
         }
         for (let i = 0; i < node.childCount; i++) {
@@ -269,7 +329,8 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
             startLine: (isExport ? node.parent! : node).startPosition.row + 1,
             endLine: (isExport ? node.parent! : node).endPosition.row + 1,
             body: isExport ? node.parent!.text : node.text,
-            parent: currentParent
+            parent: currentParent,
+            docstring: extractDocstring(node, isExport)
           });
           currentParent = className;
         }
@@ -290,7 +351,8 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
                 startLine: emitNode.startPosition.row + 1,
                 endLine: emitNode.endPosition.row + 1,
                 body: emitNode.text,
-                parent: currentParent
+                parent: currentParent,
+                docstring: extractDocstring(node, isExport)
               });
             }
           }

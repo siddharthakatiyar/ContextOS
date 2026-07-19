@@ -31,6 +31,12 @@ export interface ContextOSConfig {
   cursor: {
     autoGenerateConfig: boolean;
   };
+  memoryInjection: 'relevant' | 'always' | 'off';
+  sentDedupEnabled: boolean;
+  legacyTools: boolean;
+  tokenCalibration: number;
+  framingReserve: number;
+  adaptiveResponse: boolean;
 }
 
 /** Partial zod schema for config.json — validates known keys; unknown keys are stripped with a warning. */
@@ -61,6 +67,12 @@ export const configJsonSchema = z.object({
   cursor: z.object({
     autoGenerateConfig: z.boolean().optional(),
   }).partial().optional(),
+  memoryInjection: z.enum(['relevant', 'always', 'off']).optional(),
+  sentDedupEnabled: z.boolean().optional(),
+  legacyTools: z.boolean().optional(),
+  tokenCalibration: z.number().positive().optional(),
+  framingReserve: z.number().nonnegative().optional(),
+  adaptiveResponse: z.boolean().optional(),
 }).passthrough();
 
 export type ConfigJson = z.infer<typeof configJsonSchema>;

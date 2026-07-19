@@ -149,19 +149,35 @@ export function registerExecuteTool(server: McpServer) {
           maxBuffer: 1024 * 1024
         });
         
+        const capOutput = (output: string) => {
+          const lines = output.split('\n');
+          if (lines.length <= 250) return output;
+          const head = lines.slice(0, 200).join('\n');
+          const tail = lines.slice(lines.length - 50).join('\n');
+          return `${head}\n\n... [${lines.length - 250} lines omitted by ContextOS] ...\n\n${tail}`;
+        };
+
         let output = "";
-        if (stdout) output += `STDOUT:\n${stdout}\n`;
-        if (stderr) output += `STDERR:\n${stderr}\n`;
+        if (stdout) output += `STDOUT:\n${capOutput(stdout)}\n`;
+        if (stderr) output += `STDERR:\n${capOutput(stderr)}\n`;
 
         return {
           content: [{ type: "text", text: output || "Command completed successfully with no output." }],
         };
       } catch (error: any) {
+        const capOutput = (output: string) => {
+          if (!output) return '';
+          const lines = output.split('\n');
+          if (lines.length <= 250) return output;
+          const head = lines.slice(0, 200).join('\n');
+          const tail = lines.slice(lines.length - 50).join('\n');
+          return `${head}\n\n... [${lines.length - 250} lines omitted by ContextOS] ...\n\n${tail}`;
+        };
         return {
           content: [
             { 
               type: "text", 
-              text: `Command failed with exit code ${error.code}:\n\nSTDOUT:\n${error.stdout || ''}\n\nSTDERR:\n${error.stderr || ''}\n\nError Message:\n${error.message}` 
+              text: `Command failed with exit code ${error.code}:\n\nSTDOUT:\n${capOutput(error.stdout)}\n\nSTDERR:\n${capOutput(error.stderr)}\n\nError Message:\n${error.message}` 
             }
           ],
           isError: true,

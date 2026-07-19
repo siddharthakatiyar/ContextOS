@@ -84,11 +84,11 @@ export function containmentDedup(
   // Accuracy-first: NEVER drop the parent (E2E relies on full bodies when the
   // prompt names or needs the whole function). Only drop segments when the
   // parent is an exact identifier hit (full body will be compiled).
+  // All functions/methods that were retrieved
   const fnParents = chunks.filter(
     (c) =>
       (c.symbolKind === 'function' || c.symbolKind === 'method') &&
-      c.symbolName &&
-      (c.tokenCount || 0) > 900,
+      c.symbolName,
   );
   const segments = chunks.filter((c) => c.symbolKind === 'segment' && c.parentSymbol);
 
@@ -104,13 +104,30 @@ export function containmentDedup(
 
     const exactId =
       !!parent.symbolName && idSet.has(parent.symbolName.toLowerCase());
+    const isGiant = (parent.tokenCount || 0) > 1200;
 
-    if (exactId) {
-      // Prompt names this function — keep full parent body, drop segments
+    if (exactId || !isGiant) {
+      // Keep full parent body
+      // If it's a generic query (!exactId), the parent might have a terrible BM25 score 
+      // compared to its dense segments. Let it inherit the best segment score.
+      if (!exactId) {
+        const bestSegScore = Math.max(...kids.map((k) => k.score || 0));
+        if (bestSegScore > (parent.score || 0)) {
+          parent.score = bestSegScore * 0.95;
+        }
+      }
+      // Drop all segments since we're keeping the parent
       for (const s of kids) drop.add(s.id);
+    } else {
+      // Prompt did NOT name this giant function exactly — drop the giant parent
+      // and distribute its score among the retrieved segments.
+      const parentScore = parent.score || 0;
+      for (const s of kids) {
+        s.score = Math.max(s.score || 0, parentScore * 0.9);
+        (s as any).parentDropped = true;
+      }
+      drop.add(parent.id);
     }
-    // Otherwise keep both: compressor prefers intact segments as leader when
-    // the parent is not an exact-id hit; parent remains available as fallback.
   }
 
   return chunks.filter(c => !drop.has(c.id));
@@ -185,11 +202,39 @@ export class RetrievalEngine {
       if (!allChunksMap.has(c.id)) {
         allChunksMap.set(c.id, c);
       } else {
-        allChunksMap.get(c.id).score += (c.score || 0);
+        // Rank Fusion graph-walk overlap: if chunk is found via keyword/semantic AND
+        // relationship expansion, this is a strong relevance signal for generic queries.
+        allChunksMap.get(c.id).score = (allChunksMap.get(c.id).score || 0) + ((c.score || 0) * 1.5);
       }
     }
 
     let allChunks = Array.from(allChunksMap.values()) as ScoredChunk[];
+    
+    // Step 5b: Ensure parents of all retrieved segments are present
+    // If a parent function fell just below the FTS limit but its segments made it,
+    // containmentDedup needs the parent to correctly inherit scores and drop the segments.
+    const missingParents = new Set<string>();
+    for (const c of allChunks) {
+      if (c.symbolKind === 'segment' && c.parentSymbol) {
+        missingParents.add(c.parentSymbol);
+      }
+    }
+    for (const c of allChunks) {
+      if (c.symbolName && c.symbolKind !== 'segment') {
+        missingParents.delete(c.symbolName);
+      }
+    }
+    for (const parentSymbol of missingParents) {
+      const pChunks = this.primaryChunksRepo
+        ? this.primaryChunksRepo.findBySymbolName(parentSymbol)
+        : [];
+      for (const p of pChunks) {
+        if (p.symbolKind !== 'segment' && !allChunksMap.has(p.id)) {
+          allChunksMap.set(p.id, p);
+        }
+      }
+    }
+    allChunks = Array.from(allChunksMap.values()) as ScoredChunk[];
     const chunkIds = allChunks.map(c => c.id);
 
     // Fetch feedback adjustments if not provided in opts
@@ -227,15 +272,16 @@ export class RetrievalEngine {
     const segs = scored
       .filter((c) => c.symbolKind === 'segment')
       .sort((a, b) => {
-        const aParent = parentNames.has((a.parentSymbol || '').toLowerCase()) ? 1 : 0;
-        const bParent = parentNames.has((b.parentSymbol || '').toLowerCase()) ? 1 : 0;
+        // Treat intentionally dropped parents (via containmentDedup) as present so we don't punish their segments
+        const aParent = (a as any).parentDropped || parentNames.has((a.parentSymbol || '').toLowerCase()) ? 1 : 0;
+        const bParent = (b as any).parentDropped || parentNames.has((b.parentSymbol || '').toLowerCase()) ? 1 : 0;
         if (aParent !== bParent) return bParent - aParent;
         const aHits = promptTerms.filter((t) => t.length >= 5 && a.content.toLowerCase().includes(t)).length;
         const bHits = promptTerms.filter((t) => t.length >= 5 && b.content.toLowerCase().includes(t)).length;
         if (aHits !== bHits) return bHits - aHits;
         return (b.score || 0) - (a.score || 0);
       })
-      .slice(0, 2);
+      .slice(0, 4);
     const segIds = new Set(segs.map((s) => s.id));
     const limited: ScoredChunk[] = [];
     for (const c of scored) {
@@ -287,7 +333,8 @@ export class RetrievalEngine {
       for (const c of directMatches) {
         const rank = embRank.get(c.id);
         if (rank !== undefined && rank < 10) {
-          c.score = (c.score || 0) * (1.03 + 0.08 * (1 / (1 + rank)));
+          // Strong multiplicative boost for semantic + keyword overlap
+          c.score = (c.score || 0) * (1.2 + 0.5 * (1 / (1 + rank)));
         }
       }
       if (lowConfidence) {
@@ -297,7 +344,8 @@ export class RetrievalEngine {
           const hit = embHits[i];
           if (seen.has(hit.id)) continue;
           seen.add(hit.id);
-          const base = Math.max(2, 6 - i * 0.6);
+          // Stronger base score for backfills to ensure they actually surface
+          const base = Math.max(8, 14 - i * 1.5);
           directMatches.push({ ...hit, score: base });
           inserted++;
         }

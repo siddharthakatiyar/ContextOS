@@ -1,0 +1,902 @@
+[
+  {
+    "id": "targeted_1",
+    "isAccurate": false,
+    "reason": "Shows the wrapper function delegating to _sdsMakeRoomFor, but lacks the actual allocation logic.",
+    "query": "In sds.c, how does sdsMakeRoomFor handle allocating extra space when the string needs to grow?",
+    "tokens": 136,
+    "latencyMs": 1760,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_2",
+    "isAccurate": false,
+    "reason": "Only shows the struct forward declaration without its fields.",
+    "query": "What is the structure of an sdshdr5 vs sdshdr8 in sds.h?",
+    "tokens": 96,
+    "latencyMs": 1830,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_3",
+    "isAccurate": true,
+    "reason": "Contains the complete dictRehash implementation with the rehashing loop.",
+    "query": "In dict.c, how is incremental rehashing implemented in dictRehash?",
+    "tokens": 524,
+    "latencyMs": 1352,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_4",
+    "isAccurate": false,
+    "reason": "Shows a Lua resize function instead of the Redis dictionary resize logic.",
+    "query": "What triggers a dictionary resize in dictResize?",
+    "tokens": 441,
+    "latencyMs": 585,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_5",
+    "isAccurate": true,
+    "reason": "Shows the linked list traversal resolving hash collisions in dictFind.",
+    "query": "How does dictFind resolve hash collisions?",
+    "tokens": 201,
+    "latencyMs": 886,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_6",
+    "isAccurate": true,
+    "reason": "Provides the complete aeProcessEvents loop.",
+    "query": "In ae.c, explain the aeProcessEvents loop.",
+    "tokens": 1181,
+    "latencyMs": 517,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_7",
+    "isAccurate": true,
+    "reason": "Shows time event allocation and insertion at the head of the list.",
+    "query": "How are time events managed in aeCreateTimeEvent?",
+    "tokens": 298,
+    "latencyMs": 734,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_8",
+    "isAccurate": true,
+    "reason": "Provides the aeApiPoll implementation for kqueue.",
+    "query": "What does aeApiPoll do in the context of epoll/kqueue?",
+    "tokens": 641,
+    "latencyMs": 778,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_9",
+    "isAccurate": true,
+    "reason": "Fully explains reading from the socket into the query buffer in readQueryFromClient.",
+    "query": "In networking.c, how does readQueryFromClient read data from the socket?",
+    "tokens": 1829,
+    "latencyMs": 1094,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_10",
+    "isAccurate": true,
+    "reason": "Shows the parsing loop handling multiple commands in processInputBuffer.",
+    "query": "How does processInputBuffer handle pipelined requests?",
+    "tokens": 2255,
+    "latencyMs": 1362,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_11",
+    "isAccurate": false,
+    "reason": "Shows only delegation to slave/non-slave functions without the underlying logic.",
+    "query": "What is the purpose of clientHasPendingReplies?",
+    "tokens": 156,
+    "latencyMs": 443,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_12",
+    "isAccurate": true,
+    "reason": "Contains a comprehensive portion of initServer establishing configurations and state.",
+    "query": "In server.c, explain the initServer function.",
+    "tokens": 2809,
+    "latencyMs": 469,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_13",
+    "isAccurate": true,
+    "reason": "Shows the serverCron function handling background tasks.",
+    "query": "How is the serverCron timer configured and what tasks does it perform?",
+    "tokens": 2844,
+    "latencyMs": 923,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_14",
+    "isAccurate": true,
+    "reason": "Fully explains tasks run before sleeping in the event loop.",
+    "query": "What happens during beforeSleep in server.c?",
+    "tokens": 2280,
+    "latencyMs": 527,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_15",
+    "isAccurate": true,
+    "reason": "Shows argument parsing and dispatching to setGenericCommand.",
+    "query": "In t_string.c, how is the SET command implemented in setCommand?",
+    "tokens": 223,
+    "latencyMs": 1271,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_16",
+    "isAccurate": true,
+    "reason": "Displays the exact key lookup and reply generation for GET requests.",
+    "query": "How does getGenericCommand process GET requests?",
+    "tokens": 183,
+    "latencyMs": 1055,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_17",
+    "isAccurate": true,
+    "reason": "Explains the listpack optimization path in hsetCommand.",
+    "query": "In t_hash.c, how is hsetCommand optimized for small hashes (ziplist/listpack)?",
+    "tokens": 824,
+    "latencyMs": 1056,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_18",
+    "isAccurate": false,
+    "reason": "Shows value retrieval but lacks any logic regarding transitioning encodings.",
+    "query": "How does hashTypeGetValue handle the transition from listpack to dict?",
+    "tokens": 1289,
+    "latencyMs": 973,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_19",
+    "isAccurate": false,
+    "reason": "Only shows a one-line delegation to pushGenericCommand without quicklist logic.",
+    "query": "In t_list.c, how does lpushCommand insert elements into a quicklist?",
+    "tokens": 125,
+    "latencyMs": 814,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_20",
+    "isAccurate": true,
+    "reason": "Demonstrates the blocking logic triggering blockForKeys when keys are missing.",
+    "query": "Explain the blocking logic in blockingPopGenericCommand.",
+    "tokens": 716,
+    "latencyMs": 656,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_21",
+    "isAccurate": true,
+    "reason": "saddCommand function body is present",
+    "query": "In t_set.c, how does saddCommand handle intset vs hash table encoding?",
+    "tokens": 505,
+    "latencyMs": 1140,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_22",
+    "isAccurate": false,
+    "reason": "Only struct name is present, not its members",
+    "query": "In t_zset.c, what is the structure of a zskiplistNode?",
+    "tokens": 105,
+    "latencyMs": 503,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_23",
+    "isAccurate": true,
+    "reason": "zslInsert function body is present",
+    "query": "How does zslInsert manage level probabilities when adding to a skiplist?",
+    "tokens": 241,
+    "latencyMs": 991,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_24",
+    "isAccurate": true,
+    "reason": "rdbSaveRio function body is present",
+    "query": "In rdb.c, how does rdbSaveRio write the RDB file to disk?",
+    "tokens": 811,
+    "latencyMs": 1118,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_25",
+    "isAccurate": true,
+    "reason": "rdbSaveObjectType function body is present",
+    "query": "Explain the object encoding format used in rdbSaveObjectType.",
+    "tokens": 790,
+    "latencyMs": 918,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_26",
+    "isAccurate": true,
+    "reason": "flushAppendOnlyFile function body is present",
+    "query": "In aof.c, what triggers an fsync in flushAppendOnlyFile?",
+    "tokens": 2432,
+    "latencyMs": 488,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_27",
+    "isAccurate": true,
+    "reason": "backgroundRewriteDoneHandler function body is present",
+    "query": "How does backgroundRewriteDoneHandler finalize an AOF rewrite?",
+    "tokens": 1931,
+    "latencyMs": 888,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_28",
+    "isAccurate": true,
+    "reason": "syncCommand function body is present",
+    "query": "In replication.c, how does syncCommand handle full vs partial resynchronization (PSYNC)?",
+    "tokens": 2400,
+    "latencyMs": 826,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_29",
+    "isAccurate": true,
+    "reason": "replicationFeedSlaves function body is present",
+    "query": "What is the role of replicationFeedSlaves?",
+    "tokens": 1058,
+    "latencyMs": 352,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_30",
+    "isAccurate": true,
+    "reason": "clusterProcessPacket function body is present",
+    "query": "In cluster.c, how does clusterProcessPacket handle MEET messages?",
+    "tokens": 6789,
+    "latencyMs": 634,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_31",
+    "isAccurate": true,
+    "reason": "clusterUpdateSlotsConfigWith function body is present",
+    "query": "How does clusterUpdateSlotsConfigWith calculate slot assignments?",
+    "tokens": 1959,
+    "latencyMs": 652,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_32",
+    "isAccurate": true,
+    "reason": "sentinelFailoverStateMachine function body is present",
+    "query": "In sentinel.c, explain the logic in sentinelFailoverStateMachine.",
+    "tokens": 289,
+    "latencyMs": 383,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_33",
+    "isAccurate": true,
+    "reason": "sentinelCheckObjectivelyDown function body is present",
+    "query": "How does sentinelCheckObjectivelyDown determine if a master is ODOWN?",
+    "tokens": 420,
+    "latencyMs": 645,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_34",
+    "isAccurate": false,
+    "reason": "moduleCommand is present instead of RM_CreateCommand",
+    "query": "In module.c, how does RM_CreateCommand register a new module command?",
+    "tokens": 759,
+    "latencyMs": 693,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_35",
+    "isAccurate": true,
+    "reason": "moduleBlockClient function body is present",
+    "query": "How are module block clients managed in moduleBlockClient?",
+    "tokens": 792,
+    "latencyMs": 877,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_36",
+    "isAccurate": true,
+    "reason": "performEvictions function body is present",
+    "query": "In evict.c, how does performEvictions choose keys to evict based on maxmemory-policy?",
+    "tokens": 2252,
+    "latencyMs": 876,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_37",
+    "isAccurate": true,
+    "reason": "LFUDecrAndReturn function body is present",
+    "query": "Explain the LFU implementation in LFUDecrAndReturn.",
+    "tokens": 210,
+    "latencyMs": 526,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_38",
+    "isAccurate": true,
+    "reason": "emptyDbAsync function body is present",
+    "query": "In lazyfree.c, how does emptyDbAsync defer freeing to a background thread?",
+    "tokens": 339,
+    "latencyMs": 865,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_39",
+    "isAccurate": false,
+    "reason": "background_thread_create_locked is present instead of bioCreateBackgroundJob",
+    "query": "In bio.c, how does bioCreateBackgroundJob submit tasks to background threads?",
+    "tokens": 567,
+    "latencyMs": 882,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_40",
+    "isAccurate": true,
+    "reason": "raxInsert function body is present",
+    "query": "In rax.c, how does raxInsert insert a key into the radix tree?",
+    "tokens": 175,
+    "latencyMs": 750,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_41",
+    "isAccurate": true,
+    "reason": "Accurately shows lpInsert from listpack.c",
+    "query": "In listpack.c, how does lpInsert insert an element into the listpack?",
+    "tokens": 1560,
+    "latencyMs": 590,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_42",
+    "isAccurate": true,
+    "reason": "Accurately shows quicklistPushHead from quicklist.c",
+    "query": "In quicklist.c, how does quicklistPushHead allocate a new node?",
+    "tokens": 388,
+    "latencyMs": 643,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_43",
+    "isAccurate": true,
+    "reason": "Accurately shows createObject from object.c",
+    "query": "In object.c, how does createObject allocate a new robj?",
+    "tokens": 192,
+    "latencyMs": 632,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_44",
+    "isAccurate": false,
+    "reason": "Shows lookupKeyReadWithFlags but misses the core LRU/LFU update logic in lookupKey",
+    "query": "In db.c, how does lookupKeyReadWithFlags update LRU/LFU stats?",
+    "tokens": 151,
+    "latencyMs": 1554,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_45",
+    "isAccurate": true,
+    "reason": "Accurately shows streamAppendItem from t_stream.c",
+    "query": "In t_stream.c, how does streamAppendItem add a new entry to the stream's radix tree?",
+    "tokens": 2876,
+    "latencyMs": 1367,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_46",
+    "isAccurate": true,
+    "reason": "Accurately shows streamCreateCG from t_stream.c",
+    "query": "How are consumer groups implemented in streamCreateCG?",
+    "tokens": 365,
+    "latencyMs": 564,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_47",
+    "isAccurate": false,
+    "reason": "Shows pubsubPublishMessage but misses the internal distribution logic in pubsubPublishMessageInternal",
+    "query": "In pubsub.c, how does pubsubPublishMessage distribute messages to subscribers?",
+    "tokens": 158,
+    "latencyMs": 720,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_48",
+    "isAccurate": true,
+    "reason": "Accurately shows luaRedisGenericCommand from script_lua.c",
+    "query": "In script.c, how does luaRedisGenericCommand bridge Lua calls to Redis commands?",
+    "tokens": 1085,
+    "latencyMs": 1699,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_49",
+    "isAccurate": true,
+    "reason": "Accurately shows tlsAcceptHandler from tls.c",
+    "query": "In tls.c, how does tlsAccept handle the TLS handshake?",
+    "tokens": 299,
+    "latencyMs": 822,
+    "type": "specific"
+  },
+  {
+    "id": "targeted_50",
+    "isAccurate": true,
+    "reason": "Accurately shows trackingRememberKeys from tracking.c",
+    "query": "In tracking.c, how does trackingRememberKeys record client dependencies?",
+    "tokens": 536,
+    "latencyMs": 742,
+    "type": "specific"
+  },
+  {
+    "id": "generic_1",
+    "isAccurate": false,
+    "reason": "Shows ContextOSDaemon.start instead of Redis initialization",
+    "query": "How does Redis start up and initialize its main event loop?",
+    "tokens": 618,
+    "latencyMs": 1554,
+    "type": "generic"
+  },
+  {
+    "id": "generic_2",
+    "isAccurate": false,
+    "reason": "Shows struct redisServer instead of the main entry point",
+    "query": "Where is the main entry point for the Redis server process?",
+    "tokens": 102,
+    "latencyMs": 1377,
+    "type": "generic"
+  },
+  {
+    "id": "generic_3",
+    "isAccurate": false,
+    "reason": "Shows connectionTypeTls instead of general client connection handling",
+    "query": "How does Redis handle incoming client connections?",
+    "tokens": 177,
+    "latencyMs": 2392,
+    "type": "generic"
+  },
+  {
+    "id": "generic_4",
+    "isAccurate": false,
+    "reason": "Shows Command class from a python util rather than Redis client parsing logic",
+    "query": "How are client commands parsed from the input buffer?",
+    "tokens": 207,
+    "latencyMs": 788,
+    "type": "generic"
+  },
+  {
+    "id": "generic_5",
+    "isAccurate": false,
+    "reason": "Shows Command class again, misses command execution lifecycle",
+    "query": "What is the lifecycle of a command execution from read to reply?",
+    "tokens": 111,
+    "latencyMs": 811,
+    "type": "generic"
+  },
+  {
+    "id": "generic_6",
+    "isAccurate": false,
+    "reason": "Shows getClientOutputBufferMemoryUsage instead of how replies are sent",
+    "query": "How are replies buffered and sent back to the client?",
+    "tokens": 141,
+    "latencyMs": 727,
+    "type": "generic"
+  },
+  {
+    "id": "generic_7",
+    "isAccurate": false,
+    "reason": "Shows freeTrackingRadixTreeCallback instead of dict/rax structures for key storage",
+    "query": "What is the core data structure used to store all Redis keys?",
+    "tokens": 118,
+    "latencyMs": 1581,
+    "type": "generic"
+  },
+  {
+    "id": "generic_8",
+    "isAccurate": false,
+    "reason": "Shows ffsl bitwise function instead of SDS string implementation",
+    "query": "How does Redis implement strings under the hood?",
+    "tokens": 150,
+    "latencyMs": 966,
+    "type": "generic"
+  },
+  {
+    "id": "generic_9",
+    "isAccurate": false,
+    "reason": "Shows jemalloc hash function instead of Redis hash implementation",
+    "query": "What data structures are used to represent Hashes?",
+    "tokens": 246,
+    "latencyMs": 989,
+    "type": "generic"
+  },
+  {
+    "id": "generic_10",
+    "isAccurate": false,
+    "reason": "Shows list struct definition but no details on implementation or changes",
+    "query": "How are Lists implemented, and how has it changed over time?",
+    "tokens": 87,
+    "latencyMs": 1314,
+    "type": "generic"
+  },
+  {
+    "id": "generic_11",
+    "isAccurate": false,
+    "reason": "Shows generic jemalloc functions and module replies, entirely missing Redis Sets internal implementation (intset/dict).",
+    "query": "How are Sets implemented for small vs large collections?",
+    "tokens": 154,
+    "latencyMs": 763,
+    "type": "generic"
+  },
+  {
+    "id": "generic_12",
+    "isAccurate": false,
+    "reason": "Shows Lua sort functions and unrelated hash/list checks instead of skiplists or ziplists used for Sorted Sets.",
+    "query": "What is the internal representation of Sorted Sets (ZSETs)?",
+    "tokens": 216,
+    "latencyMs": 1024,
+    "type": "generic"
+  },
+  {
+    "id": "generic_13",
+    "isAccurate": false,
+    "reason": "Only shows an empty stream struct definition and unrelated tracking callbacks, missing the listpack/radix tree implementation details.",
+    "query": "How do Redis Streams store data internally?",
+    "tokens": 109,
+    "latencyMs": 1494,
+    "type": "generic"
+  },
+  {
+    "id": "generic_14",
+    "isAccurate": true,
+    "reason": "Mentions getExpire, keyIsExpired, and activeExpireCycleTryExpire which cover both passive and active TTL expiration logic.",
+    "query": "How does Redis expire keys with TTLs?",
+    "tokens": 149,
+    "latencyMs": 1151,
+    "type": "generic"
+  },
+  {
+    "id": "generic_15",
+    "isAccurate": false,
+    "reason": "Shows stream max size limits and maxmemory configuration updates, but completely misses the eviction execution logic.",
+    "query": "What happens when maxmemory is reached?",
+    "tokens": 159,
+    "latencyMs": 403,
+    "type": "generic"
+  },
+  {
+    "id": "generic_16",
+    "isAccurate": true,
+    "reason": "Mentions evictionPoolAlloc and EvictionPoolLRU which are core to managing the pool for eviction policies.",
+    "query": "How are eviction policies implemented (e.g., LRU vs LFU)?",
+    "tokens": 219,
+    "latencyMs": 760,
+    "type": "generic"
+  },
+  {
+    "id": "generic_17",
+    "isAccurate": false,
+    "reason": "Shows AOF truncation and unrelated string append commands, missing the core AOF writing/fsyncing mechanisms.",
+    "query": "How does the Append Only File (AOF) mechanism work?",
+    "tokens": 302,
+    "latencyMs": 1941,
+    "type": "generic"
+  },
+  {
+    "id": "generic_18",
+    "isAccurate": true,
+    "reason": "Lists rewriteAppendOnlyFile in aof.c which is the core function responsible for the background AOF rewrite.",
+    "query": "How does Redis rewrite the AOF file without blocking the main thread?",
+    "tokens": 99,
+    "latencyMs": 2112,
+    "type": "generic"
+  },
+  {
+    "id": "generic_19",
+    "isAccurate": false,
+    "reason": "Shows a Python CLI script and unrelated buffer processing functions instead of the rdbSave or rdbSaveBackground logic.",
+    "query": "How does the RDB snapshotting process work?",
+    "tokens": 301,
+    "latencyMs": 958,
+    "type": "generic"
+  },
+  {
+    "id": "generic_20",
+    "isAccurate": true,
+    "reason": "Mentions backgroundSaveDoneHandler and backgroundSaveDoneHandlerDisk which handle the completion of the fork-based background save.",
+    "query": "How is fork() used for background saves (BGSAVE)?",
+    "tokens": 339,
+    "latencyMs": 812,
+    "type": "generic"
+  },
+  {
+    "id": "generic_21",
+    "isAccurate": true,
+    "reason": "Mentions syncCommand in replication.c which is the core function handling the initial sync from a replica.",
+    "query": "How does a replica initially sync with a master?",
+    "tokens": 133,
+    "latencyMs": 478,
+    "type": "generic"
+  },
+  {
+    "id": "generic_22",
+    "isAccurate": true,
+    "reason": "Shows both slaveTryPartialResynchronization and masterTryPartialResynchronization which implement the PSYNC mechanism.",
+    "query": "What is PSYNC and how does partial resynchronization work?",
+    "tokens": 383,
+    "latencyMs": 550,
+    "type": "generic"
+  },
+  {
+    "id": "generic_23",
+    "isAccurate": false,
+    "reason": "Only shows a Python script for generating command schemas and unrelated error handlers, missing replicationFeedSlaves.",
+    "query": "How does the master propagate write commands to replicas?",
+    "tokens": 544,
+    "latencyMs": 890,
+    "type": "generic"
+  },
+  {
+    "id": "generic_24",
+    "isAccurate": true,
+    "reason": "Mentions sentinelMasterLooksSane which is directly relevant to how Sentinel monitors the state of master nodes.",
+    "query": "How does Redis Sentinel monitor master nodes?",
+    "tokens": 191,
+    "latencyMs": 1496,
+    "type": "generic"
+  },
+  {
+    "id": "generic_25",
+    "isAccurate": true,
+    "reason": "Mentions sentinelAbortFailover and SENTINEL_FAILOVER_STATE enums which are part of the Sentinel failover state machine.",
+    "query": "How is a failover triggered and executed in Sentinel?",
+    "tokens": 251,
+    "latencyMs": 821,
+    "type": "generic"
+  },
+  {
+    "id": "generic_26",
+    "isAccurate": false,
+    "reason": "Shows cluster initialization but fails to explain key distribution, slot hashing (CRC16), or slot mapping.",
+    "query": "How does Redis Cluster distribute keys across nodes?",
+    "tokens": 929,
+    "latencyMs": 1761,
+    "type": "generic"
+  },
+  {
+    "id": "generic_27",
+    "isAccurate": true,
+    "reason": "Mentions clusterBroadcastMessage and clusterSendPing which are the core functions for the cluster gossip protocol.",
+    "query": "How do cluster nodes communicate state with each other?",
+    "tokens": 227,
+    "latencyMs": 640,
+    "type": "generic"
+  },
+  {
+    "id": "generic_28",
+    "isAccurate": false,
+    "reason": "Only shows the clusterNode struct definition without explaining the failover process or node failure states.",
+    "query": "What happens when a cluster node goes down?",
+    "tokens": 119,
+    "latencyMs": 1147,
+    "type": "generic"
+  },
+  {
+    "id": "generic_29",
+    "isAccurate": true,
+    "reason": "Shows clusterRedirectClient which explicitly handles CLUSTER_REDIR_MOVED and CLUSTER_REDIR_ASK client redirects.",
+    "query": "How are client redirects (MOVED/ASK) handled in Cluster mode?",
+    "tokens": 509,
+    "latencyMs": 1352,
+    "type": "generic"
+  },
+  {
+    "id": "generic_30",
+    "isAccurate": false,
+    "reason": "Only shows markdown and yaml files, without explaining the C API or how functions like RedisModule_CreateCommand extend Redis.",
+    "query": "How does the Redis Modules API allow extending Redis?",
+    "tokens": 119,
+    "latencyMs": 3427,
+    "type": "generic"
+  },
+  {
+    "id": "generic_31",
+    "isAccurate": true,
+    "reason": "Mentions RM_BlockClient and blockClient which are relevant to blocking clients.",
+    "query": "How can a module block a client and wake it up later?",
+    "tokens": 245,
+    "latencyMs": 884,
+    "type": "generic"
+  },
+  {
+    "id": "generic_32",
+    "isAccurate": false,
+    "reason": "Only shows LRU list logic and package.json scripts, missing lua execution logic entirely.",
+    "query": "How are Lua scripts executed within Redis?",
+    "tokens": 97,
+    "latencyMs": 1269,
+    "type": "generic"
+  },
+  {
+    "id": "generic_33",
+    "isAccurate": false,
+    "reason": "No information about transaction atomicity or thread blocking for scripts.",
+    "query": "How does Redis guarantee atomicity for Lua scripts?",
+    "tokens": 251,
+    "latencyMs": 1232,
+    "type": "generic"
+  },
+  {
+    "id": "generic_34",
+    "isAccurate": true,
+    "reason": "Shows addReplyPubsubMessage and addReplyPubsubPatMessage which explain message broadcasting.",
+    "query": "How does Pub/Sub broadcasting work?",
+    "tokens": 234,
+    "latencyMs": 1097,
+    "type": "generic"
+  },
+  {
+    "id": "generic_35",
+    "isAccurate": true,
+    "reason": "Lists blpopCommand from t_list.c which implements BLPOP.",
+    "query": "How are blocking commands like BLPOP implemented?",
+    "tokens": 246,
+    "latencyMs": 729,
+    "type": "generic"
+  },
+  {
+    "id": "generic_36",
+    "isAccurate": true,
+    "reason": "Shows initClientMultiState and execCommandAbort which identify MULTI/EXEC states.",
+    "query": "How does Redis handle transactions (MULTI/EXEC)?",
+    "tokens": 199,
+    "latencyMs": 1587,
+    "type": "generic"
+  },
+  {
+    "id": "generic_37",
+    "isAccurate": true,
+    "reason": "Lists watchCommand in multi.c, relevant for transaction watches.",
+    "query": "What is the role of the WATCH command in transactions?",
+    "tokens": 733,
+    "latencyMs": 1317,
+    "type": "generic"
+  },
+  {
+    "id": "generic_38",
+    "isAccurate": true,
+    "reason": "Shows lazyfreeFreeObject, lazyFreeErrors, and background_work thread logic.",
+    "query": "How does lazy freeing (UNLINK) work in the background?",
+    "tokens": 160,
+    "latencyMs": 867,
+    "type": "generic"
+  },
+  {
+    "id": "generic_39",
+    "isAccurate": true,
+    "reason": "Lists bioInit and jemalloc background thread work.",
+    "query": "What tasks are handled by the background I/O threads (bio.c)?",
+    "tokens": 445,
+    "latencyMs": 672,
+    "type": "generic"
+  },
+  {
+    "id": "generic_40",
+    "isAccurate": true,
+    "reason": "Mentions zmalloc_register_reserved_slot and zmalloc_default_oom.",
+    "query": "How does Redis implement memory reallocation (zmalloc)?",
+    "tokens": 256,
+    "latencyMs": 1232,
+    "type": "generic"
+  },
+  {
+    "id": "generic_41",
+    "isAccurate": true,
+    "reason": "Shows trackingRememberKeys and disableTracking which is the caching implementation.",
+    "query": "How does client-side caching (tracking) work?",
+    "tokens": 538,
+    "latencyMs": 657,
+    "type": "generic"
+  },
+  {
+    "id": "generic_42",
+    "isAccurate": true,
+    "reason": "Shows ACLSelectorHasUnrestrictedKeyAccess which implements ACL pattern matching and validation.",
+    "query": "How are ACLs (Access Control Lists) validated during command execution?",
+    "tokens": 327,
+    "latencyMs": 1703,
+    "type": "generic"
+  },
+  {
+    "id": "generic_43",
+    "isAccurate": false,
+    "reason": "Only shows crash debug info and lua error buffering, misses core serverLog.",
+    "query": "How does Redis log information and errors?",
+    "tokens": 137,
+    "latencyMs": 1766,
+    "type": "generic"
+  },
+  {
+    "id": "generic_44",
+    "isAccurate": true,
+    "reason": "Mentions prepareForShutdown and cancelShutdown functions.",
+    "query": "What happens during a graceful shutdown?",
+    "tokens": 170,
+    "latencyMs": 587,
+    "type": "generic"
+  },
+  {
+    "id": "generic_45",
+    "isAccurate": false,
+    "reason": "Only shows network timeout handling, misses key expiration mechanisms entirely.",
+    "query": "How does Redis handle time and expiration internally?",
+    "tokens": 154,
+    "latencyMs": 1215,
+    "type": "generic"
+  },
+  {
+    "id": "generic_46",
+    "isAccurate": true,
+    "reason": "Shows slowlogCommand, slowlogPushEntryIfNeeded and slowlogPushCurrentCommand.",
+    "query": "How does the slowlog capture slow commands?",
+    "tokens": 718,
+    "latencyMs": 723,
+    "type": "generic"
+  },
+  {
+    "id": "generic_47",
+    "isAccurate": false,
+    "reason": "Misses epoll/kqueue network events and ae.c, just shows cluster read/write and hiredis async read.",
+    "query": "How does Redis handle network read/write events via epoll/kqueue?",
+    "tokens": 166,
+    "latencyMs": 2829,
+    "type": "generic"
+  },
+  {
+    "id": "generic_48",
+    "isAccurate": false,
+    "reason": "Missing redis.conf loading/parsing logic, only shows config types for another project.",
+    "query": "How are configuration directives from redis.conf parsed?",
+    "tokens": 153,
+    "latencyMs": 427,
+    "type": "generic"
+  },
+  {
+    "id": "generic_49",
+    "isAccurate": true,
+    "reason": "Shows connectionTypeTls and cliSecureConnection.",
+    "query": "How does Redis support TLS for secure connections?",
+    "tokens": 189,
+    "latencyMs": 1418,
+    "type": "generic"
+  },
+  {
+    "id": "generic_50",
+    "isAccurate": true,
+    "reason": "Shows activeDefragHfieldDictCallback and isValidActiveDefrag sweeps.",
+    "query": "How are active defragmentation sweeps performed?",
+    "tokens": 286,
+    "latencyMs": 575,
+    "type": "generic"
+  }
+]
