@@ -7,6 +7,7 @@ import { Indexer } from '../../core/indexer/index.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
 import cliProgress from 'cli-progress';
 import chalk from 'chalk';
+import { pLimit } from '../../utils/concurrency.js';
 
 export const initCommand = new Command('init')
   .description('Initialize ContextOS in the current repository')
@@ -57,9 +58,18 @@ export const initCommand = new Command('init')
     let totalProcessed = 0;
     let totalChunks = 0;
     let totalRels = 0;
+    let totalFilesCount = 0;
     
-    // Index repo layer
-    console.log(chalk.blue.bold('\nIndexing repo context...'));
+    const abortController = new AbortController();
+    const onSigInt = () => {
+      console.log(chalk.red('\n\nAborting initialization...'));
+      abortController.abort();
+    };
+    process.on('SIGINT', onSigInt);
+
+    try {
+      // Index repo layer
+      console.log(chalk.blue.bold('\nIndexing repo context...'));
     const allRepoFiles = new Set<string>();
     for (const pattern of config.indexablePatterns) {
       const files = await glob(pattern, { cwd, ignore, absolute: true, nodir: true, follow: false });
@@ -69,7 +79,7 @@ export const initCommand = new Command('init')
     // Index global layer
     const globalFiles = await glob('**/*.md', { cwd: globalContextDir, absolute: true, nodir: true, follow: false });
     
-    const totalFilesCount = allRepoFiles.size + globalFiles.length;
+    totalFilesCount = allRepoFiles.size + globalFiles.length;
     
     const bar = new cliProgress.SingleBar({
       format: 'Indexing [{bar}] {percentage}% | {value}/{total} files | {chunks} chunks | {rels} relationships',
@@ -80,39 +90,58 @@ export const initCommand = new Command('init')
     
     bar.start(totalFilesCount, 0, { chunks: 0, rels: 0 });
     
+    const limit = pLimit(8);
+    const promises: Promise<void>[] = [];
+    
     for (const file of allRepoFiles) {
-      try {
-        // Skip files larger than 100KB (usually generated/minified)
-        const fileStat = fs.statSync(file);
-        if (fileStat.size > 100 * 1024) {
-          bar.increment({ chunks: totalChunks, rels: totalRels });
-          continue;
+      promises.push(limit(async () => {
+        if (abortController.signal.aborted) return;
+        try {
+          // Skip files larger than 100KB (usually generated/minified)
+          const fileStat = fs.statSync(file);
+          if (fileStat.size > 100 * 1024) {
+            bar.increment({ chunks: totalChunks, rels: totalRels });
+            return;
+          }
+          const stats = await indexer.indexFile(file, 'repo', undefined, abortController.signal);
+          if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
+            totalProcessed++;
+            totalChunks += stats.chunksCreated;
+            totalRels += stats.relationshipsFound;
+          }
+        } catch (e) {
+          // Silently skip failed parses for the progress bar
         }
-        const stats = await indexer.indexFile(file, 'repo');
-        if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
-          totalProcessed++;
-          totalChunks += stats.chunksCreated;
-          totalRels += stats.relationshipsFound;
-        }
-      } catch (e) {
-        // Silently skip failed parses for the progress bar
-      }
-      bar.increment({ chunks: totalChunks, rels: totalRels });
+        bar.increment({ chunks: totalChunks, rels: totalRels });
+      }));
     }
 
     for (const file of globalFiles) {
-      try {
-        const stats = await indexer.indexFile(file, 'global');
-        if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
-          totalProcessed++;
-          totalChunks += stats.chunksCreated;
-          totalRels += stats.relationshipsFound;
-        }
-      } catch (e) {}
-      bar.increment({ chunks: totalChunks, rels: totalRels });
+      promises.push(limit(async () => {
+        if (abortController.signal.aborted) return;
+        try {
+          const stats = await indexer.indexFile(file, 'global', undefined, abortController.signal);
+          if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
+            totalProcessed++;
+            totalChunks += stats.chunksCreated;
+            totalRels += stats.relationshipsFound;
+          }
+        } catch (e) {}
+        bar.increment({ chunks: totalChunks, rels: totalRels });
+      }));
     }
+    
+    await Promise.all(promises);
 
     bar.stop();
+
+    if (abortController.signal.aborted) {
+      console.log(chalk.yellow('\nInitialization was cancelled by user. Partial index saved.'));
+      process.exit(1);
+    }
+    } finally {
+      process.off('SIGINT', onSigInt);
+    }
 
     const elapsedMs = Date.now() - startTime;
     console.log(chalk.green.bold(`\n\u2714 Initialization complete in ${(elapsedMs/1000).toFixed(1)}s`));

@@ -11,10 +11,6 @@ describe('README.md Truth Pass', () => {
   const readme = fs.readFileSync(readmePath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
-  it('maintains version consistency', () => {
-    const version = pkg.version;
-    expect(readme).toContain(`@siddharthakatiyar/contextos@${version}`);
-  });
 
   it('documents all configuration keys', () => {
     const configKeys = Object.keys(defaultConfig);

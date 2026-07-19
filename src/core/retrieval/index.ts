@@ -10,6 +10,20 @@ import { isEmbeddingsAvailable, searchEmbeddingChunks } from '../embeddings/inde
 
 export * from './types.js';
 
+export function deduplicateChunks(scored: ScoredChunk[]): ScoredChunk[] {
+  scored.sort((a, b) => ((b.score || 0) - (a.score || 0)) || a.id.localeCompare(b.id));
+  const uniqueChunks: ScoredChunk[] = [];
+  const seenHashes = new Set<string>();
+  for (const c of scored) {
+    if (c.hash) {
+      if (seenHashes.has(c.hash)) continue;
+      seenHashes.add(c.hash);
+    }
+    uniqueChunks.push(c);
+  }
+  return uniqueChunks;
+}
+
 /**
  * When a class chunk and its method chunks (same sourceFile, parentSymbol == class name)
  * both survive: never drop method bodies for a compact outline; keep cheap outlines so
@@ -144,12 +158,13 @@ export class RetrievalEngine {
     this.primaryChunksRepo = Array.isArray(chunksRepos) ? chunksRepos[0] : chunksRepos;
   }
 
-  public async retrieve(prompt: string, opts?: RetrievalOptions): Promise<RetrievalResult> {
+  public async retrieve(prompt: string, opts?: RetrievalOptions, signal?: AbortSignal): Promise<RetrievalResult> {
     const startTime = Date.now();
     const config = loadConfig();
     const pipeline = config.pipeline ?? {};
 
     // Step 1: Detect intent
+    signal?.throwIfAborted();
     const intent = detectIntent(prompt);
 
     // Step 2: Keyword matching (FTS + direct) → RRF-fused
@@ -179,6 +194,7 @@ export class RetrievalEngine {
     directMatches = await this.applyEmbeddingFusion(prompt, directMatches, lowConfidence, embFusionEnabled);
 
     // Step 3: Relationship expansion — ONLY use actual code identifiers as seeds
+    signal?.throwIfAborted();
     const seedEntities = new Set<string>([...intent.identifiers, ...intent.quotedTerms]);
     const isIdentifier = (k: string) => /^[a-z]+(?:[A-Z][a-z]+)+$|^[a-z]+(?:_[a-z]+)+$|^[a-z]+(?:\.[a-z]+)+$/.test(k);
 
@@ -199,6 +215,7 @@ export class RetrievalEngine {
     }
 
     // Step 4: Retrieve chunks for expanded entities
+    signal?.throwIfAborted();
     const expandedEntityNames = expandedEntities.map(e => e.entity);
     const expandedChunks = this.matcher.matchForEntities(expandedEntityNames);
 
@@ -257,6 +274,7 @@ export class RetrievalEngine {
       ...intent.quotedTerms,
     ]);
 
+    signal?.throwIfAborted();
     let scored = scoreChunks(allChunks, expandedEntities, adjustments || {}, {
       repoRoot: opts?.repoRoot,
       matchTokens,
@@ -267,19 +285,7 @@ export class RetrievalEngine {
     if (pipeline.containmentDedup !== false) {
       scored = containmentDedup(scored, intent.identifiers);
     }
-    scored.sort((a, b) => ((b.score || 0) - (a.score || 0)) || a.id.localeCompare(b.id));
-
-    // Cross-file exact duplicate chunk deduplication
-    const uniqueChunks: ScoredChunk[] = [];
-    const seenHashes = new Set<string>();
-    for (const c of scored) {
-      if (c.hash) {
-        if (seenHashes.has(c.hash)) continue; // Drop lower-scoring exact duplicate
-        seenHashes.add(c.hash);
-      }
-      uniqueChunks.push(c);
-    }
-    scored = uniqueChunks;
+    scored = deduplicateChunks(scored);
 
     // Soft segment cap: keep at most 2 naturally-matched segments so they don't
     // crowd out other symbols. Exact-id parents already dropped their segments in dedup.
