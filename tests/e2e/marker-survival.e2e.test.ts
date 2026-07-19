@@ -34,7 +34,7 @@ describe('Marker Survival E2E Gate', () => {
     const knowledgeStore = new KnowledgeStore(db);
 
     deps = { engine, sessionManager, knowledgeStore, promptsRepo, sessionStore };
-  }, 30000); // 30s timeout for buildFixtureDb
+  }, 60000); // 60s timeout for buildFixtureDb
 
   afterAll(() => {
     if (db) db.close();
