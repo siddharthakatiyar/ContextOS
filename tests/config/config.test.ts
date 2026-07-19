@@ -52,4 +52,42 @@ describe('validateConfigJson', () => {
     const result = validateConfigJson({ maxChunkTokens: 'nope' });
     expect(result).toBeNull();
   });
+
+  it('accepts pipeline config block with all stage flags', () => {
+    const result = validateConfigJson({
+      pipeline: {
+        graphExpansion: false,
+        embeddingFusion: false,
+        containmentDedup: false,
+        diversityFilter: false,
+      },
+    });
+    expect(result).not.toBeNull();
+    const p = result!.pipeline as Record<string, unknown>;
+    expect(p.graphExpansion).toBe(false);
+    expect(p.embeddingFusion).toBe(false);
+    expect(p.containmentDedup).toBe(false);
+    expect(p.diversityFilter).toBe(false);
+  });
+
+  it('accepts partial pipeline config block', () => {
+    const result = validateConfigJson({ pipeline: { graphExpansion: false } });
+    expect(result).not.toBeNull();
+    const p = result!.pipeline as Record<string, unknown>;
+    expect(p.graphExpansion).toBe(false);
+    expect(p.embeddingFusion).toBeUndefined(); // not provided = use default
+  });
+
+  it('rejects invalid pipeline flag type', () => {
+    const result = validateConfigJson({ pipeline: { graphExpansion: 'yes' } });
+    expect(result).toBeNull();
+  });
+
+  it('merges pipeline config block with deep merge', () => {
+    const target = { pipeline: { graphExpansion: true, diversityFilter: true } };
+    const source = { pipeline: { graphExpansion: false } };
+    const result = mergeDeep(structuredClone(target), source);
+    expect(result.pipeline.graphExpansion).toBe(false);
+    expect(result.pipeline.diversityFilter).toBe(true); // untouched
+  });
 });

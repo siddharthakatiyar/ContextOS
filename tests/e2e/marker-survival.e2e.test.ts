@@ -164,11 +164,11 @@ describe('Marker Survival E2E Gate', () => {
       expect(specificDropped.length, `Specific suite regressed on topics: ${specificDropped.join(', ')}`).toBe(0);
       expect(genericDropped.length, `Generic suite regressed on topics: ${genericDropped.join(', ')}`).toBe(0);
 
-      // 2. Specific one-shot >= 14
-      expect(currentStats.specific.passCount).toBeGreaterThanOrEqual(14);
+      // 2. Specific one-shot must match or exceed baseline
+      expect(currentStats.specific.passCount).toBeGreaterThanOrEqual(baseline.specific.passCount);
 
-      // 3. Generic >= 2
-      expect(currentStats.generic.passCount).toBeGreaterThanOrEqual(2);
+      // 3. Generic must match or exceed baseline
+      expect(currentStats.generic.passCount).toBeGreaterThanOrEqual(baseline.generic.passCount);
 
       // 4. Avg first-call ceiling (should not increase drastically)
       expect(currentStats.specific.avgTokens).toBeLessThanOrEqual(baseline.specific.avgTokens * 1.05);

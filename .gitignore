@@ -10,3 +10,6 @@ contextos-graph.html
 daemon.log
 scripts/results/
 scripts/bench/fixtures/
+
+# Local planning files
+V1_CHECKLIST.md

@@ -147,13 +147,14 @@ export class RetrievalEngine {
   public async retrieve(prompt: string, opts?: RetrievalOptions): Promise<RetrievalResult> {
     const startTime = Date.now();
     const config = loadConfig();
+    const pipeline = config.pipeline ?? {};
 
     // Step 1: Detect intent
     const intent = detectIntent(prompt);
 
     // Step 2: Keyword matching (FTS + direct) → RRF-fused
     let directMatches = this.matcher.matchChunks(intent, opts);
-    directMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
+    directMatches.sort((a, b) => ((b.score || 0) - (a.score || 0)) || a.id.localeCompare(b.id));
 
     // Keyword confidence: top-score margin + hit count (gates emb fallback)
     const topScore = directMatches[0]?.score || 0;
@@ -171,24 +172,31 @@ export class RetrievalEngine {
       (!hasExactId && (topScore < 8 || (directMatches.length >= 2 && margin < 0.15)));
 
     // Step 2b: Embeddings (helper keeps `retrieve` body under the segment threshold)
-    directMatches = await this.applyEmbeddingFusion(prompt, directMatches, lowConfidence);
+    // The pipeline.embeddingFusion flag overrides embeddingsRetrieval when explicitly set.
+    const embFusionEnabled = pipeline.embeddingFusion !== undefined
+      ? pipeline.embeddingFusion
+      : undefined; // undefined → applyEmbeddingFusion uses its own logic
+    directMatches = await this.applyEmbeddingFusion(prompt, directMatches, lowConfidence, embFusionEnabled);
 
     // Step 3: Relationship expansion — ONLY use actual code identifiers as seeds
     const seedEntities = new Set<string>([...intent.identifiers, ...intent.quotedTerms]);
     const isIdentifier = (k: string) => /^[a-z]+(?:[A-Z][a-z]+)+$|^[a-z]+(?:_[a-z]+)+$|^[a-z]+(?:\.[a-z]+)+$/.test(k);
 
     // Only extract identifier-shaped keywords from top matches (not generic words)
-    directMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
-    for (const match of directMatches.slice(0, 5)) {
-      if (match.keywords) {
-        match.keywords.split(', ').map((k: string) => k.trim()).filter(isIdentifier).forEach((k: string) => seedEntities.add(k));
+    directMatches.sort((a, b) => ((b.score || 0) - (a.score || 0)) || a.id.localeCompare(b.id));
+    // Step 3 (cont.): Graph expansion
+    let expandedEntities: ExpandedEntity[] = [];
+    if (pipeline.graphExpansion !== false) {
+      for (const match of directMatches.slice(0, 5)) {
+        if (match.keywords) {
+          match.keywords.split(', ').map((k: string) => k.trim()).filter(isIdentifier).forEach((k: string) => seedEntities.add(k));
+        }
+        if (match.symbolName && match.symbolName.length > 2) {
+          seedEntities.add(match.symbolName);
+        }
       }
-      if (match.symbolName && match.symbolName.length > 2) {
-        seedEntities.add(match.symbolName);
-      }
+      expandedEntities = this.expander.expand(Array.from(seedEntities), config.graphExpansionDepth || 2, config.graphExpansionMaxNodes || 20);
     }
-
-    const expandedEntities = this.expander.expand(Array.from(seedEntities), config.graphExpansionDepth || 2, config.graphExpansionMaxNodes || 20);
 
     // Step 4: Retrieve chunks for expanded entities
     const expandedEntityNames = expandedEntities.map(e => e.entity);
@@ -253,10 +261,13 @@ export class RetrievalEngine {
       repoRoot: opts?.repoRoot,
       matchTokens,
       identifiers: intent.identifiers,
+      diversityFilter: pipeline.diversityFilter !== false,
     });
     // Containment dedup after scoring so we keep the higher-scoring class or method
-    scored = containmentDedup(scored, intent.identifiers);
-    scored.sort((a, b) => (b.score || 0) - (a.score || 0));
+    if (pipeline.containmentDedup !== false) {
+      scored = containmentDedup(scored, intent.identifiers);
+    }
+    scored.sort((a, b) => ((b.score || 0) - (a.score || 0)) || a.id.localeCompare(b.id));
 
     // Soft segment cap: keep at most 2 naturally-matched segments so they don't
     // crowd out other symbols. Exact-id parents already dropped their segments in dedup.
@@ -305,16 +316,20 @@ export class RetrievalEngine {
    * Optional embedding fusion: agreement-boost keyword hits; on low confidence,
    * insert a few emb-only candidates. Kept out of `retrieve` so that method's
    * body stays under maxSymbolChunkTokens (E2E can show the full pipeline).
+   *
+   * @param forceEnabled When explicitly set by pipeline config, overrides embeddingsRetrieval.
+   *                     When undefined, falls back to config + env-var logic.
    */
   private async applyEmbeddingFusion(
     prompt: string,
     directMatches: ScoredChunk[],
     lowConfidence: boolean,
+    forceEnabled?: boolean,
   ): Promise<ScoredChunk[]> {
     try {
-      const embRetrievalOn =
-        loadConfig().embeddingsRetrieval === true ||
-        process.env.CONTEXTOS_EMBEDDINGS_RETRIEVAL === '1';
+      const embRetrievalOn = forceEnabled !== undefined
+        ? forceEnabled
+        : (loadConfig().embeddingsRetrieval === true || process.env.CONTEXTOS_EMBEDDINGS_RETRIEVAL === '1');
       if (
         !isEmbeddingsAvailable() ||
         !this.primaryChunksRepo ||

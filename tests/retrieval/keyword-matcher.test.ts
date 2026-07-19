@@ -23,4 +23,24 @@ describe('keyword-matcher', () => {
     expect(fused[0].id).toBe('a');
     expect(fused[0].score).toBeGreaterThan(fused[1].score);
   });
+
+  it('reciprocalRankFusion produces deterministic order when scores are tied', () => {
+    // To guarantee a true score tie we put each chunk at rank 0 in its own list
+    // with equal weight. Both get the same RRF contribution → equal post-scale scores.
+    // The id tiebreaker must then order them lexicographically.
+    const x = { id: 'z-chunk', score: 0 } as ScoredChunk;
+    const y = { id: 'a-chunk', score: 0 } as ScoredChunk;
+    const run1 = reciprocalRankFusion([
+      { list: [{ ...x }], weight: 1 },
+      { list: [{ ...y }], weight: 1 },
+    ]).map(c => c.id);
+    const run2 = reciprocalRankFusion([
+      { list: [{ ...x }], weight: 1 },
+      { list: [{ ...y }], weight: 1 },
+    ]).map(c => c.id);
+    // Both runs must be identical (deterministic)
+    expect(run1).toEqual(run2);
+    // 'a-chunk' < 'z-chunk' lexicographically, so it comes first on a score tie
+    expect(run1[0]).toBe('a-chunk');
+  });
 });
