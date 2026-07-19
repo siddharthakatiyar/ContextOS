@@ -77,17 +77,20 @@ export class DB {
     
     // 1. Open the local project DB (CWD)
     const localDbPath = path.join(startDir, '.contextos', 'index.db');
-    if (fs.existsSync(localDbPath)) {
+    try {
       dbs.push(new DB(localDbPath));
-    } else {
-      // No local DB exists yet — create one
-      dbs.push(new DB(localDbPath));
+    } catch (e: any) {
+      console.error(`Failed to open local DB at ${localDbPath}: ${e.message}`);
     }
 
     // 2. Add global DB if it exists and is different from local
     const globalDbPath = path.join(getContextOSHome(), 'index.db');
     if (fs.existsSync(globalDbPath) && globalDbPath !== localDbPath) {
-      dbs.push(new DB(globalDbPath));
+      try {
+        dbs.push(new DB(globalDbPath));
+      } catch (e: any) {
+        console.error(`Failed to open global DB at ${globalDbPath}: ${e.message}`);
+      }
     }
 
     return dbs;

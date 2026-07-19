@@ -9,6 +9,33 @@ export const metadata = {
 
 const releases = [
   {
+    version: "v0.7.2",
+    date: "19 Jul 2026",
+    type: "Minor Release",
+    description: "Robust file handling and chunk deduplication for index optimization.",
+    highlights: [
+      "Symlink loop prevention",
+      "Binary file sniffing",
+      "Generated code detection",
+      "Cross-file chunk deduplication"
+    ],
+    link: "#",
+    active: true,
+  },
+  {
+    version: "v0.7.1",
+    date: "19 Jul 2026",
+    type: "Minor Release",
+    description: "Deterministic ranking and configurable retrieval pipeline stages.",
+    highlights: [
+      "Stable hash tiebreaker",
+      "Configurable pipeline stages",
+      "NPM CI/CD fixes"
+    ],
+    link: "#",
+    active: false,
+  },
+  {
     version: "v0.7.0",
     date: "19 Jul 2026",
     type: "Major Release",
@@ -19,7 +46,7 @@ const releases = [
       "AST semantic chunking",
     ],
     link: "/releases/v0.7.0",
-    active: true,
+    active: false,
   },
   {
     version: "v0.6.0",

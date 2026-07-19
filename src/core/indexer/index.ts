@@ -10,6 +10,7 @@ import { chunkCode } from '../chunker/code-chunker.js';
 import { extractRelationships, extractImportRelationships } from '../graph/extractor.js';
 import { scoreFileImportance } from './importance-scorer.js';
 import { hashContent } from '../../utils/hash.js';
+import { isBinaryFile, isGeneratedFile } from '../../utils/file-heuristics.js';
 import { Layer, Chunk } from '../storage/types.js';
 import { indexChunkEmbeddings } from '../embeddings/index.js';
 
@@ -43,8 +44,8 @@ export class Indexer {
       throw new Error(`File not found: ${filePath}`);
     }
 
-    const stat = fs.statSync(filePath);
-    if (!stat.isFile()) {
+    const stat = fs.lstatSync(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
       return {
         filesProcessed: 0,
         chunksCreated: 0,
@@ -63,11 +64,8 @@ export class Indexer {
       };
     }
 
-    const content = fs.readFileSync(filePath, 'utf8');
-    const hash = hashContent(content);
-
-    // Skip binary files (SQLite databases, images, etc.) by checking for null bytes
-    if (content.indexOf('\0') !== -1) {
+    // Skip binary files using optimized buffer check
+    if (isBinaryFile(filePath)) {
       return {
         filesProcessed: 0,
         chunksCreated: 0,
@@ -75,6 +73,20 @@ export class Indexer {
         durationMs: Date.now() - startTime
       };
     }
+
+    const content = fs.readFileSync(filePath, 'utf8');
+
+    // Skip generated / minified code
+    if (isGeneratedFile(filePath, content)) {
+      return {
+        filesProcessed: 0,
+        chunksCreated: 0,
+        relationshipsFound: 0,
+        durationMs: Date.now() - startTime
+      };
+    }
+
+    const hash = hashContent(content);
 
     // Check if changed
     if (!this.filesRepo.isChanged(filePath, hash)) {
