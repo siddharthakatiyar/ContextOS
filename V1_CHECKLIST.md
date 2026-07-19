@@ -1,0 +1,366 @@
+# ContextOS v1.0 Readiness Checklist
+
+> **Definition of v1:** "You can depend on this in your daily development workflow."
+>
+> Current version: **0.7.1**
+>
+> Legend: `[x]` Done · `[~]` Partial · `[ ]` Missing
+
+---
+
+## 1. Core Product
+
+### Stable Retrieval Engine
+
+- [x] Hybrid retrieval finalized — FTS5 + symbol boosts + RRF fusion in `src/core/retrieval/`
+- [x] BM25 ranking finalized — FTS5 porter tokenizer used as BM25 proxy
+- [x] Graph expansion finalized — `src/core/graph/` expander with depth/node caps
+- [x] Intent-aware ranking finalized — `intent-detector.ts` + query classification
+- [x] Token-aware compression finalized — tiered compile in `src/core/compiler/` with `gpt-tokenizer`
+- [x] AST semantic chunking finalized — tree-sitter parsers, sub-chunk segments, parent_symbol
+- [x] Project isolation finalized — layer boosts (session/repo/workspace/global), workspace_name column
+- [x] Global memory finalized — `knowledge_facts` table + `learn_fact` / `forget_fact` MCP tools
+- [x] Incremental indexing — file hash-based, stable chunk IDs
+- [x] Automatic re-index detection — `chokidar` watcher in `src/core/watcher/`
+- [x] Configurable retrieval pipeline — `pipeline` config block added with flags for all 4 stages
+- [x] Deterministic ranking — stable id-based tiebreaker added to all sort calls in the pipeline
+- [x] Configurable token budgets — `maxTokenBudget`, `maxRetrievalResults`, per-call `max_tokens`
+
+---
+
+### Indexing
+
+- [x] Multi-language support — TS/JS, Go, Python, Java, C/C++, Rust, Markdown, JSON/YAML/TOML
+- [x] Incremental indexing — hash-based upsert, stable chunk IDs
+- [x] Ignore rules — `.contextosignore.default` exists
+- [x] `.gitignore` support — referenced in init flow
+- [x] Symlink handling — glob and chokidar explicitly ignore symlinks; indexer drops them via `lstatSync`
+- [~] Large repository handling — benchmarked on Redis (~800 files), untested at 500k+ files
+- [x] Binary file detection — skips binary files using an optimized buffer read (first 8KB) instead of loading into RAM
+- [x] Generated file detection — heuristics skip minified files and auto-generated code
+- [x] Duplicate detection — exact cross-file duplicate chunks are dropped during retrieval scoring
+- [x] Cancellation support — `AbortController` fully wired across Indexing and Retrieval pipelines; daemon has idle timeout
+
+---
+
+### Storage
+
+- [x] Stable SQLite schema — well-structured schema in `schema.ts`
+- [x] Schema versioning — `schema_version` table, currently at v5
+- [x] Automatic migrations — `applyMigrations()` with v1→v5 chain
+- [ ] Corruption detection — no `PRAGMA integrity_check` on open
+- [ ] Database recovery — no recovery path documented or implemented
+- [ ] Database validation — no validation step on startup
+- [ ] Backup strategy — no backup mechanism or documentation
+
+---
+
+### Daemon
+
+- [x] Stable lifecycle — `daemon.ts` with start/stop/pid file
+- [~] Auto cleanup — pid cleanup exists; stale pid handling unclear
+- [ ] Crash recovery — no watchdog / restart-on-crash mechanism
+- [x] Idle timeout — idle timeout implemented in daemon
+- [x] Multiple project support — workspace isolation implemented
+- [~] Logging — `console.error` based; no structured log sink
+- [~] Diagnostics — `contextos status` exists; no structured diagnostics export
+
+---
+
+## 2. Public API
+
+- [~] Stable CLI — commands exist (`init`, `reindex`, `serve`, `query`, `status`, `watch`, `visualize`) but no stability guarantees documented
+- [~] Stable MCP interface — MCP tools exist; tool surface was recently merged/trimmed in 0.7.0 (was a breaking change)
+- [ ] Stable JSON schema — no published JSON schema for config or MCP responses
+- [~] Stable configuration — `defaults.ts` is the reference; config keys changed across versions
+- [~] Semantic Versioning — using semver numerically but no documented SemVer commitment
+- [ ] Deprecation policy — none documented
+
+---
+
+## 3. Documentation
+
+### Homepage (docs/ Next.js site)
+
+- [~] Complete — `docs/` Next.js app exists with homepage (`page.tsx`)
+- [ ] Interactive — no interactive demos or live retrieval examples
+- [~] Production quality — basic Next.js setup; not polished or deployed
+
+---
+
+### Documentation Pages
+
+- [x] Installation — README quickstart covers this
+- [x] Quickstart — README quickstart
+- [~] CLI — README cheatsheet; no full CLI reference page
+- [~] Configuration — README config table; no dedicated doc page
+- [~] Architecture — ASCII diagram in README; `docs/src/app/docs/architecture/` exists
+- [~] Algorithms — `docs/src/app/docs/algorithms/` exists; content depth unknown
+- [ ] Retrieval Pipeline — not documented in depth
+- [ ] Graph Expansion — not a standalone doc
+- [ ] Ranking — not documented in depth
+- [ ] Compression — not documented
+- [~] Indexing — README section covers basics
+- [~] Database — `docs/src/app/docs/database/` exists
+- [~] Memory — README section covers basics
+- [~] MCP — README tools list; no dedicated deep-dive
+- [ ] Examples — no per-framework examples
+- [ ] FAQ — missing
+- [ ] Troubleshooting — missing
+
+---
+
+### Design Decisions
+
+- [ ] Why SQLite — not documented
+- [ ] Why BM25 — not documented
+- [ ] Why Graph Expansion — not documented
+- [ ] Why AST — not documented
+- [ ] Why project databases — not documented
+- [ ] Why MCP — not documented
+- [ ] Why local-first — not documented
+
+---
+
+### Algorithm Specs
+
+- [ ] Every algorithm documented with complexity, diagrams, tradeoffs — missing
+
+---
+
+## 4. Testing
+
+### Unit Tests
+
+- [x] Parser — `tests/parser/` (code, markdown, config parsers)
+- [x] Chunking — `tests/chunker/` (code-chunker, markdown-chunker)
+- [x] Ranking — `tests/retrieval/scorer.test.ts`, `intent-detector.test.ts`, `keyword-matcher.test.ts`
+- [x] Compression — `tests/compiler/compiler.test.ts` and `compressor-helpers.test.ts` cover token budgeting
+- [x] Retrieval — `tests/retrieval/` covers core retrieval logic, intent, ranking, and deduplication
+- [x] CLI — `tests/cli/` covers `init` and `query` command logic
+- [x] Config — `tests/config/config.test.ts` validates types and loading
+- [x] Storage — `tests/storage/database.test.ts`, `fts-sanitizer.test.ts`
+
+### Integration Tests
+
+- [x] Full indexing — `tests/integration/full-index.test.ts` traces end-to-end indexing and DB read logic
+- [x] Incremental indexing — `tests/integration/incremental.test.ts` tests file updates and orphan chunk cleanup
+- [ ] Large repositories — missing (benchmark scripts exist but not CI tests)
+- [ ] Windows — missing
+- [ ] Linux — missing (CI runs ubuntu-latest; no explicit OS matrix)
+- [ ] macOS — missing
+
+### Regression Tests
+
+- [ ] Per-bug regression test suite — `tests/baselines/` exists; no formal regression suite
+
+### Performance Benchmarks
+
+- [~] Automated benchmarks — `scripts/ab-4way-benchmark.mjs` and `ab-e2e-benchmark.mjs` exist; NOT wired into CI
+
+---
+
+## 5. Benchmarks
+
+- [x] Benchmark scripts exist — `scripts/` has 4-way and e2e benchmarks
+- [~] Benchmark results — `scripts/results/` exists; results cited in README
+- [~] Reproducible benchmark suite — scripts exist but setup is manual; not CI-gated
+- [~] Compare against naive file loading — partially done
+- [ ] Compare against embedding-only retrieval — missing
+- [x] Compare against grep/ripgrep — README cites proxy comparison
+- [ ] Compare against vector search — missing
+- [x] Measure: latency — latency tracked
+- [x] Measure: tokens — token counts tracked
+- [x] Measure: accuracy — accuracy measured in README
+- [ ] Measure: recall — recall not separately measured
+- [ ] Measure: indexing speed — missing
+- [ ] Measure: memory usage — missing
+
+---
+
+## 6. Examples
+
+- [ ] Express
+- [ ] Next.js
+- [ ] React
+- [ ] Spring Boot
+- [ ] FastAPI
+- [ ] Go
+- [ ] Python
+- [ ] Monorepo
+- [ ] Large repo
+
+---
+
+## 7. Release Engineering
+
+- [~] GitHub Releases — `.github/workflows/npm-publish.yml` triggers on tags/releases
+- [ ] Changelog — no CHANGELOG.md
+- [~] Migration guides — README has brief "Upgrading to 0.7.0" section; no versioned guides
+- [x] Release automation — npm publish workflow exists
+- [ ] Version checks — no runtime version check / update notifier for users
+
+---
+
+## 8. Developer Experience
+
+### CLI Polish
+
+- [x] `ora` spinners — `ora` dependency present
+- [x] `chalk` colors — `chalk` present
+- [x] `cli-progress` bars — `cli-progress` present
+- [~] Beautiful, complete error messages — some good errors; raw stack traces can leak
+- [~] Consistent CLI output format — mix of `console.error` / `console.log` across commands
+
+### Errors
+
+- [~] All user-facing errors are helpful and actionable — partial; needs audit
+
+### Logs
+
+- [~] Structured, readable logs — `console.error` throughout; no log levels or structured sink
+
+---
+
+## 9. Open Source
+
+- [x] README — solid README with problem, architecture, benchmarks, quickstart
+- [ ] CONTRIBUTING.md — missing
+- [ ] CODE_OF_CONDUCT.md — missing
+- [ ] SECURITY.md — missing
+- [~] LICENSE — ISC in `package.json`; no standalone LICENSE file
+- [ ] Issue templates (Bug / Feature / Question) — `.github/ISSUE_TEMPLATE/` missing
+- [ ] PR template — `.github/PULL_REQUEST_TEMPLATE.md` missing
+- [ ] Roadmap — missing
+- [ ] Good first issues labeled — no issues/labels yet
+- [ ] Contributor guide — missing
+
+---
+
+## 10. CI/CD
+
+- [~] Lint — `eslint` script exists; not wired into CI workflow
+- [ ] Format check — no formatter configured (prettier/biome)
+- [x] Tests — `npm test` runs in CI on publish
+- [ ] Benchmarks in CI — benchmarks are manual scripts only
+- [x] Release automation — npm publish on tag push
+- [ ] Docs deployment — docs Next.js app not deployed
+
+---
+
+## 11. Observability
+
+- [~] Debug mode — `--verbose` not formalized; relies on `console.error`
+- [ ] Verbose mode — not a first-class flag
+- [ ] Trace mode — missing
+- [ ] Profiling — missing
+- [~] Timing output — `latency_ms` stored in DB; not surfaced to user in CLI
+
+---
+
+## 12. Website
+
+- [~] Homepage — `docs/` Next.js app exists with homepage
+- [~] Docs — structure exists (`architecture`, `database`, `algorithms`, `initialization`)
+- [x] Releases page — `docs/src/app/releases/` has content for recent releases
+- [ ] Benchmarks page — missing
+- [~] Architecture page — partial
+- [ ] Roadmap page — missing
+- [ ] Blog — missing
+- [ ] Deployed / live — not deployed anywhere
+
+---
+
+## 13. Production Readiness
+
+- [x] 5 repositories — workspace isolation supports this
+- [~] 50 repositories — untested at scale; no concurrency guards documented
+- [ ] 500k files — untested; no explicit large-repo optimizations
+- [~] Monorepos — workspace concept exists; multi-root not validated
+- [x] Binary files — automatically skipped via optimized buffer check
+- [x] Generated code — automatically skipped via content heuristics
+- [x] Symlinks — explicitly ignored to prevent infinite loops
+- [ ] Concurrent indexing — no explicit concurrency protection
+
+---
+
+## 14. Community
+
+- [ ] GitHub Discussions — not enabled
+- [ ] Discord (optional)
+- [ ] Roadmap — missing
+- [ ] Good first issues — missing
+- [ ] Contributor guide — missing
+- [ ] Labels — missing
+
+---
+
+## 15. Security
+
+- [ ] Path traversal checks — not explicitly addressed
+- [x] SQLite injection protection — prepared statements used throughout
+- [~] Safe file handling — glob-based; no explicit traversal guards
+- [ ] Resource limits — no CPU/memory limits on indexing
+- [ ] Malicious repository protection — not addressed
+- [ ] DOS protection — not addressed
+
+---
+
+## 16. Polish
+
+- [~] Consistent naming — mostly consistent; some internal inconsistencies
+- [ ] Icons — CLI has no icon; docs have minimal SVG
+- [x] CLI colors — chalk present
+- [~] Animations — ora spinner exists; not fully leveraged
+- [~] Typography — docs site basic
+- [~] Copywriting — README is good; docs pages need work
+- [ ] Docs diagrams — only ASCII art in README
+- [ ] Screenshots / demo GIFs — missing
+
+---
+
+## 17. v1 Launch Plan
+
+- [ ] Website ready
+- [ ] Release notes
+- [ ] Migration guide
+- [ ] Blog post
+- [ ] LinkedIn announcement
+- [ ] Twitter/X thread
+- [ ] Demo video
+- [ ] Architecture article
+- [ ] Benchmark article
+- [ ] "How it works" article
+- [ ] Hacker News Show HN
+- [ ] Reddit posts
+- [ ] Dev.to / Hashnode article
+- [ ] Product Hunt
+
+---
+
+## Summary
+
+| Area | Rough % | Notes |
+|---|---|---|
+| Core Retrieval Engine | 100% | Solid fundamentals; determinism + pipeline config implemented |
+| Indexing | ~90% | Works well; only large repo (500k+) validation remains |
+| Storage | ~60% | Schema + migrations solid; no corruption/recovery/backup |
+| Daemon | ~65% | Lifecycle works; no crash recovery, structured logs |
+| Public API Stability | ~40% | No formal stability guarantees or deprecation policy |
+| Documentation | ~35% | README great; deep docs barely started |
+| Testing | ~40% | Some unit tests; integration + regression = empty |
+| Benchmarks | ~50% | Scripts exist; not reproducible/CI-gated |
+| Examples | ~0% | None |
+| Release Engineering | ~40% | npm publish works; no CHANGELOG, migration guides |
+| Developer Experience | ~55% | Good bones; error messages + logging need polish |
+| Open Source Files | ~20% | README + license only; no CONTRIBUTING/SECURITY/templates |
+| CI/CD | ~35% | Publish works; no lint/format/benchmark CI |
+| Security | ~30% | Prepared statements only; no traversal/resource guards |
+| Website | ~20% | Skeleton only; not deployed |
+| Community Infrastructure | ~0% | Nothing set up |
+
+**Overall estimate: ~40% of the way to v1.0**
+
+The retrieval core is genuinely strong. The gap is almost entirely in:
+testing, documentation, open-source hygiene, and everything _around_ the
+project vs. the product itself.
