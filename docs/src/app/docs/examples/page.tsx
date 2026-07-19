@@ -5,6 +5,8 @@ export default function ExamplesDocs() {
     <DocPage
       title="Framework Examples"
       description="Integration examples and best practices across popular technology stacks."
+      prev={{ title: "SQLite Schema", href: "/docs/database/schema" }}
+      next={{ title: "Troubleshooting", href: "/docs/troubleshooting" }}
     >
       <h2>Next.js / React</h2>
       <p>

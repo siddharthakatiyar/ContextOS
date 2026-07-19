@@ -6,7 +6,7 @@ export default function CliDocs() {
     <DocPage
       title="CLI Reference"
       description="Command-line interface commands for managing ContextOS in your repository."
-      prev={{ title: "Introduction", href: "/docs" }}
+      prev={{ title: "Design Decisions", href: "/docs/design-decisions" }}
       next={{ title: "Configuration", href: "/docs/reference/configuration" }}
     >
       <SourceLink path="src/index.ts" />

@@ -8,7 +8,7 @@ export default function InitializationDocs() {
       title="Initialization Sequence"
       description="The end-to-end process executed by the 'contextos init' command, powered by the core Indexer."
       prev={{ title: "Architecture", href: "/docs/architecture" }}
-      next={{ title: "Graph Expansion", href: "/docs/algorithms/graph-expansion" }}
+      next={{ title: "Retrieval Pipeline", href: "/docs/algorithms/retrieval-pipeline" }}
     >
       <SourceLink path="src/cli/commands/init.ts" />
 

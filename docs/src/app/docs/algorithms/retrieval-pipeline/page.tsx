@@ -7,6 +7,7 @@ export default function RetrievalPipelineDocs() {
     <DocPage
       title="Retrieval Pipeline"
       description="The multi-stage architecture ContextOS uses to fetch, expand, rank, and compress tokens."
+      prev={{ title: "Initialization Sequence", href: "/docs/initialization" }}
       next={{ title: "Ranking & Tie-Breaking", href: "/docs/algorithms/ranking" }}
     >
       <SourceLink path="src/core/retrieval/index.ts" />

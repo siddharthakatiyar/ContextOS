@@ -5,6 +5,7 @@ export default function TroubleshootingDocs() {
     <DocPage
       title="Troubleshooting & FAQ"
       description="Common issues, error codes, and how to resolve them."
+      prev={{ title: "Framework Examples", href: "/docs/examples" }}
     >
       <h2>Daemon Connection Drops (EPERM / ENOENT)</h2>
       <p>

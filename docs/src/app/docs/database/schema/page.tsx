@@ -6,7 +6,8 @@ export default function SchemaDocs() {
     <DocPage
       title="SQLite Schema"
       description="The underlying relational structure of the Schema v5 .contextos database."
-      prev={{ title: "Graph Expansion", href: "/docs/algorithms/graph-expansion" }}
+      prev={{ title: "Context Compression", href: "/docs/algorithms/compression" }}
+      next={{ title: "Framework Examples", href: "/docs/examples" }}
     >
       <SourceLink path="src/core/storage/schema.ts" />
 

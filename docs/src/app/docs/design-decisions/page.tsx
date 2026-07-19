@@ -5,6 +5,8 @@ export default function DesignDecisionsDocs() {
     <DocPage
       title="Design Decisions"
       description="The rationale behind the core architectural choices in ContextOS."
+      prev={{ title: "Introduction", href: "/docs" }}
+      next={{ title: "CLI Commands", href: "/docs/reference/cli" }}
     >
       <h2>Why SQLite? (Instead of a Vector Database)</h2>
       <p>

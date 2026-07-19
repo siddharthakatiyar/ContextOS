@@ -7,7 +7,8 @@ export default function CompressionDocs() {
     <DocPage
       title="Context Compression"
       description="Algorithms to surgically slice AST chunks to fit strict LLM token budgets."
-      prev={{ title: "Ranking & Tie-Breaking", href: "/docs/algorithms/ranking" }}
+      prev={{ title: "Graph Expansion", href: "/docs/algorithms/graph-expansion" }}
+      next={{ title: "SQLite Schema", href: "/docs/database/schema" }}
     >
       <SourceLink path="src/core/compiler/compiler.ts" />
 
