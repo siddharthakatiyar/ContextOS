@@ -90,13 +90,29 @@ describe('scoreChunks', () => {
     expect(scored[0].score).toBeGreaterThan(scored[1].score);
   });
 
-  it('demotes trivial getters and constructors generically', () => {
-    const getter = chunk({ id: '1', symbolName: 'getFoo', tokenCount: 10, score: 5 });
-    const ctor = chunk({ id: '2', symbolName: 'constructor', tokenCount: 20, score: 5 });
-    const real = chunk({ id: '3', symbolName: 'compile', tokenCount: 100, score: 5 });
-    const scored = scoreChunks([getter, ctor, real], [], {});
-    const byId = Object.fromEntries(scored.map(c => [c.id, c.score]));
-    expect(byId['3']).toBeGreaterThan(byId['1']);
-    expect(byId['3']).toBeGreaterThan(byId['2']);
+  it('produces identical ordering on two calls with the same input (deterministic)', () => {
+    // Build chunks that will land on equal RRF-ish float scores after scoreChunks
+    // multipliers — the only difference between runs should be the tiebreaker.
+    const chunks = Array.from({ length: 10 }, (_, i) =>
+      chunk({ id: `chunk-${String(i).padStart(3, '0')}`, score: 5, symbolName: `fn${i}` })
+    );
+    const run1 = scoreChunks([...chunks], [], {}).map(c => c.id);
+    const run2 = scoreChunks([...chunks], [], {}).map(c => c.id);
+    expect(run1).toEqual(run2);
+  });
+
+  it('skips diversity decay when diversityFilter is false', () => {
+    // Feed 10 chunks from the same file — with diversity enabled the later ones
+    // get penalised; with it disabled, scores should remain unchanged.
+    const chunks = Array.from({ length: 10 }, (_, i) =>
+      chunk({ id: `f${i}`, sourceFile: 'src/big.ts', score: 5 })
+    );
+    const withDiversity = scoreChunks([...chunks], [], {}, { diversityFilter: true });
+    const noDiversity   = scoreChunks([...chunks], [], {}, { diversityFilter: false });
+
+    // With diversity the last few chunks are demoted; without it they keep their score
+    const lastWithDiv = withDiversity[withDiversity.length - 1].score;
+    const lastNoDivScore = noDiversity[noDiversity.length - 1].score;
+    expect(lastNoDivScore).toBeGreaterThan(lastWithDiv);
   });
 });

@@ -99,4 +99,10 @@ export const defaultConfig: ContextOSConfig = {
   tokenCalibration: 1.0,
   framingReserve: 48,
   adaptiveResponse: true,
+  pipeline: {
+    graphExpansion: true,
+    embeddingFusion: true,
+    containmentDedup: true,
+    diversityFilter: true,
+  },
 };
