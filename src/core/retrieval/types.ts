@@ -35,4 +35,6 @@ export interface ScoreChunksOptions {
   matchTokens?: string[];
   /** High-precision identifiers (stronger boost than concepts). */
   identifiers?: string[];
+  /** When false, skip the per-file diversity decay pass. Default: true */
+  diversityFilter?: boolean;
 }

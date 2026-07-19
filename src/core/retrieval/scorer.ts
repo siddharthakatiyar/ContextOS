@@ -159,6 +159,7 @@ export function scoreChunks(
   const maxGraphBoost = config.maxGraphBoost || 10;
   const diversityDecay = config.diversityDecay || 0.7;
   const diversityPenaltyStart = config.diversityPenaltyStart || 3;
+  const applyDiversity = opts?.diversityFilter !== false;
   const repoRoot = opts?.repoRoot || process.cwd();
   const matchTokens = (opts?.matchTokens || [])
     .map(t => t.toLowerCase().replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/i, ''))
@@ -335,8 +336,9 @@ export function scoreChunks(
     return { ...chunk, score: finalScore };
   }).filter(chunk => chunk.score > -9000);
 
-  // Sort by score descending
-  scored.sort((a, b) => b.score - a.score);
+  // Sort by score descending; use chunk ID as a stable tiebreaker so ordering
+  // is deterministic across runs even when float scores are equal.
+  scored.sort((a, b) => (b.score - a.score) || a.id.localeCompare(b.id));
 
   // Apply progressive diversity filter
   // Same-class methods are complementary (not redundant) — allow more before demoting.
@@ -344,24 +346,28 @@ export function scoreChunks(
   const fileCounts = new Map<string, number>();
   const diverse: ScoredChunk[] = [];
 
-  for (const chunk of scored) {
-    const count = fileCounts.get(chunk.sourceFile) || 0;
-    const sn = (chunk.symbolName || '').toLowerCase();
-    const isExactId = sn && identifiers.has(sn);
-    const threshold = chunk.parentSymbol
-      ? Math.max(diversityPenaltyStart + 4, 8)
-      : (chunk.symbolKind === 'class' || chunk.symbolKind === 'struct')
-        ? diversityPenaltyStart + 2
-        : diversityPenaltyStart;
-    if (!isExactId && count >= threshold) {
-      chunk.score *= Math.pow(diversityDecay, count - threshold + 1);
+  if (applyDiversity) {
+    for (const chunk of scored) {
+      const count = fileCounts.get(chunk.sourceFile) || 0;
+      const sn = (chunk.symbolName || '').toLowerCase();
+      const isExactId = sn && identifiers.has(sn);
+      const threshold = chunk.parentSymbol
+        ? Math.max(diversityPenaltyStart + 4, 8)
+        : (chunk.symbolKind === 'class' || chunk.symbolKind === 'struct')
+          ? diversityPenaltyStart + 2
+          : diversityPenaltyStart;
+      if (!isExactId && count >= threshold) {
+        chunk.score *= Math.pow(diversityDecay, count - threshold + 1);
+      }
+      fileCounts.set(chunk.sourceFile, count + 1);
+      diverse.push(chunk);
     }
-    fileCounts.set(chunk.sourceFile, count + 1);
-    diverse.push(chunk);
-  }
 
-  // Re-sort after demotions
-  diverse.sort((a, b) => b.score - a.score);
+    // Re-sort after demotions; stable tiebreaker keeps order deterministic.
+    diverse.sort((a, b) => (b.score - a.score) || a.id.localeCompare(b.id));
+  } else {
+    diverse.push(...scored);
+  }
 
   return diverse;
 }

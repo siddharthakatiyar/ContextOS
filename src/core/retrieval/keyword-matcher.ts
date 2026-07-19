@@ -32,10 +32,11 @@ export function reciprocalRankFusion(weightedLists: WeightedList[], k: number = 
     });
   }
 
-  // Scale RRF into ~1–10 range so post-fusion absolute adds don't wash out ranking
+  // Scale RRF into ~1–10 range so post-fusion absolute adds don't wash out ranking.
+  // Use chunk ID as a stable tiebreaker so equal-score chunks sort consistently.
   return Array.from(fused.values())
     .map(c => ({ ...c, score: c.score * 100 }))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => (b.score - a.score) || a.id.localeCompare(b.id));
 }
 
 function rankByBm25(chunks: any[]): ScoredChunk[] {
