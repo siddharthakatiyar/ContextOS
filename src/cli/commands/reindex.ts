@@ -17,7 +17,15 @@ export const reindexCommand = new Command('reindex')
     const shmPath = path.join(repoContextDir, 'index.db-shm');
 
     // Embeddings-only backfill: keep existing index, just (re)build vectors
-    if (opts.embeddings && fs.existsSync(dbPath)) {
+    const abortController = new AbortController();
+    const onSigInt = () => {
+      console.log(chalk.red('\n\nAborting reindex...'));
+      abortController.abort();
+    };
+    process.on('SIGINT', onSigInt);
+
+    try {
+      if (opts.embeddings && fs.existsSync(dbPath)) {
       if (!isEmbeddingsAvailable()) {
         console.log(chalk.yellow(
           'Embeddings are disabled (CONTEXTOS_EMBEDDINGS=0 or embeddingsEnabled=false). Nothing to do.'
@@ -28,7 +36,7 @@ export const reindexCommand = new Command('reindex')
       console.log(chalk.dim('(Normal indexing also embeds on upsert; this forces a full backfill.)'));
       const db = new DB(dbPath);
       try {
-        const n = await backfillAllEmbeddings(db.getInstance());
+        const n = await backfillAllEmbeddings(db.getInstance(), abortController.signal);
         console.log(chalk.green(`Embedding backfill complete (${n} chunks processed).`));
       } finally {
         db.close();
@@ -57,10 +65,13 @@ export const reindexCommand = new Command('reindex')
       console.log(chalk.blue.bold('\nEnsuring embeddings are backfilled...'));
       const db = new DB(dbPath);
       try {
-        const n = await backfillAllEmbeddings(db.getInstance());
+        const n = await backfillAllEmbeddings(db.getInstance(), abortController.signal);
         console.log(chalk.green(`Embedding backfill complete (${n} chunks processed).`));
       } finally {
         db.close();
       }
+    }
+    } finally {
+      process.off('SIGINT', onSigInt);
     }
   });

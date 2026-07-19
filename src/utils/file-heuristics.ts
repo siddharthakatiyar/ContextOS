@@ -36,7 +36,8 @@ export function isGeneratedFile(filePath: string, content: string): boolean {
     base === 'yarn.lock' ||
     base === 'pnpm-lock.yaml' ||
     base === 'bun.lockb' ||
-    base === 'lazy-lock.json'
+    base === 'lazy-lock.json' ||
+    base === 'cargo.lock'
   ) {
     return true;
   }
