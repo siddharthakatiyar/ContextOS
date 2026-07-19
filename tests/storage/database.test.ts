@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { DB } from '../../src/core/storage/database.js';
 import os from 'os';
 
@@ -33,5 +33,26 @@ describe('database', () => {
     // resolveDatabases returns an array, fallback to global or local
     const dbs = DB.resolveDatabases(os.tmpdir());
     expect(dbs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should gracefully handle unopenable local databases', () => {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const tmpdir = os.tmpdir();
+    const badPath = path.join(tmpdir, '.contextos', 'index.db');
+    
+    // Ensure it's a directory
+    fs.rmSync(badPath, { force: true, recursive: true });
+    fs.mkdirSync(badPath, { recursive: true });
+    
+    // Should not throw, should just log and continue
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dbs = DB.resolveDatabases(tmpdir);
+    expect(consoleSpy).toHaveBeenCalled();
+    
+    // Cleanup
+    consoleSpy.mockRestore();
+    fs.rmSync(badPath, { force: true, recursive: true });
   });
 });
