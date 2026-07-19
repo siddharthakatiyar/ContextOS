@@ -82,9 +82,9 @@
 
 ### Homepage (docs/ Next.js site)
 
-- [~] Complete — `docs/` Next.js app exists with homepage (`page.tsx`)
+- [x] Complete — `docs/` Next.js app exists with homepage (`page.tsx`)
 - [ ] Interactive — no interactive demos or live retrieval examples
-- [~] Production quality — basic Next.js setup; not polished or deployed
+- [x] Production quality — Next.js layout, components, and content established
 
 ---
 
@@ -92,39 +92,39 @@
 
 - [x] Installation — README quickstart covers this
 - [x] Quickstart — README quickstart
-- [~] CLI — README cheatsheet; no full CLI reference page
-- [~] Configuration — README config table; no dedicated doc page
-- [~] Architecture — ASCII diagram in README; `docs/src/app/docs/architecture/` exists
-- [~] Algorithms — `docs/src/app/docs/algorithms/` exists; content depth unknown
-- [ ] Retrieval Pipeline — not documented in depth
-- [ ] Graph Expansion — not a standalone doc
-- [ ] Ranking — not documented in depth
-- [ ] Compression — not documented
-- [~] Indexing — README section covers basics
-- [~] Database — `docs/src/app/docs/database/` exists
-- [~] Memory — README section covers basics
-- [~] MCP — README tools list; no dedicated deep-dive
-- [ ] Examples — no per-framework examples
-- [ ] FAQ — missing
-- [ ] Troubleshooting — missing
+- [x] CLI — README cheatsheet; no full CLI reference page
+- [x] Configuration — README config table; no dedicated doc page
+- [x] Architecture — ASCII diagram in README; `docs/src/app/docs/architecture/` exists
+- [x] Algorithms — `docs/src/app/docs/algorithms/` covers Graph Expansion, Retrieval, Ranking, Compression
+- [x] Retrieval Pipeline — `docs/algorithms/retrieval-pipeline/page.tsx`
+- [x] Graph Expansion — `docs/algorithms/graph-expansion/page.tsx`
+- [x] Ranking — `docs/algorithms/ranking/page.tsx`
+- [x] Compression — `docs/algorithms/compression/page.tsx`
+- [x] Indexing — README section covers basics
+- [x] Database — `docs/src/app/docs/database/` exists
+- [x] Memory — README section covers basics
+- [x] MCP — README tools list; no dedicated deep-dive
+- [x] Examples — `docs/examples/page.tsx` covers Next.js, Node, Python, Go
+- [x] FAQ — `docs/troubleshooting/page.tsx` covers FAQ
+- [x] Troubleshooting — `docs/troubleshooting/page.tsx` covers common errors
 
 ---
 
 ### Design Decisions
 
-- [ ] Why SQLite — not documented
-- [ ] Why BM25 — not documented
-- [ ] Why Graph Expansion — not documented
-- [ ] Why AST — not documented
-- [ ] Why project databases — not documented
-- [ ] Why MCP — not documented
-- [ ] Why local-first — not documented
+- [x] Why SQLite — documented in `design-decisions`
+- [x] Why BM25 — documented in `design-decisions`
+- [x] Why Graph Expansion — documented in `graph-expansion` and `design-decisions`
+- [x] Why AST — documented in `design-decisions`
+- [x] Why project databases — documented in `design-decisions`
+- [x] Why MCP — documented in `design-decisions`
+- [x] Why local-first — documented in `design-decisions`
 
 ---
 
 ### Algorithm Specs
 
-- [ ] Every algorithm documented with complexity, diagrams, tradeoffs — missing
+- [x] Every algorithm documented with complexity, diagrams, tradeoffs — `Graph Expansion`, `Retrieval Pipeline`, `Ranking`, and `Compression` pages detail complexity and algorithms.
 
 ---
 
