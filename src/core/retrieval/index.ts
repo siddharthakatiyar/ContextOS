@@ -269,6 +269,18 @@ export class RetrievalEngine {
     }
     scored.sort((a, b) => ((b.score || 0) - (a.score || 0)) || a.id.localeCompare(b.id));
 
+    // Cross-file exact duplicate chunk deduplication
+    const uniqueChunks: ScoredChunk[] = [];
+    const seenHashes = new Set<string>();
+    for (const c of scored) {
+      if (c.hash) {
+        if (seenHashes.has(c.hash)) continue; // Drop lower-scoring exact duplicate
+        seenHashes.add(c.hash);
+      }
+      uniqueChunks.push(c);
+    }
+    scored = uniqueChunks;
+
     // Soft segment cap: keep at most 2 naturally-matched segments so they don't
     // crowd out other symbols. Exact-id parents already dropped their segments in dedup.
     // Prefer segments whose parent is also in the result set and that hit prompt terms.

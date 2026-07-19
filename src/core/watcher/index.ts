@@ -69,6 +69,7 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
     persistent: true,
     ignoreInitial: true,
     ignorePermissionErrors: true,
+    followSymlinks: false,
     awaitWriteFinish: {
       stabilityThreshold: 400,
       pollInterval: 100,

@@ -62,12 +62,12 @@ export const initCommand = new Command('init')
     console.log(chalk.blue.bold('\nIndexing repo context...'));
     const allRepoFiles = new Set<string>();
     for (const pattern of config.indexablePatterns) {
-      const files = await glob(pattern, { cwd, ignore, absolute: true, nodir: true });
+      const files = await glob(pattern, { cwd, ignore, absolute: true, nodir: true, follow: false });
       for (const f of files) allRepoFiles.add(f);
     }
     
     // Index global layer
-    const globalFiles = await glob('**/*.md', { cwd: globalContextDir, absolute: true, nodir: true });
+    const globalFiles = await glob('**/*.md', { cwd: globalContextDir, absolute: true, nodir: true, follow: false });
     
     const totalFilesCount = allRepoFiles.size + globalFiles.length;
     

@@ -25,9 +25,7 @@ export const watchCommand = new Command('watch')
     // Re-index all existing files on startup to ensure we're up to date
     try {
       const files = await glob(config.indexablePatterns, {
-        ignore: config.ignorePatterns,
-        cwd,
-        absolute: true,
+        cwd, ignore: config.ignorePatterns, absolute: true, nodir: true, follow: false
       });
 
       let processed = 0;
@@ -49,6 +47,7 @@ export const watchCommand = new Command('watch')
       ],
       persistent: true,
       ignoreInitial: true,
+      followSymlinks: false,
     });
 
     watcher
