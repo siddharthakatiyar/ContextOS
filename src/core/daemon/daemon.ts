@@ -88,6 +88,8 @@ export class ContextOSDaemon {
             throw err;
           }
           // Stale PID file, clean it up
+          console.warn(`[ContextOS] Cleaning up stale PID file ${this.pidPath}`);
+          fs.unlinkSync(this.pidPath);
         }
       }
     }
@@ -125,9 +127,23 @@ export class ContextOSDaemon {
       this.server.listen(this.socketPath, () => {
         fs.writeFileSync(this.pidPath, String(process.pid));
         
+        // Override console.log and console.error to write to a log file instead
+        // since the daemon is fully detached and stdio is ignored
+        const logPath = path.join(path.dirname(this.pidPath), 'daemon.log');
+        const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+        
+        const logWithTime = (level: string, ...args: any[]) => {
+          const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+          logStream.write(`[${new Date().toISOString()}] [${level}] ${msg}\n`);
+        };
+        
+        console.log = (...args) => logWithTime('INFO', ...args);
+        console.error = (...args) => logWithTime('ERROR', ...args);
+        console.warn = (...args) => logWithTime('WARN', ...args);
+
         // Prevent unhandled errors from crashing the daemon
         process.on('uncaughtException', (err) => {
-          console.error(`Daemon uncaught exception: ${err.message}`);
+          console.error(`Daemon uncaught exception: ${err.message}\n${err.stack}`);
         });
         process.on('unhandledRejection', (reason) => {
           console.error(`Daemon unhandled rejection: ${reason}`);

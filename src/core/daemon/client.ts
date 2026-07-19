@@ -68,47 +68,60 @@ function spawnDaemon(projectDir: string): Promise<void> {
 
 export async function runDaemonClient(projectDir: string): Promise<void> {
   const socketPath = getSocketPath(projectDir);
-  
-  let socket: net.Socket;
-  try {
-    socket = await connectToDaemon(socketPath);
-  } catch (e: any) {
-    // Daemon is likely not running. Spawn it.
-    await spawnDaemon(projectDir);
-    
-    // Try again with retries
-    let retries = 5;
-    while (retries > 0) {
-      try {
-        socket = await connectToDaemon(socketPath);
-        break;
-      } catch (err) {
-        retries--;
-        if (retries === 0) {
-          process.stderr.write(`Failed to connect to ContextOS Daemon at ${socketPath}: ${err}\n`);
-          process.exit(1);
+
+  const connectWithRetry = async (): Promise<net.Socket> => {
+    let socket: net.Socket;
+    try {
+      socket = await connectToDaemon(socketPath);
+    } catch (e: any) {
+      await spawnDaemon(projectDir);
+      let retries = 5;
+      while (retries > 0) {
+        try {
+          socket = await connectToDaemon(socketPath);
+          break;
+        } catch (err) {
+          retries--;
+          if (retries === 0) {
+            process.stderr.write(`Failed to connect to ContextOS Daemon at ${socketPath}: ${err}\n`);
+            process.exit(1);
+          }
+          await new Promise(r => setTimeout(r, 200));
         }
-        // Wait 200ms before retrying
-        await new Promise(r => setTimeout(r, 200));
       }
     }
-  }
+    return socket!;
+  };
 
-  // Once connected, pipe stdio
-  // @ts-ignore - socket is guaranteed to be assigned if we reached here
-  process.stdin.pipe(socket);
-  // @ts-ignore
-  socket.pipe(process.stdout);
+  const wireSocket = async () => {
+    const socket = await connectWithRetry();
+    
+    process.stdin.pipe(socket);
+    socket.pipe(process.stdout);
 
-  // When socket closes, exit the proxy
-  // @ts-ignore
-  socket.on('close', () => {
-    process.exit(0);
-  });
-  
-  // @ts-ignore
-  socket.on('error', (err: any) => {
-    process.stderr.write(`Connection to daemon lost: ${err.message}\n`);
-    process.exit(1);
-  });
+    const onDisconnect = () => {
+      // Cleanup existing bindings
+      process.stdin.unpipe(socket);
+      socket.unpipe(process.stdout);
+      
+      // The daemon died or dropped us. Reconnect transparently.
+      // Wait 100ms before trying to reconnect to let the port cleanup
+      setTimeout(() => wireSocket().catch(e => {
+        process.stderr.write(`Fatal reconnect error: ${e.message}\n`);
+        process.exit(1);
+      }), 100);
+    };
+
+    socket.once('close', onDisconnect);
+    socket.once('error', (err: any) => {
+      // Suppress ECONNRESET logs since we handle it seamlessly
+      if (err.code !== 'ECONNRESET') {
+        process.stderr.write(`Connection to daemon lost: ${err.message}. Reconnecting...\n`);
+      }
+      socket.destroy();
+      // onDisconnect will be called by 'close' event
+    });
+  };
+
+  await wireSocket();
 }

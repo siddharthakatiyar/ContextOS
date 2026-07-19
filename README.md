@@ -166,6 +166,9 @@ Agents can rate chunks; feedback adjusts future scores (including implicit signa
 **Cross-session memory**  
 Facts learned via `learn_fact` / knowledge tools persist across sessions and can appear in `get_context`.
 
+**Backup & Recovery**  
+ContextOS's SQLite database is fundamentally an ephemeral index. If corruption occurs, the daemon auto-detects it via `quick_check` and transparently self-heals by rebuilding the index. No manual backups are required unless you heavily rely on manual `knowledge_facts` which you can backup by simply copying `~/.contextos/index.db`.
+
 ### Developer Experience
 
 **CLI**  

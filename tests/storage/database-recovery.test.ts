@@ -1,0 +1,44 @@
+import { describe, it, expect } from 'vitest';
+import { DB } from '../../src/core/storage/database.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+describe('Database Auto-Recovery', () => {
+  it('detects corruption and auto-recreates the database', () => {
+    const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-test-dbrecovery-'));
+    const dbPath = path.join(tmpdir, '.contextos', 'index.db');
+    fs.mkdirSync(path.join(tmpdir, '.contextos'), { recursive: true });
+
+    // 1. Create a valid DB
+    let db = new DB(dbPath);
+    // Write something to ensure it's initialized
+    db.getInstance().exec('CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY);');
+    db.close();
+
+    // 2. Corrupt the DB file by writing garbage over the header
+    const fd = fs.openSync(dbPath, 'r+');
+    const garbage = Buffer.alloc(100, 'x'); // Writes 'x' characters over the SQLite header
+    fs.writeSync(fd, garbage, 0, garbage.length, 0);
+    fs.closeSync(fd);
+
+    // 3. Attempt to instantiate the DB again
+    // This should trigger the `quick_check` or a native SQLite Error which we catch and auto-recover
+    let recoveredDb: DB | undefined;
+    expect(() => {
+      recoveredDb = new DB(dbPath);
+    }).not.toThrow();
+
+    // 4. Verify it actually recovered by checking schema tables
+    expect(recoveredDb).toBeDefined();
+    if (recoveredDb) {
+      const tables = recoveredDb.getInstance().prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+      // Should contain the standard contextOS schema tables like 'chunks', 'files', etc.
+      expect(tables.some(t => t.name === 'chunks')).toBe(true);
+      recoveredDb.close();
+    }
+
+    // Cleanup
+    fs.rmSync(tmpdir, { recursive: true, force: true });
+  });
+});

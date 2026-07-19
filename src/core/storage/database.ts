@@ -23,12 +23,48 @@ export class DB {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    this.db = new Database(resolvedPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('busy_timeout = 5000');
-    this.db.pragma('foreign_keys = ON');
-    // Skip integrity check on startup as it blocks the thread for minutes on large DBs
-    this.runMigrations();
+    let dbInstance: Database.Database | undefined;
+    
+    try {
+      dbInstance = new Database(resolvedPath);
+      dbInstance.pragma('journal_mode = WAL');
+      dbInstance.pragma('busy_timeout = 5000');
+      dbInstance.pragma('foreign_keys = ON');
+      
+      // 1. Validate B-Tree structure (faster than integrity_check)
+      const check = dbInstance.pragma('quick_check') as { quick_check: string }[];
+      if (!check || check.length === 0 || check[0].quick_check !== 'ok') {
+        throw new Error('DatabaseCorruptedError: quick_check failed');
+      }
+      
+      this.db = dbInstance;
+      // 2. Run migrations
+      this.runMigrations();
+    } catch (err: any) {
+      // If corruption is detected either by quick_check, a SQLITE_CORRUPT error, or "file is not a database"
+      if (err.message.includes('corrupt') || err.message.includes('DatabaseCorruptedError') || err.message.includes('file is not a database')) {
+        console.error(`[ContextOS] Database corruption detected at ${resolvedPath}. Auto-recovering...`);
+        if (dbInstance) {
+          try { dbInstance.close(); } catch {}
+        }
+        
+        // Delete all DB files to start fresh
+        if (fs.existsSync(resolvedPath)) fs.unlinkSync(resolvedPath);
+        if (fs.existsSync(resolvedPath + '-wal')) fs.unlinkSync(resolvedPath + '-wal');
+        if (fs.existsSync(resolvedPath + '-shm')) fs.unlinkSync(resolvedPath + '-shm');
+        
+        // Re-init
+        this.db = new Database(resolvedPath);
+        this.db.pragma('journal_mode = WAL');
+        this.db.pragma('busy_timeout = 5000');
+        this.db.pragma('foreign_keys = ON');
+        
+        // Re-run migrations
+        this.runMigrations();
+      } else {
+        throw err;
+      }
+    }
   }
 
   private runMigrations() {
@@ -36,7 +72,8 @@ export class DB {
       applyMigrations(this.db);
     } catch (e: any) {
       console.error(`Error executing schema migrations: ${e.message}`);
-      // In a severe locked state, don't crash the server, but log it
+      // Re-throw so the constructor can catch SQLITE_CORRUPT and recover
+      throw e;
     }
   }
 
