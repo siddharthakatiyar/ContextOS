@@ -170,6 +170,10 @@ Facts learned via `learn_fact` / knowledge tools persist across sessions and can
 
 **CLI**  
 `init`, `reindex`, `serve`, `query`, `status`, `watch`, `visualize`, and more.
+*Commands support graceful cancellation (Ctrl+C / SIGINT) to safely abort long-running indexing operations and rollback in-flight database transactions without causing lock-ups.*
+
+**Concurrency**  
+Repository indexing now runs with bounded concurrency to overlap CPU-intensive parsing and disk I/O, dramatically speeding up `init` and `reindex` on large codebases.
 
 **MCP tools**  
 `get_context`, `save_context`, `reindex_context`, `get_neighbors`, `get_symbol`, `ctx_execute`, `learn_fact`, `forget_fact`, `rate_chunk`, and related helpers.
@@ -200,7 +204,17 @@ Array keys in config use `!` prefix overrides where documented (replace rather t
 | `diversityDecay` | `0.7` | Penalty for many chunks from one file |
 | `diversityPenaltyStart` | `3` | Start applying diversity decay after N chunks/file |
 | `embeddingsEnabled` | `true` | Index-time local embeddings (`CONTEXTOS_EMBEDDINGS=0` to disable) |
-| `embeddingsRetrieval` | `false` | Fuse emb kNN into RRF (`CONTEXTOS_EMBEDDINGS_RETRIEVAL=1` to enable) |
+
+### Pipeline Configurations
+
+The optional `pipeline` object in config enables toggling specific query-time pipelines on or off:
+
+| Key | Default | Notes |
+|-----|---------|--------|
+| `pipeline.graphExpansion` | `true` | Enable/disable relationship walking. |
+| `pipeline.embeddingFusion` | `false` | Enable/disable embeddings retrieval fallback. Overrides `embeddingsRetrieval`. |
+| `pipeline.containmentDedup` | `true` | Enable/disable deduplication between classes and their member methods. |
+| `pipeline.diversityFilter` | `true` | Enable/disable score decay for many chunks originating from the same file. |
 
 ### `get_context` parameters
 

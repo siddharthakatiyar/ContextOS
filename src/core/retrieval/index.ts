@@ -158,12 +158,13 @@ export class RetrievalEngine {
     this.primaryChunksRepo = Array.isArray(chunksRepos) ? chunksRepos[0] : chunksRepos;
   }
 
-  public async retrieve(prompt: string, opts?: RetrievalOptions): Promise<RetrievalResult> {
+  public async retrieve(prompt: string, opts?: RetrievalOptions, signal?: AbortSignal): Promise<RetrievalResult> {
     const startTime = Date.now();
     const config = loadConfig();
     const pipeline = config.pipeline ?? {};
 
     // Step 1: Detect intent
+    signal?.throwIfAborted();
     const intent = detectIntent(prompt);
 
     // Step 2: Keyword matching (FTS + direct) → RRF-fused
@@ -193,6 +194,7 @@ export class RetrievalEngine {
     directMatches = await this.applyEmbeddingFusion(prompt, directMatches, lowConfidence, embFusionEnabled);
 
     // Step 3: Relationship expansion — ONLY use actual code identifiers as seeds
+    signal?.throwIfAborted();
     const seedEntities = new Set<string>([...intent.identifiers, ...intent.quotedTerms]);
     const isIdentifier = (k: string) => /^[a-z]+(?:[A-Z][a-z]+)+$|^[a-z]+(?:_[a-z]+)+$|^[a-z]+(?:\.[a-z]+)+$/.test(k);
 
@@ -213,6 +215,7 @@ export class RetrievalEngine {
     }
 
     // Step 4: Retrieve chunks for expanded entities
+    signal?.throwIfAborted();
     const expandedEntityNames = expandedEntities.map(e => e.entity);
     const expandedChunks = this.matcher.matchForEntities(expandedEntityNames);
 
@@ -271,6 +274,7 @@ export class RetrievalEngine {
       ...intent.quotedTerms,
     ]);
 
+    signal?.throwIfAborted();
     let scored = scoreChunks(allChunks, expandedEntities, adjustments || {}, {
       repoRoot: opts?.repoRoot,
       matchTokens,

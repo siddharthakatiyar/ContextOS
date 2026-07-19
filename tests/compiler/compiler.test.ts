@@ -29,7 +29,7 @@ describe('Compiler', () => {
       latencyMs: 10
     };
     
-    const compiled = compile(result, { maxTokens: 1000, repoRoot: '/test' });
+    const compiled = compile(result, { maxTokens: 1000 });
     
     expect(compiled.output).toContain('console.log("hello");');
     expect(compiled.output).toContain('const a = 1;');
