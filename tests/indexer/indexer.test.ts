@@ -89,5 +89,15 @@ describe('Indexer', () => {
       const chunks = db.getInstance().prepare('SELECT * FROM chunks WHERE source_file = ?').all(file);
       expect(chunks.length).toBeGreaterThan(0);
     });
+
+    it('throws AbortError if signal is aborted', async () => {
+      const file = path.join(tmpdir, 'abort.ts');
+      fs.writeFileSync(file, 'export function add(a: number, b: number) { return a + b; }');
+      
+      const controller = new AbortController();
+      controller.abort();
+      
+      await expect(indexer.indexFile(file, 'repo', undefined, controller.signal)).rejects.toThrow('This operation was aborted');
+    });
   });
 });
