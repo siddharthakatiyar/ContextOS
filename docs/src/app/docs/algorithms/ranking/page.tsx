@@ -8,7 +8,7 @@ export default function RankingDocs() {
       title="Ranking & Tie-Breaking"
       description="Deterministic scoring and Reciprocal Rank Fusion implementation."
       prev={{ title: "Retrieval Pipeline", href: "/docs/algorithms/retrieval-pipeline" }}
-      next={{ title: "Context Compression", href: "/docs/algorithms/compression" }}
+      next={{ title: "Graph Expansion", href: "/docs/algorithms/graph-expansion" }}
     >
       <SourceLink path="src/core/retrieval/scorer.ts" />
 

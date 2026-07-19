@@ -6,7 +6,7 @@ export default function DocsIntro() {
     <DocPage
       title="ContextOS"
       description="The definitive technical specification for the ContextOS retrieval engine."
-      next={{ title: "Architecture", href: "/docs/architecture" }}
+      next={{ title: "Design Decisions", href: "/docs/design-decisions" }}
     >
       <SourceLink path="src/index.ts" />
 

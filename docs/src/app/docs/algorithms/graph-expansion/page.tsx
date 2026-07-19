@@ -7,8 +7,8 @@ export default function GraphExpansionDocs() {
     <DocPage
       title="Graph Expansion"
       description="The BFS algorithm responsible for traversing AST-derived dependency edges to construct the final LLM context."
-      prev={{ title: "Initialization Sequence", href: "/docs/initialization" }}
-      next={{ title: "SQLite Schema", href: "/docs/database/schema" }}
+      prev={{ title: "Ranking & Tie-Breaking", href: "/docs/algorithms/ranking" }}
+      next={{ title: "Context Compression", href: "/docs/algorithms/compression" }}
     >
       <SourceLink path="src/core/graph/expander.ts" />
 

@@ -9,7 +9,7 @@ export default function ArchitectureDocs() {
     <DocPage
       title="Architecture Overview"
       description="The end-to-end pipeline of ContextOS, from raw source files to compressed LLM prompts."
-      prev={{ title: "Introduction", href: "/docs" }}
+      prev={{ title: "Configuration", href: "/docs/reference/configuration" }}
       next={{ title: "Initialization Sequence", href: "/docs/initialization" }}
     >
       <SourceLink path="src/core/indexer/index.ts" />
