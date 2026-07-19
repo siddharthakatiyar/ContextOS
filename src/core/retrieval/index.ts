@@ -10,6 +10,20 @@ import { isEmbeddingsAvailable, searchEmbeddingChunks } from '../embeddings/inde
 
 export * from './types.js';
 
+export function deduplicateChunks(scored: ScoredChunk[]): ScoredChunk[] {
+  scored.sort((a, b) => ((b.score || 0) - (a.score || 0)) || a.id.localeCompare(b.id));
+  const uniqueChunks: ScoredChunk[] = [];
+  const seenHashes = new Set<string>();
+  for (const c of scored) {
+    if (c.hash) {
+      if (seenHashes.has(c.hash)) continue;
+      seenHashes.add(c.hash);
+    }
+    uniqueChunks.push(c);
+  }
+  return uniqueChunks;
+}
+
 /**
  * When a class chunk and its method chunks (same sourceFile, parentSymbol == class name)
  * both survive: never drop method bodies for a compact outline; keep cheap outlines so
@@ -267,19 +281,7 @@ export class RetrievalEngine {
     if (pipeline.containmentDedup !== false) {
       scored = containmentDedup(scored, intent.identifiers);
     }
-    scored.sort((a, b) => ((b.score || 0) - (a.score || 0)) || a.id.localeCompare(b.id));
-
-    // Cross-file exact duplicate chunk deduplication
-    const uniqueChunks: ScoredChunk[] = [];
-    const seenHashes = new Set<string>();
-    for (const c of scored) {
-      if (c.hash) {
-        if (seenHashes.has(c.hash)) continue; // Drop lower-scoring exact duplicate
-        seenHashes.add(c.hash);
-      }
-      uniqueChunks.push(c);
-    }
-    scored = uniqueChunks;
+    scored = deduplicateChunks(scored);
 
     // Soft segment cap: keep at most 2 naturally-matched segments so they don't
     // crowd out other symbols. Exact-id parents already dropped their segments in dedup.
