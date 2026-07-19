@@ -6,7 +6,7 @@ ContextOS indexes your repository into a semantic graph so agents like Cursor, C
 
 Instead of sending entire files, ContextOS sends only the code the model actually needs.
 
-**Current version: 0.7.0**
+**Current version: 0.7.1**
 
 ## Why ContextOS?
 
@@ -242,6 +242,13 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 - **Robust Conceptual Retrieval:** Resolves broad queries accurately 94% of the time.
 - **Low latency:** Local SQLite FTS5 retrieval typically completes in milliseconds.
 - **Cost savings:** Smaller prompts for API-backed agents mean significantly lower spend per query, and fewer API round-trips.
+
+## Upgrading to 0.7.1
+
+1. Install / update the package (`npm install -g @siddharthakatiyar/contextos@0.7.1`).
+2. Restart the ContextOS MCP server in your IDE.
+
+New in 0.7.1: **Deterministic Ranking & Configurable Pipeline**. All sort operations in the retrieval pipeline now use a stable content-hash tiebreaker so query results are identical across sessions and after re-index. Introduces a `pipeline` config block letting you toggle individual retrieval stages (`graphExpansion`, `embeddingFusion`, `containmentDedup`, `diversityFilter`) from `.contextos/config.json` without code changes.
 
 ## Upgrading to 0.7.0
 

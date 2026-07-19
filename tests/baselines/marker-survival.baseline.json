@@ -17,14 +17,13 @@
       "importance-scorer",
       "cursor-mcp-config"
     ],
-    "avgTokens": 769.6785714285714
+    "avgTokens": 731.8214285714286
   },
   "generic": {
-    "passCount": 2,
+    "passCount": 1,
     "passSet": [
-      "schema-chunks-fts",
-      "default-config"
+      "schema-chunks-fts"
     ],
-    "avgTokens": 424.57142857142856
+    "avgTokens": 396.4642857142857
   }
 }

@@ -1,6 +1,21 @@
 import { z } from 'zod';
 import { Layer } from '../core/storage/types.js';
 
+/**
+ * Feature flags for individual retrieval pipeline stages.
+ * All default to `true` — set any to `false` to skip that stage.
+ */
+export interface PipelineConfig {
+  /** Walk the relationship graph to pull in related chunks. Default: true */
+  graphExpansion?: boolean;
+  /** Fuse embedding kNN results into scoring. Default: follows embeddingsRetrieval. */
+  embeddingFusion?: boolean;
+  /** Drop redundant class/method/segment duplicates after scoring. Default: true */
+  containmentDedup?: boolean;
+  /** Apply per-file diversity decay to prevent one file dominating results. Default: true */
+  diversityFilter?: boolean;
+}
+
 export interface ContextOSConfig {
   dbPath: string;
   globalContextDir: string;
@@ -37,6 +52,8 @@ export interface ContextOSConfig {
   tokenCalibration: number;
   framingReserve: number;
   adaptiveResponse: boolean;
+  /** Per-stage feature flags for the retrieval pipeline. */
+  pipeline?: PipelineConfig;
 }
 
 /** Partial zod schema for config.json — validates known keys; unknown keys are stripped with a warning. */
@@ -73,6 +90,12 @@ export const configJsonSchema = z.object({
   tokenCalibration: z.number().positive().optional(),
   framingReserve: z.number().nonnegative().optional(),
   adaptiveResponse: z.boolean().optional(),
+  pipeline: z.object({
+    graphExpansion: z.boolean().optional(),
+    embeddingFusion: z.boolean().optional(),
+    containmentDedup: z.boolean().optional(),
+    diversityFilter: z.boolean().optional(),
+  }).partial().optional(),
 }).passthrough();
 
 export type ConfigJson = z.infer<typeof configJsonSchema>;
