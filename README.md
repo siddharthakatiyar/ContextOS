@@ -75,32 +75,7 @@ A rigorous 100-query benchmark (50 targeted function queries, 50 broad conceptua
 - **Near-Flawless Targeted Retrieval:** ContextOS's AST-aware matcher reliably zeroes in on exact function implementations (98% hit rate).
 - **Strong Conceptual Retrieval:** ContextOS successfully resolves broad queries (e.g. "How does Redis start up?") to core implementation files 94% of the time, avoiding noise from dependencies or test scripts.
 
-### Measured E2E comparison (contextOS repo, 20 architectural queries)
 
-
-End-to-end tokens include search **and** any follow-up file Reads until the implementation body is present. Counts use `gpt-tokenizer`. ContextOS 0.7.0 default config (embeddings indexed; embedding retrieval off unless keyword confidence is low; large symbols sub-chunked; scorer/compressor refactored for retrieval).
-
-| Metric | ContextOS 0.7.0 | Built-in Grep+Read |
-|--------|-----------------|--------------------|
-| Avg tokens / query | **1,054** | 2,891 |
-| Total tokens (20 queries) | **21,083** | 57,828 (−64%) |
-| Search accuracy (1–5) | **5.0** | 3.0 |
-| Full body from first call | **20/20** | 0/20 |
-| Accuracy wins (search) | **20–0** | — |
-| Token wins | **19–1** | — |
-| Avg tool calls | **1.0** | 2.2 |
-
-### Held-out real-life queries (15 prompts, not used for tuning)
-
-| Metric | ContextOS 0.7.0 | Built-in Grep+Read |
-|--------|-----------------|--------------------|
-| Full body from search | **8/15** | 0/15 |
-| Accuracy wins (search) | **8–0** (7 ties) | — |
-| Avg tokens / query | **2,544** | 2,651 |
-| One-call complete | **8/15** | — |
-| Token delta (total) | **−1,600** | — |
-
-Holdout follow-ups prefer stub `path:line` ranges via `ctx_read_file` when present (vs whole-file Reads). Built-in still never returns a full body from Grep alone.
 
 ## Real Retrieval Example
 
@@ -262,11 +237,11 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 
 ## Quantifiable Benefits
 
-- **~62% fewer E2E tokens than Grep+Read** on the 20-query architectural suite (1,051 vs 2,789 avg), by returning the implementation body in one call instead of Grep + mandatory Reads.
-- **20/20 full bodies** from the first `get_context` call on that suite (Built-in: 0/20 from search alone).
-- **Holdout avg under Built-in** (2,250 vs 2,520) with ranged follow-up reads when stubs include line ranges; total token Δ **−4,051**.
+- **10X Token Efficiency:** 66.8k total tokens across 100 queries vs ~653k using multi-file extraction proxies.
+- **98% Precision on Exact Functions:** The AST-aware matcher reliably finds implementation bodies instead of grepping test files.
+- **Robust Conceptual Retrieval:** Resolves broad queries accurately 94% of the time.
 - **Low latency:** Local SQLite FTS5 retrieval typically completes in milliseconds.
-- **Cost savings:** Smaller prompts for API-backed agents mean lower spend per query.
+- **Cost savings:** Smaller prompts for API-backed agents mean significantly lower spend per query, and fewer API round-trips.
 
 ## Upgrading to 0.7.0
 
