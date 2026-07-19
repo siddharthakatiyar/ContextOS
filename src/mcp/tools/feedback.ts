@@ -69,7 +69,13 @@ export function onFileRead(filePath: string): void {
 }
 
 export function registerFeedbackTools(server: McpServer, dbs: DB[]) {
-  // Feedback signals are stored in the primary project DB
+  const primaryDb = dbs[0];
+  const tracker = new FeedbackTracker(primaryDb);
+  trackerRef = tracker;
+  // Implicit feedback only (no rate_chunk tool)
+}
+
+export function registerLegacyFeedbackTools(server: McpServer, dbs: DB[]) {
   const primaryDb = dbs[0];
   const tracker = new FeedbackTracker(primaryDb);
   trackerRef = tracker;

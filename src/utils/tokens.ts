@@ -39,15 +39,25 @@ function resolveEncode(): EncodeFn | null {
   return encodeFn;
 }
 
+import { loadConfig } from '../config/index.js';
+
 export function estimateTokens(text: string): number {
   if (!text) return 0;
+  
+  const config = loadConfig();
+  const calibration = typeof config.tokenCalibration === 'number' ? config.tokenCalibration : 1.0;
+  
+  let count = 0;
   const encode = resolveEncode();
   if (encode) {
     try {
-      return encode(text).length;
+      count = encode(text).length;
     } catch {
-      return heuristicEstimate(text);
+      count = heuristicEstimate(text);
     }
+  } else {
+    count = heuristicEstimate(text);
   }
-  return heuristicEstimate(text);
+  
+  return Math.ceil(count * calibration);
 }

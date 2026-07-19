@@ -1,0 +1,30 @@
+{
+  "specific": {
+    "passCount": 14,
+    "passSet": [
+      "containment-dedup",
+      "embedding-fusion",
+      "pack-to-budget",
+      "truncate-signals",
+      "segment-large-symbol",
+      "file-structure-chunk",
+      "fts-sanitizer",
+      "chunks-repo-bm25",
+      "schema-chunks-fts",
+      "file-watcher",
+      "ctx-execute-allowlist",
+      "default-config",
+      "importance-scorer",
+      "cursor-mcp-config"
+    ],
+    "avgTokens": 769.6785714285714
+  },
+  "generic": {
+    "passCount": 2,
+    "passSet": [
+      "schema-chunks-fts",
+      "default-config"
+    ],
+    "avgTokens": 424.57142857142856
+  }
+}

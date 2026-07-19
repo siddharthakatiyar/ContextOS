@@ -4,7 +4,7 @@ import {
   applyPoisonPenalty,
   applyWorkspacePenalty,
   applyNoiseDemotion,
-  applyIntentAdjustments,
+  applyGenericAdjustments,
 } from '../../src/core/retrieval/scorer.js';
 import { ScoredChunk } from '../../src/core/retrieval/types.js';
 
@@ -56,16 +56,17 @@ describe('scoreChunks helpers', () => {
     expect(applyNoiseDemotion(chunk({ id: '3', sectionTitle: 'File Structure' }), 10)).toBeCloseTo(4.5);
   });
 
-  it('applyIntentAdjustments boosts retrieve on dedup prompts', () => {
+  it('applyGenericAdjustments is symbol-name neutral (no hardcoded dedup/watcher boosts)', () => {
     const ctx = {
       repoRoot: '/x',
       matchTokens: ['deduplicate'],
       identifiers: new Set<string>(),
     };
-    const retrieve = chunk({ id: '1', symbolName: 'retrieve' });
-    const scorer = chunk({ id: '2', symbolName: 'scoreChunks' });
-    expect(applyIntentAdjustments(retrieve, 10, ctx)).toBeGreaterThan(10);
-    expect(applyIntentAdjustments(scorer, 10, ctx)).toBeLessThan(10);
+    const retrieve = chunk({ id: '1', symbolName: 'retrieve', score: 10 });
+    const genericChunk = chunk({ id: '2', symbolName: 'someFunction', score: 10 });
+    // Without the hardcoded logic, retrieve should not get an artificial 3.2x boost just because "deduplicate" is in the prompt
+    expect(applyGenericAdjustments(retrieve, 10, ctx)).toBe(10);
+    expect(applyGenericAdjustments(genericChunk, 10, ctx)).toBe(10);
   });
 });
 

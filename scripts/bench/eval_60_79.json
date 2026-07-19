@@ -1,0 +1,102 @@
+[
+  {
+    "id": "generic_11",
+    "isAccurate": false,
+    "reason": "Shows generic jemalloc functions and module replies, entirely missing Redis Sets internal implementation (intset/dict)."
+  },
+  {
+    "id": "generic_12",
+    "isAccurate": false,
+    "reason": "Shows Lua sort functions and unrelated hash/list checks instead of skiplists or ziplists used for Sorted Sets."
+  },
+  {
+    "id": "generic_13",
+    "isAccurate": false,
+    "reason": "Only shows an empty stream struct definition and unrelated tracking callbacks, missing the listpack/radix tree implementation details."
+  },
+  {
+    "id": "generic_14",
+    "isAccurate": true,
+    "reason": "Mentions getExpire, keyIsExpired, and activeExpireCycleTryExpire which cover both passive and active TTL expiration logic."
+  },
+  {
+    "id": "generic_15",
+    "isAccurate": false,
+    "reason": "Shows stream max size limits and maxmemory configuration updates, but completely misses the eviction execution logic."
+  },
+  {
+    "id": "generic_16",
+    "isAccurate": true,
+    "reason": "Mentions evictionPoolAlloc and EvictionPoolLRU which are core to managing the pool for eviction policies."
+  },
+  {
+    "id": "generic_17",
+    "isAccurate": false,
+    "reason": "Shows AOF truncation and unrelated string append commands, missing the core AOF writing/fsyncing mechanisms."
+  },
+  {
+    "id": "generic_18",
+    "isAccurate": true,
+    "reason": "Lists rewriteAppendOnlyFile in aof.c which is the core function responsible for the background AOF rewrite."
+  },
+  {
+    "id": "generic_19",
+    "isAccurate": false,
+    "reason": "Shows a Python CLI script and unrelated buffer processing functions instead of the rdbSave or rdbSaveBackground logic."
+  },
+  {
+    "id": "generic_20",
+    "isAccurate": true,
+    "reason": "Mentions backgroundSaveDoneHandler and backgroundSaveDoneHandlerDisk which handle the completion of the fork-based background save."
+  },
+  {
+    "id": "generic_21",
+    "isAccurate": true,
+    "reason": "Mentions syncCommand in replication.c which is the core function handling the initial sync from a replica."
+  },
+  {
+    "id": "generic_22",
+    "isAccurate": true,
+    "reason": "Shows both slaveTryPartialResynchronization and masterTryPartialResynchronization which implement the PSYNC mechanism."
+  },
+  {
+    "id": "generic_23",
+    "isAccurate": false,
+    "reason": "Only shows a Python script for generating command schemas and unrelated error handlers, missing replicationFeedSlaves."
+  },
+  {
+    "id": "generic_24",
+    "isAccurate": true,
+    "reason": "Mentions sentinelMasterLooksSane which is directly relevant to how Sentinel monitors the state of master nodes."
+  },
+  {
+    "id": "generic_25",
+    "isAccurate": true,
+    "reason": "Mentions sentinelAbortFailover and SENTINEL_FAILOVER_STATE enums which are part of the Sentinel failover state machine."
+  },
+  {
+    "id": "generic_26",
+    "isAccurate": false,
+    "reason": "Shows cluster initialization but fails to explain key distribution, slot hashing (CRC16), or slot mapping."
+  },
+  {
+    "id": "generic_27",
+    "isAccurate": true,
+    "reason": "Mentions clusterBroadcastMessage and clusterSendPing which are the core functions for the cluster gossip protocol."
+  },
+  {
+    "id": "generic_28",
+    "isAccurate": false,
+    "reason": "Only shows the clusterNode struct definition without explaining the failover process or node failure states."
+  },
+  {
+    "id": "generic_29",
+    "isAccurate": true,
+    "reason": "Shows clusterRedirectClient which explicitly handles CLUSTER_REDIR_MOVED and CLUSTER_REDIR_ASK client redirects."
+  },
+  {
+    "id": "generic_30",
+    "isAccurate": false,
+    "reason": "Only shows markdown and yaml files, without explaining the C API or how functions like RedisModule_CreateCommand extend Redis."
+  }
+]

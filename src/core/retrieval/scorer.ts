@@ -5,7 +5,7 @@ import { loadConfig } from '../../config/index.js';
 import path from 'path';
 
 const PRIMARY_EXPORT_RE =
-  /^(extract|parse|compile|expand|start|init|register|create|add|search|match|load|merge)/i;
+  /^(extract|parse|compile|expand|start|init|register|create|add|search|match|load|merge|detect|apply|stem)/i;
 
 export interface ScoreAdjustContext {
   repoRoot: string;
@@ -71,7 +71,7 @@ export function applyNoiseDemotion(chunk: ScoredChunk, finalScore: number): numb
 }
 
 /** Intent-aware boosts/demotions for config, dedup, watcher, and CLI prompts. */
-export function applyIntentAdjustments(
+export function applyGenericAdjustments(
   chunk: ScoredChunk,
   finalScore: number,
   ctx: ScoreAdjustContext,
@@ -82,58 +82,6 @@ export function applyIntentAdjustments(
   ).toLowerCase();
   const { matchTokens, identifiers } = ctx;
 
-  // Generic: when prompt mentions config/defaults/overrides, prefer load*/merge* helpers
-  if (
-    snLower &&
-    /^(load|merge)/i.test(snLower) &&
-    matchTokens.some(t => /^(config|default|override)/.test(t) || t.includes('config') || t.includes('override') || t.includes('default'))
-  ) {
-    finalScore *= 2.0;
-  }
-
-  // Generic: dedup prompts prefer containmentDedup / retrieve; demote pure scorers
-  // and unrelated "merge" helpers (formatMergedFileGroup, mergeDeep, …)
-  const wantsDedup = [...matchTokens, ...identifiers].some(
-    (t) => t.includes('dedup') || t.includes('deduplicat'),
-  );
-  if (wantsDedup) {
-    if (snLower.includes('dedup')) finalScore *= 2.4;
-    else if (snLower === 'retrieve') finalScore *= 3.2;
-    else if (chunk.symbolKind === 'segment' && (chunk.parentSymbol || '').toLowerCase() === 'retrieve') {
-      finalScore *= 2.8;
-    } else if (snLower === 'scorechunks' || snLower === 'score') finalScore *= 0.35;
-    else if (snLower.includes('merge') || snLower.startsWith('format')) finalScore *= 0.45;
-  }
-
-  // Generic: watcher / file-change prompts prefer startWatcher over CLI reindex commands
-  const wantsWatcher = [...matchTokens, ...identifiers].some(
-    (t) => t.includes('watcher') || t.includes('chokidar') || (t.includes('change') && t.includes('file')),
-  );
-  if (wantsWatcher) {
-    if (snLower === 'startwatcher' || snLower === 'filewatcher') finalScore *= 3.0;
-    else if (/command$/i.test(snLower) && /reindex|watch/i.test(snLower)) finalScore *= 0.45;
-  }
-
-  // Generic CLI intent: boost bin/cli entrypoint files so registration wiring surfaces
-  const wantsCli = matchTokens.some(t => /^(cli|command|bin|registration)$/i.test(t))
-    || [...identifiers].some(id => /^(cli|command|registration)/i.test(id) || /registration/i.test(id));
-  if (wantsCli && /(?:^|[/\\])(?:bin|cli)[/\\]/i.test(chunk.sourceFile)) {
-    finalScore *= chunk.symbolKind === 'file' || /\.(ts|js|mjs|cjs)$/i.test(chunk.symbolName || '')
-      ? 6.0
-      : 3.0;
-  }
-  // Prefer the exact *Command named in the prompt; demote sibling *Command symbols
-  if (chunk.symbolName && /Command$/i.test(chunk.symbolName)) {
-    const exactCommand = [...identifiers].some(
-      id => id.toLowerCase() === chunk.symbolName!.toLowerCase()
-    );
-    if (exactCommand) {
-      finalScore *= 1.15;
-    } else if (wantsCli || [...identifiers].some(id => /command$/i.test(id))) {
-      finalScore *= 0.45;
-    }
-  }
-
   // When prompt identifier or token matches file stem (get_context → get-context.ts), prefer that file's bodies.
   // This explicitly boosts all chunks (including helpers) from a file named in the prompt.
   const allTokens = [...identifiers, ...matchTokens];
@@ -141,9 +89,13 @@ export function applyIntentAdjustments(
     const fsCompact = fileStemLower.replace(/[_-]/g, '');
     let fileNamedInPrompt = false;
     for (const t of allTokens) {
-      const tc = t.replace(/[_-]/g, '');
+      const tc = t.replace(/[_-]/g, '').toLowerCase();
+      if (tc === 'contextos' || tc === 'contexto') continue;
+      const isId = identifiers.has(t);
+      const minLen = isId ? 5 : 8; // Require longer matches for generic concepts to avoid 'server' or 'daemon' dominating
+
       // Ensure it's a substantive match (e.g., intentdetector)
-      if (tc.length >= 6 && (fsCompact === tc || (fsCompact.includes(tc) && tc.length >= 8))) {
+      if (tc.length >= minLen && (fsCompact === tc || (fsCompact.includes(tc) && tc.length >= minLen + 2))) {
         fileNamedInPrompt = true;
         break;
       }
@@ -181,6 +133,17 @@ export function applyIntentAdjustments(
       finalScore *= 1.3;
     }
   }
+
+  // Definition / Type boost
+  // if (chunk.symbolKind && /^(class|interface|type_alias|struct|enum|type_declaration)$/.test(chunk.symbolKind)) {
+  //   const sn = (chunk.symbolName || '').toLowerCase();
+  //   const overlaps = [...identifiers, ...matchTokens].some(
+  //     t => t.length >= 4 && (sn === t || sn.startsWith(t) || t.startsWith(sn) || sn.includes(t))
+  //   );
+  //   if (overlaps) {
+  //     finalScore *= 2.0;
+  //   }
+  // }
 
   return finalScore;
 }
@@ -249,14 +212,20 @@ export function scoreChunks(
 
       // Identifiers get stronger exact/prefix boosts than plain concepts
       for (const t of identifiers) {
+        if (t === 'contextos' || t === 'contexto') continue; // Prevent project name from dominating file stem matches
+        const snLower = sn;
+        const tLower = t;
         if (sn && sn === t) {
           // Compact class/struct outlines matching the name are weaker than method bodies
           const compactOutline =
             (chunk.symbolKind === 'class' || chunk.symbolKind === 'struct') &&
             (chunk.tokenCount || 0) < 80;
-          best = Math.max(best, compactOutline ? 2.2 : 4.0);
-        } else if (sn && (sn.startsWith(t) || t.startsWith(sn))) best = Math.max(best, 3.0);
-        else if (sn && t.length >= 5 && sn.includes(t)) best = Math.max(best, 2.2);
+          best = Math.max(best, compactOutline ? 2.5 : 3.5);
+        } else if (snLower && tLower && (snLower.startsWith(tLower) || tLower.startsWith(snLower))) {
+          best = Math.max(best, 3.0);
+        } else if (snLower && tLower.length >= 5 && (snLower.includes(tLower) || tLower.includes(snLower))) {
+          best = Math.max(best, 2.2);
+        }
         if (parent && (parent === t || parent.startsWith(t) || t.startsWith(parent))) {
           best = Math.max(best, 2.8);
         }
@@ -269,6 +238,7 @@ export function scoreChunks(
       }
 
       for (const t of matchTokens) {
+        if (t === 'contextos' || t === 'contexto') continue;
         // Skip short generic concepts that over-boost merge*/add*/get* noise
         // but still allow short tokens for endsWith / compact matches below
         const shortGeneric = t.length < 6 && !identifiers.has(t);
@@ -360,7 +330,7 @@ export function scoreChunks(
       finalScore *= 0.75;
     }
 
-    finalScore = applyIntentAdjustments(chunk, finalScore, adjustCtx);
+    finalScore = applyGenericAdjustments(chunk, finalScore, adjustCtx);
 
     return { ...chunk, score: finalScore };
   }).filter(chunk => chunk.score > -9000);

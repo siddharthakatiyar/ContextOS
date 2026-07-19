@@ -1,0 +1,102 @@
+[
+  {
+    "id": "targeted_41",
+    "isAccurate": true,
+    "reason": "Accurately shows lpInsert from listpack.c"
+  },
+  {
+    "id": "targeted_42",
+    "isAccurate": true,
+    "reason": "Accurately shows quicklistPushHead from quicklist.c"
+  },
+  {
+    "id": "targeted_43",
+    "isAccurate": true,
+    "reason": "Accurately shows createObject from object.c"
+  },
+  {
+    "id": "targeted_44",
+    "isAccurate": false,
+    "reason": "Shows lookupKeyReadWithFlags but misses the core LRU/LFU update logic in lookupKey"
+  },
+  {
+    "id": "targeted_45",
+    "isAccurate": true,
+    "reason": "Accurately shows streamAppendItem from t_stream.c"
+  },
+  {
+    "id": "targeted_46",
+    "isAccurate": true,
+    "reason": "Accurately shows streamCreateCG from t_stream.c"
+  },
+  {
+    "id": "targeted_47",
+    "isAccurate": false,
+    "reason": "Shows pubsubPublishMessage but misses the internal distribution logic in pubsubPublishMessageInternal"
+  },
+  {
+    "id": "targeted_48",
+    "isAccurate": true,
+    "reason": "Accurately shows luaRedisGenericCommand from script_lua.c"
+  },
+  {
+    "id": "targeted_49",
+    "isAccurate": true,
+    "reason": "Accurately shows tlsAcceptHandler from tls.c"
+  },
+  {
+    "id": "targeted_50",
+    "isAccurate": true,
+    "reason": "Accurately shows trackingRememberKeys from tracking.c"
+  },
+  {
+    "id": "generic_1",
+    "isAccurate": false,
+    "reason": "Shows ContextOSDaemon.start instead of Redis initialization"
+  },
+  {
+    "id": "generic_2",
+    "isAccurate": false,
+    "reason": "Shows struct redisServer instead of the main entry point"
+  },
+  {
+    "id": "generic_3",
+    "isAccurate": false,
+    "reason": "Shows connectionTypeTls instead of general client connection handling"
+  },
+  {
+    "id": "generic_4",
+    "isAccurate": false,
+    "reason": "Shows Command class from a python util rather than Redis client parsing logic"
+  },
+  {
+    "id": "generic_5",
+    "isAccurate": false,
+    "reason": "Shows Command class again, misses command execution lifecycle"
+  },
+  {
+    "id": "generic_6",
+    "isAccurate": false,
+    "reason": "Shows getClientOutputBufferMemoryUsage instead of how replies are sent"
+  },
+  {
+    "id": "generic_7",
+    "isAccurate": false,
+    "reason": "Shows freeTrackingRadixTreeCallback instead of dict/rax structures for key storage"
+  },
+  {
+    "id": "generic_8",
+    "isAccurate": false,
+    "reason": "Shows ffsl bitwise function instead of SDS string implementation"
+  },
+  {
+    "id": "generic_9",
+    "isAccurate": false,
+    "reason": "Shows jemalloc hash function instead of Redis hash implementation"
+  },
+  {
+    "id": "generic_10",
+    "isAccurate": false,
+    "reason": "Shows list struct definition but no details on implementation or changes"
+  }
+]

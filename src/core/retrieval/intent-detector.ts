@@ -119,23 +119,8 @@ export function detectIntent(prompt: string): DetectedIntent {
     }
   }
 
-  // Verb-stem + noun synthesis when verb appears as a word in the prompt
-  // e.g. create+session → createSession (capped to avoid explosion)
-  const verbStems = [
-    'create', 'get', 'add', 'load', 'parse', 'start', 'init', 'search',
-    'match', 'compile', 'extract', 'register', 'merge', 'expand', 'detect',
-  ];
-  const nounCandidates = [...new Set([
-    ...unigrams.filter(u => u.length >= 4),
-    ...unigrams.map(u => u.replace(/s$/, '')).filter(u => u.length >= 4),
-  ])].slice(0, 8);
-  for (const verb of verbStems) {
-    if (!new RegExp(`\\b${verb}`, 'i').test(prompt)) continue;
-    for (const noun of nounCandidates) {
-      if (noun === verb) continue;
-      synthesized.push(verb + noun.charAt(0).toUpperCase() + noun.slice(1));
-    }
-  }
+  // Verb-stem + noun synthesis was overly aggressive and caused precision drops.
+  // It has been pruned in Phase 4.
 
   // Extract explicit function calls like compile() or myMethod() and backticks like `foo`
   const explicitFuncs: string[] = [];

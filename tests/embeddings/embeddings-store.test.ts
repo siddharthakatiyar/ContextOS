@@ -33,7 +33,7 @@ describe('EmbeddingsStore brute-force', () => {
     `).run();
 
     const store = new EmbeddingsStore(instance);
-    const dims = 8;
+    const dims = 384;
     store.upsertEmbedding('c1', unitVec(dims, 0), 'test');
     store.upsertEmbedding('c2', unitVec(dims, 1), 'test');
 

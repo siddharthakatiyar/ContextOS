@@ -17,8 +17,8 @@ describe('keyword-matcher', () => {
     const b = { id: 'b', score: 0 } as ScoredChunk;
     const c = { id: 'c', score: 0 } as ScoredChunk;
     const fused = reciprocalRankFusion([
-      [{ ...a }, { ...b }, { ...c }],
-      [{ ...a }, { ...c }, { ...b }],
+      { list: [{ ...a }, { ...b }, { ...c }], weight: 1 },
+      { list: [{ ...a }, { ...c }, { ...b }], weight: 1 },
     ]);
     expect(fused[0].id).toBe('a');
     expect(fused[0].score).toBeGreaterThan(fused[1].score);

@@ -53,7 +53,7 @@ describe('containmentDedup segments', () => {
     expect(out.map((c) => c.id)).toEqual(['p']);
   });
 
-  it('keeps both parent and segments when parent is not an exact-id hit', () => {
+  it('drops giant parent when it is not an exact-id hit', () => {
     const parent = chunk({
       id: 'p',
       symbolName: 'scoreChunks',
@@ -78,7 +78,7 @@ describe('containmentDedup segments', () => {
       score: 35,
     });
     const out = containmentDedup([parent, seg1, seg2], ['foreign', 'workspace']);
-    expect(out.map((c) => c.id).sort()).toEqual(['p', 's1', 's2']);
+    expect(out.map((c) => c.id).sort()).toEqual(['s1', 's2']);
   });
 
   it('does not treat segments as symbolName hits', () => {

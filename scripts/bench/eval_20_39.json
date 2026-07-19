@@ -1,0 +1,102 @@
+[
+  {
+    "id": "targeted_21",
+    "isAccurate": true,
+    "reason": "saddCommand function body is present"
+  },
+  {
+    "id": "targeted_22",
+    "isAccurate": false,
+    "reason": "Only struct name is present, not its members"
+  },
+  {
+    "id": "targeted_23",
+    "isAccurate": true,
+    "reason": "zslInsert function body is present"
+  },
+  {
+    "id": "targeted_24",
+    "isAccurate": true,
+    "reason": "rdbSaveRio function body is present"
+  },
+  {
+    "id": "targeted_25",
+    "isAccurate": true,
+    "reason": "rdbSaveObjectType function body is present"
+  },
+  {
+    "id": "targeted_26",
+    "isAccurate": true,
+    "reason": "flushAppendOnlyFile function body is present"
+  },
+  {
+    "id": "targeted_27",
+    "isAccurate": true,
+    "reason": "backgroundRewriteDoneHandler function body is present"
+  },
+  {
+    "id": "targeted_28",
+    "isAccurate": true,
+    "reason": "syncCommand function body is present"
+  },
+  {
+    "id": "targeted_29",
+    "isAccurate": true,
+    "reason": "replicationFeedSlaves function body is present"
+  },
+  {
+    "id": "targeted_30",
+    "isAccurate": true,
+    "reason": "clusterProcessPacket function body is present"
+  },
+  {
+    "id": "targeted_31",
+    "isAccurate": true,
+    "reason": "clusterUpdateSlotsConfigWith function body is present"
+  },
+  {
+    "id": "targeted_32",
+    "isAccurate": true,
+    "reason": "sentinelFailoverStateMachine function body is present"
+  },
+  {
+    "id": "targeted_33",
+    "isAccurate": true,
+    "reason": "sentinelCheckObjectivelyDown function body is present"
+  },
+  {
+    "id": "targeted_34",
+    "isAccurate": false,
+    "reason": "moduleCommand is present instead of RM_CreateCommand"
+  },
+  {
+    "id": "targeted_35",
+    "isAccurate": true,
+    "reason": "moduleBlockClient function body is present"
+  },
+  {
+    "id": "targeted_36",
+    "isAccurate": true,
+    "reason": "performEvictions function body is present"
+  },
+  {
+    "id": "targeted_37",
+    "isAccurate": true,
+    "reason": "LFUDecrAndReturn function body is present"
+  },
+  {
+    "id": "targeted_38",
+    "isAccurate": true,
+    "reason": "emptyDbAsync function body is present"
+  },
+  {
+    "id": "targeted_39",
+    "isAccurate": false,
+    "reason": "background_thread_create_locked is present instead of bioCreateBackgroundJob"
+  },
+  {
+    "id": "targeted_40",
+    "isAccurate": true,
+    "reason": "raxInsert function body is present"
+  }
+]

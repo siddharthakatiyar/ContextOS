@@ -13,6 +13,12 @@ function fileStemFromPath(filePath: string): string {
   return base.includes('.') ? base.replace(/\.[^.]+$/, '') : base;
 }
 
+function tokenizeName(name: string): string[] {
+  return name.split(/_|-|\./).flatMap(p => 
+    p.toUpperCase() === p ? [p.toLowerCase()] : p.split(/(?=[A-Z])/).map(s => s.toLowerCase())
+  ).filter(s => s.length > 2);
+}
+
 /** Stable chunk ID: survives content edits (B7). Hash field still tracks content changes. */
 function stableChunkId(filePath: string, symbolPathOrTitle: string): string {
   return crypto.createHash('md5').update(`${filePath}:${symbolPathOrTitle}`).digest('hex');
@@ -194,7 +200,7 @@ function createSegmentChunks(
     const sectionTitle = `${symbol.name} › ${seg.label}`;
     const keywords = extractKeywords(seg.content, sectionTitle);
     if (symbol.name.length > 2) keywords.push(symbol.name.toLowerCase());
-    keywords.push(...symbol.name.split(/(?=[A-Z])|_|-|\./).map(s => s.toLowerCase()).filter(s => s.length > 2));
+    keywords.push(...tokenizeName(symbol.name));
     const contentHashVal = hashContent(seg.content);
     const id = stableChunkId(filePath, `${titleContext}#seg${i}`);
 
@@ -294,7 +300,10 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
       sectionDepth: 1,
       content: storedContent,
       summary: null,
-      keywords: extractKeywords(summaryContent, 'File Structure').join(', '),
+      keywords: Array.from(new Set([
+        ...extractKeywords(summaryContent, 'File Structure'),
+        ...tokenizeName(path.basename(doc.filePath))
+      ])).join(', '),
       hash: summaryHashVal,
       importance: options.importance ?? 5,
       tokenCount: estimateTokens(storedContent),
@@ -354,7 +363,7 @@ function createCodeChunk(
   // Add full symbol name itself as a keyword
   if (symbol.name.length > 2) keywords.push(symbol.name.toLowerCase());
   // And also its parts
-  keywords.push(...symbol.name.split(/(?=[A-Z])|_|-|\./).map(s => s.toLowerCase()).filter(s => s.length > 2));
+  keywords.push(...tokenizeName(symbol.name));
 
   const contentHashVal = hashContent(symbol.body);
   const id = stableChunkId(filePath, titleContext);

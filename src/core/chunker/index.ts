@@ -31,10 +31,12 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
           let currentChunkContent = '';
           let currentTokens = 0;
 
+          let segIndex = 0;
           for (const para of paragraphs) {
             const pTokens = estimateTokens(para);
             if (currentTokens + pTokens > maxTokens && currentChunkContent.trim().length > 0) {
-              chunks.push(createChunk(currentChunkContent.trim(), titleContext, section.depth, doc.filePath, options, doc.frontmatter));
+              const segTitleContext = `${titleContext}#seg${segIndex++}`;
+              chunks.push(createChunk(currentChunkContent.trim(), segTitleContext, section.depth, doc.filePath, options, doc.frontmatter));
               currentChunkContent = para + '\n\n';
               currentTokens = pTokens;
             } else {
@@ -43,7 +45,8 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
             }
           }
           if (currentChunkContent.trim().length > 0) {
-            chunks.push(createChunk(currentChunkContent.trim(), titleContext, section.depth, doc.filePath, options, doc.frontmatter));
+            const segTitleContext = `${titleContext}#seg${segIndex++}`;
+            chunks.push(createChunk(currentChunkContent.trim(), segTitleContext, section.depth, doc.filePath, options, doc.frontmatter));
           }
         } else {
           chunks.push(createChunk(section.content, titleContext, section.depth, doc.filePath, options, doc.frontmatter));

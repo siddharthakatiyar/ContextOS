@@ -7,13 +7,11 @@ import { DB } from '../storage/database.js';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerGetContextTool } from "../../mcp/tools/get-context.js";
-import { registerSaveContextTool } from "../../mcp/tools/save-context.js";
 import { registerIndexFilesTool } from "../../mcp/tools/index-files.js";
 import { registerGetStatusTool } from "../../mcp/tools/get-status.js";
 import { registerGetGraphTools } from "../../mcp/tools/get-graph.js";
 import { registerExecuteTool } from "../../mcp/tools/execute.js";
 import { registerListTopicsTool } from "../../mcp/tools/list-topics.js";
-import { registerReadTopicTool } from "../../mcp/tools/read-topic.js";
 import { registerKnowledgeTools } from "../../mcp/tools/knowledge.js";
 import { registerFeedbackTools } from "../../mcp/tools/feedback.js";
 import { startWatcher } from '../watcher/index.js';
@@ -174,13 +172,11 @@ export class ContextOSDaemon {
 
     // Register all tools for this specific MCP Server instance
     registerGetContextTool(mcpServer, this.dbs);
-    registerSaveContextTool(mcpServer, this.dbs[0]);
     registerIndexFilesTool(mcpServer, this.dbs[0]);
     registerGetStatusTool(mcpServer, this.dbs[0]);
     registerGetGraphTools(mcpServer, this.dbs[0]);
     registerExecuteTool(mcpServer);
     registerListTopicsTool(mcpServer, this.dbs[0]);
-    registerReadTopicTool(mcpServer, this.dbs[0]);
     registerKnowledgeTools(mcpServer, this.dbs);
     registerFeedbackTools(mcpServer, this.dbs);
 
