@@ -13,6 +13,29 @@ export const statusCommand = new Command('status')
     const config = loadConfig();
     const dbs = DB.resolveDatabases(cwd);
     
+    // Check daemon status
+    let daemonStatus = 'Stopped';
+    let daemonPid: number | null = null;
+    const pidPath = path.join(cwd, '.contextos', 'daemon.pid');
+    if (fs.existsSync(pidPath)) {
+      try {
+        const pidStr = fs.readFileSync(pidPath, 'utf-8');
+        daemonPid = parseInt(pidStr, 10);
+        if (!isNaN(daemonPid)) {
+          process.kill(daemonPid, 0); // throws ESRCH if not running
+          daemonStatus = 'Running';
+        } else {
+          daemonPid = null;
+        }
+      } catch (err: any) {
+        if (err.code === 'ESRCH') {
+          daemonStatus = 'Stale PID (Stopped)';
+        } else {
+          daemonStatus = 'Error reading PID';
+        }
+      }
+    }
+
     try {
       const results = [];
       let totalSize = 0;
@@ -52,6 +75,10 @@ export const statusCommand = new Command('status')
 
     if (options.json) {
       console.log(JSON.stringify({
+        daemon: {
+          status: daemonStatus,
+          pid: daemonPid
+        },
         databases: results,
         totals: {
           sizeBytes: totalSize,
@@ -66,6 +93,11 @@ export const statusCommand = new Command('status')
 
     console.log(chalk.bold(`\nContextOS Status`));
     console.log(`==================\n`);
+    
+    console.log(chalk.magenta.bold(`[Daemon]`));
+    console.log(`Status:        ${daemonStatus === 'Running' ? chalk.green('Running') : chalk.yellow(daemonStatus)}`);
+    if (daemonPid) console.log(`PID:           ${daemonPid}`);
+    console.log('');
 
     for (const res of results) {
       console.log(chalk.blue.bold(`[${res.layer} Database]`));

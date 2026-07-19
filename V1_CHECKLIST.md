@@ -63,7 +63,7 @@
 - [x] Idle timeout — idle timeout implemented in daemon
 - [x] Multiple project support — workspace isolation implemented
 - [x] Logging — overrides standard output to append formatted JSON logs into `daemon.log`
-- [~] Diagnostics — `contextos status` exists; no structured diagnostics export
+- [x] Diagnostics — `contextos status --json` exists and includes structured export for daemon health and database metrics
 
 ---
 
