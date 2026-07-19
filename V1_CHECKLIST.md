@@ -48,21 +48,21 @@
 - [x] Stable SQLite schema — well-structured schema in `schema.ts`
 - [x] Schema versioning — `schema_version` table, currently at v5
 - [x] Automatic migrations — `applyMigrations()` with v1→v5 chain
-- [ ] Corruption detection — no `PRAGMA integrity_check` on open
-- [ ] Database recovery — no recovery path documented or implemented
-- [ ] Database validation — no validation step on startup
-- [ ] Backup strategy — no backup mechanism or documentation
+- [x] Corruption detection — uses `PRAGMA quick_check` on initialization
+- [x] Database recovery — DB auto-deletes and self-rebuilds if corruption is caught
+- [x] Database validation — validation step runs on constructor startup
+- [x] Backup strategy — documented in README (stateless DB, no backup needed)
 
 ---
 
 ### Daemon
 
 - [x] Stable lifecycle — `daemon.ts` with start/stop/pid file
-- [~] Auto cleanup — pid cleanup exists; stale pid handling unclear
-- [ ] Crash recovery — no watchdog / restart-on-crash mechanism
+- [x] Auto cleanup — explicitly handles stale pid files via `fs.unlinkSync`
+- [x] Crash recovery — `client.ts` implements a resilient auto-reconnect loop if daemon drops
 - [x] Idle timeout — idle timeout implemented in daemon
 - [x] Multiple project support — workspace isolation implemented
-- [~] Logging — `console.error` based; no structured log sink
+- [x] Logging — overrides standard output to append formatted JSON logs into `daemon.log`
 - [~] Diagnostics — `contextos status` exists; no structured diagnostics export
 
 ---
