@@ -9,7 +9,7 @@ export default function CliDocs() {
       prev={{ title: "Introduction", href: "/docs" }}
       next={{ title: "Configuration", href: "/docs/reference/configuration" }}
     >
-      <SourceLink path="src/cli/index.ts" />
+      <SourceLink path="src/index.ts" />
 
       <h2>Usage</h2>
       <p>
