@@ -35,7 +35,7 @@ export class Indexer {
     this.relsRepo = new RelationshipsRepo(db.getInstance());
   }
 
-  public async indexFile(filePath: string, layer: Layer, workspaceName?: string): Promise<IndexStats> {
+  public async indexFile(filePath: string, layer: Layer, workspaceName?: string, signal?: AbortSignal): Promise<IndexStats> {
     const startTime = Date.now();
     let chunksCreated = 0;
     let relationshipsFound = 0;
@@ -43,6 +43,8 @@ export class Indexer {
     if (!fs.existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);
     }
+
+    signal?.throwIfAborted();
 
     const stat = fs.lstatSync(filePath);
     if (!stat.isFile() || stat.isSymbolicLink()) {
@@ -74,6 +76,7 @@ export class Indexer {
       };
     }
 
+    signal?.throwIfAborted();
     const content = fs.readFileSync(filePath, 'utf8');
 
     // Skip generated / minified code
@@ -108,6 +111,7 @@ export class Indexer {
     let imports: string[] = [];
 
     // Parse and chunk based on file type
+    signal?.throwIfAborted();
     if (isCode) {
       const parsed = await parseCode(filePath, content);
       imports = parsed.imports || [];
@@ -133,6 +137,7 @@ export class Indexer {
     }
 
     // Update file record first to satisfy foreign key constraints
+    signal?.throwIfAborted();
     this.filesRepo.upsert({
       path: filePath,
       layer,
@@ -152,7 +157,8 @@ export class Indexer {
 
     // Embeddings are retrieval-side only — never block indexing on model failures
     try {
-      await indexChunkEmbeddings(this.chunksRepo.getDatabase(), chunks);
+      signal?.throwIfAborted();
+      await indexChunkEmbeddings(this.chunksRepo.getDatabase(), chunks, signal);
     } catch {
       // continue without embeddings
     }
