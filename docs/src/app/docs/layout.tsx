@@ -11,6 +11,7 @@ const navGroups = [
     title: "Overview",
     links: [
       { title: "Introduction", href: "/docs" },
+      { title: "Design Decisions", href: "/docs/design-decisions" },
     ]
   },
   {
@@ -30,13 +31,23 @@ const navGroups = [
   {
     title: "Algorithms",
     links: [
+      { title: "Retrieval Pipeline", href: "/docs/algorithms/retrieval-pipeline" },
+      { title: "Ranking & Tie-Breaking", href: "/docs/algorithms/ranking" },
       { title: "Graph Expansion", href: "/docs/algorithms/graph-expansion" },
+      { title: "Context Compression", href: "/docs/algorithms/compression" },
     ]
   },
   {
     title: "Database",
     links: [
       { title: "SQLite Schema", href: "/docs/database/schema" },
+    ]
+  },
+  {
+    title: "Guides",
+    links: [
+      { title: "Framework Examples", href: "/docs/examples" },
+      { title: "Troubleshooting", href: "/docs/troubleshooting" },
     ]
   }
 ];
