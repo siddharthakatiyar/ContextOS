@@ -6,8 +6,6 @@ ContextOS indexes your repository into a semantic graph so agents like Cursor, C
 
 Instead of sending entire files, ContextOS sends only the code the model actually needs.
 
-**Current version: 0.7.1**
-
 ## Why ContextOS?
 
 Instead of relying on ripgrep and whole-file context, ContextOS understands your repository at the semantic level.
