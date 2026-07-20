@@ -6,7 +6,13 @@ import { estimateTokens } from '../../utils/tokens.js';
 import path from 'path';
 
 export * from './types.js';
-export { canonicalizeWhitespace, minifyConfigContent, buildSignalRegex, truncatePreservingSignals, stubLocLabel } from './compressor.js';
+export {
+  canonicalizeWhitespace,
+  minifyConfigContent,
+  buildSignalRegex,
+  truncatePreservingSignals,
+  stubLocLabel
+} from './compressor.js';
 
 function escapeXml(unsafe: string | null | undefined): string {
   if (!unsafe) return '';
@@ -40,7 +46,10 @@ function signatureLine(chunk: ScoredChunk): string {
 }
 
 function isIdentifierEntity(name: string): boolean {
-  return /^[a-zA-Z][a-zA-Z0-9_.-]{2,}$/.test(name) && !/^(select|insert|order|desc|limit|values|update|delete|create)$/i.test(name);
+  return (
+    /^[a-zA-Z][a-zA-Z0-9_.-]{2,}$/.test(name) &&
+    !/^(select|insert|order|desc|limit|values|update|delete|create)$/i.test(name)
+  );
 }
 
 function collectSignalTerms(result: RetrievalResult, opts: CompilerOptions): string[] {
@@ -116,7 +125,11 @@ function buildPathAliases(chunks: ScoredChunk[]): {
   legend: string;
 } {
   const display = new Map<string, string>();
-  const files = [...new Set(chunks.map((c) => c.sourceFile).filter((f) => f && f !== 'session' && f !== 'memory.fact'))];
+  const files = [
+    ...new Set(
+      chunks.map((c) => c.sourceFile).filter((f) => f && f !== 'session' && f !== 'memory.fact')
+    )
+  ];
   for (const f of files) display.set(f, path.basename(f));
 
   const prefix = commonDirPrefix(files);
@@ -145,7 +158,11 @@ function buildPathAliases(chunks: ScoredChunk[]): {
 }
 
 /** Merge same-file full-body code chunks into one fence where possible. */
-function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string, repoRoot?: string): string {
+function formatMergedFileGroup(
+  chunks: ScoredChunk[],
+  displayPath: string,
+  repoRoot?: string
+): string {
   if (chunks.length === 0) return '';
   if (chunks.length === 1) {
     const chunk = chunks[0];
@@ -162,12 +179,14 @@ function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string, repoR
   const langs = new Set(chunks.map((c) => c.language || ''));
   const canMerge = langs.size === 1 && [...langs][0] !== '';
   if (!canMerge) {
-    return chunks.map((c) => {
-      let out = chunkHeader(c, displayPath, repoRoot) + '\n';
-      if (c.language) out += `\`\`\`${c.language}\n${c.content.trim()}\n\`\`\`\n`;
-      else out += `${c.content.trim()}\n`;
-      return out;
-    }).join('');
+    return chunks
+      .map((c) => {
+        let out = chunkHeader(c, displayPath, repoRoot) + '\n';
+        if (c.language) out += `\`\`\`${c.language}\n${c.content.trim()}\n\`\`\`\n`;
+        else out += `${c.content.trim()}\n`;
+        return out;
+      })
+      .join('');
   }
 
   const lang = chunks[0].language!;
@@ -184,10 +203,10 @@ function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string, repoR
     {
       ...chunks[0],
       startLine: chunks[0].startLine,
-      endLine: chunks[chunks.length - 1].endLine ?? chunks[0].endLine,
+      endLine: chunks[chunks.length - 1].endLine ?? chunks[0].endLine
     },
     displayPath,
-    repoRoot,
+    repoRoot
   );
   let out = labels ? `\`${labels}\` (\`${loc}\`):\n` : `\`${loc}\`:\n`;
   out += `\`\`\`${lang}\n`;
@@ -196,7 +215,11 @@ function formatMergedFileGroup(chunks: ScoredChunk[], displayPath: string, repoR
   return out;
 }
 
-function formatLayerChunks(chunks: ScoredChunk[], pathDisplay: Map<string, string>, repoRoot?: string): string {
+function formatLayerChunks(
+  chunks: ScoredChunk[],
+  pathDisplay: Map<string, string>,
+  repoRoot?: string
+): string {
   // Group consecutive same-file chunks
   const groups: ScoredChunk[][] = [];
   for (const c of chunks) {
@@ -240,14 +263,15 @@ function formatStubs(stubs: ScoredChunk[]): string {
       out += `- \`${fileKey}\`: ${parts.map((p) => `\`${p}\``).join(', ')}\n`;
     }
   }
-  out += '\n> Use `ctx_expand` to extract query-centered windows from these files without flooding your context.\n\n';
+  out +=
+    '\n> Use `ctx_expand` to extract query-centered windows from these files without flooding your context.\n\n';
   return out;
 }
 
 function renderPass(
   compressedChunks: ScoredChunk[],
   result: RetrievalResult,
-  opts: CompilerOptions,
+  opts: CompilerOptions
 ): { output: string; tokenCount: number; stubs: ScoredChunk[] } {
   const full = compressedChunks.filter((c) => !isStub(c));
   const stubs = compressedChunks.filter((c) => isStub(c));
@@ -257,16 +281,14 @@ function renderPass(
     session: [],
     repo: [],
     workspace: [],
-    global: [],
+    global: []
   };
 
   for (const chunk of full) {
     byLayer[chunk.layer]?.push(chunk);
   }
 
-  const entities = result.expandedEntities
-    .filter((e) => isIdentifierEntity(e.entity))
-    .slice(0, 3);
+  const entities = result.expandedEntities.filter((e) => isIdentifierEntity(e.entity)).slice(0, 3);
 
   const { display: pathDisplay, legend } = buildPathAliases(full);
 
@@ -280,7 +302,8 @@ function renderPass(
         if (rel) src = rel;
       }
       let out = `<chunk id="${escapeXml(chunk.id)}" layer="${escapeXml(chunk.layer)}" source="${escapeXml(src)}"`;
-      if (chunk.symbolName) out += ` symbol="${escapeXml(chunk.symbolName)}" kind="${escapeXml(chunk.symbolKind)}"`;
+      if (chunk.symbolName)
+        out += ` symbol="${escapeXml(chunk.symbolName)}" kind="${escapeXml(chunk.symbolKind)}"`;
       if (chunk.sectionTitle) out += ` section="${escapeXml(chunk.sectionTitle)}"`;
       if (chunk.startLine != null) out += ` start="${chunk.startLine}"`;
       if (chunk.endLine != null) out += ` end="${chunk.endLine}"`;
@@ -306,8 +329,11 @@ function renderPass(
       for (const s of stubs) {
         let src = stubLocLabel(s);
         if (repoRoot && s.sourceFile.startsWith(repoRoot)) {
-           const rel = s.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
-           if (rel) src = rel + (s.startLine != null && s.endLine != null ? `:${s.startLine}-${s.endLine}` : '');
+          const rel = s.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
+          if (rel)
+            src =
+              rel +
+              (s.startLine != null && s.endLine != null ? `:${s.startLine}-${s.endLine}` : '');
         }
         xmlOutput += `  <stub source="${escapeXml(src)}" symbol="${escapeXml(s.symbolName || '')}"`;
         if (s.startLine != null) xmlOutput += ` start="${s.startLine}"`;
@@ -328,7 +354,7 @@ function renderPass(
     return {
       output: xmlOutput,
       tokenCount: estimateTokens(xmlOutput),
-      stubs,
+      stubs
     };
   }
 
@@ -342,11 +368,12 @@ function renderPass(
     session: 'Session',
     repo: 'Repo',
     workspace: 'Workspace',
-    global: 'Global',
+    global: 'Global'
   };
 
-  const populatedLayers = (['session', 'repo', 'workspace', 'global'] as const)
-    .filter(l => byLayer[l].length > 0);
+  const populatedLayers = (['session', 'repo', 'workspace', 'global'] as const).filter(
+    (l) => byLayer[l].length > 0
+  );
 
   for (const layer of populatedLayers) {
     if (populatedLayers.length > 1) {
@@ -363,7 +390,7 @@ function renderPass(
   return {
     output,
     tokenCount: estimateTokens(output),
-    stubs,
+    stubs
   };
 }
 
@@ -374,7 +401,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     signalTerms,
     identifiers: result.intent?.identifiers || [],
     concepts: result.intent?.concepts || [],
-    tier,
+    tier
   };
 
   let activeMaxTokens = opts.maxTokens;
@@ -384,7 +411,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
 
   const framingFloor = (opts as any).framingReserve ?? 48;
   const firstPassBudget = Math.max(380, activeMaxTokens - framingFloor);
-  
+
   let compressedChunks = compressChunks(result.chunks, firstPassBudget, ctxOpts);
   let renderResult = renderPass(compressedChunks, result, opts);
 
@@ -407,7 +434,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
 
   return {
     output,
-    tokenCount,
+    tokenCount
   };
 }
 

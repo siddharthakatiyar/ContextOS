@@ -23,6 +23,8 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "lint": "eslint src/ tests/",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "prepublishOnly": "npm run build",
     "generate:large-repo": "tsx tools/generate-large-repo.ts"
   },
@@ -31,7 +33,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@xenova/transformers": "^2.17.2",
@@ -57,6 +59,7 @@
     "@types/update-notifier": "^6.0.8",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.4.1",
+    "prettier": "^3.9.5",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"

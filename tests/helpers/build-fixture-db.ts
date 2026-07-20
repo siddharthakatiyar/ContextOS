@@ -11,7 +11,7 @@ export async function buildFixtureDb(): Promise<string> {
   const cacheDir = path.join(cwd, 'node_modules', '.cache', 'contextos-fixture');
   const dbPath = path.join(cacheDir, 'index.db');
   const hashPath = path.join(cacheDir, 'db-hash.txt');
-  
+
   if (!fs.existsSync(cacheDir)) {
     fs.mkdirSync(cacheDir, { recursive: true });
   }
@@ -30,10 +30,10 @@ export async function buildFixtureDb(): Promise<string> {
     '**/*.min.css',
     '**/*.map',
     '**/*.lock',
-    '**/vendor/**',
+    '**/vendor/**'
   ];
   const ignore = [...new Set([...SAFETY_IGNORE, ...(config.ignorePatterns || [])])];
-  
+
   const allRepoFiles = new Set<string>();
   for (const pattern of config.indexablePatterns) {
     const files = await glob(pattern, { cwd, ignore, absolute: true, nodir: true });
@@ -48,9 +48,9 @@ export async function buildFixtureDb(): Promise<string> {
       hashStr += `${file}:${stat.size}:${stat.mtimeMs}\n`;
     } catch (e) {}
   }
-  
+
   const currentHash = crypto.createHash('sha256').update(hashStr).digest('hex');
-  
+
   if (fs.existsSync(dbPath) && fs.existsSync(hashPath)) {
     const cachedHash = fs.readFileSync(hashPath, 'utf8');
     if (cachedHash === currentHash) {
@@ -60,9 +60,9 @@ export async function buildFixtureDb(): Promise<string> {
 
   // Rebuild needed
   if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-  
+
   process.env.CONTEXTOS_EMBEDDINGS = '1'; // enable embeddings for semantic backfills in generic queries
-  
+
   const db = new DB(dbPath);
   const indexer = new Indexer(db);
 

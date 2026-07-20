@@ -16,8 +16,8 @@ export const queryCommand = new Command('query')
   .option('--json', 'Output results in JSON format')
   .action(async (prompt: string, options: { json?: boolean }) => {
     const dbs = DB.resolveDatabases();
-    const chunksRepos = dbs.map(db => new ChunksRepo(db.getInstance()));
-    const relsRepos = dbs.map(db => new RelationshipsRepo(db.getInstance()));
+    const chunksRepos = dbs.map((db) => new ChunksRepo(db.getInstance()));
+    const relsRepos = dbs.map((db) => new RelationshipsRepo(db.getInstance()));
     const primaryDb = dbs[0];
     const promptsRepo = new PromptsRepo(primaryDb.getInstance());
     const sessionStore = new SessionStore(primaryDb);
@@ -36,65 +36,90 @@ export const queryCommand = new Command('query')
         relatedFiles: null
       });
 
-    const result = await engine.retrieve(prompt);
-    
-    // Add session context
-    const sessionChunks = await sessionManager.getSessionContext();
-    for (const sc of sessionChunks) {
-      result.chunks.push({
-        ...sc,
-        sourceFile: 'session',
-        sectionTitle: null,
-        sectionDepth: 0,
-        summary: null,
-        keywords: null,
-        hash: '',
-        tokenCount: 0,
-        score: sc.importance
-      } as any);
-    }
+      const result = await engine.retrieve(prompt);
 
-    const config = loadConfig();
-    const compiled = compile(result, { maxTokens: config.maxTokenBudget });
-
-    if (options.json) {
-      console.log(JSON.stringify({
-        intent: result.intent,
-        latencyMs: result.latencyMs,
-        chunks: result.chunks,
-        expandedEntities: result.expandedEntities,
-        context: compiled.output,
-        tokens: compiled.tokenCount
-      }, null, 2));
-    } else {
-      console.log(chalk.blue.bold('Intent Detection:'));
-      console.log(`  Concepts: [${result.intent.concepts.join(', ')}]`);
-      console.log(`  Identifiers: [${result.intent.identifiers.join(', ')}]`);
-      console.log(`  Intent Type: ${result.intent.intentType}\n`);
-
-      console.log(chalk.blue.bold(`Retrieved Chunks (${result.chunks.length} results, ${result.latencyMs}ms):`));
-      result.chunks.slice(0, 5).forEach((c, i) => {
-        console.log(`  ${i + 1}. [${c.layer}] ${c.sectionTitle || 'root'} (score: ${c.score?.toFixed(1)})`);
-      });
-      if (result.chunks.length > 5) {
-        console.log(`  ... and ${result.chunks.length - 5} more`);
+      // Add session context
+      const sessionChunks = await sessionManager.getSessionContext();
+      for (const sc of sessionChunks) {
+        result.chunks.push({
+          ...sc,
+          sourceFile: 'session',
+          sectionTitle: null,
+          sectionDepth: 0,
+          summary: null,
+          keywords: null,
+          hash: '',
+          tokenCount: 0,
+          score: sc.importance
+        } as any);
       }
-      console.log('');
 
-      console.log(chalk.blue.bold('Graph Expansion:'));
-      if (result.expandedEntities.length === 0) {
-        console.log('  No related entities found.\n');
+      const config = loadConfig();
+      const compiled = compile(result, { maxTokens: config.maxTokenBudget });
+
+      if (process.env.TRACE === '1' && !options.json) {
+        console.log(chalk.yellow.bold('\n--- [TRACE] RETRIEVAL PIPELINE ---'));
+        console.log(chalk.yellow('1. Detected Intent:'));
+        console.dir(result.intent, { depth: null, colors: true });
+        console.log(chalk.yellow('\n2. Graph Expansion:'));
+        console.dir(result.expandedEntities, { depth: null, colors: true });
+        console.log(chalk.yellow('\n3. Scored Chunks (Top 10):'));
+        console.dir(result.chunks.slice(0, 10).map(c => ({ id: c.id, score: c.score, layer: c.layer, symbol: c.symbolName })), { depth: null, colors: true });
+        console.log(chalk.yellow('----------------------------------\n'));
+      }
+
+      if (options.json) {
+        console.log(
+          JSON.stringify(
+            {
+              intent: result.intent,
+              latencyMs: result.latencyMs,
+              chunks: result.chunks,
+              expandedEntities: result.expandedEntities,
+              context: compiled.output,
+              tokens: compiled.tokenCount
+            },
+            null,
+            2
+          )
+        );
       } else {
-        result.expandedEntities.slice(0, 5).forEach(e => {
-          console.log(`  ${e.entity} (discovered via ${e.relationshipType}, depth: ${e.depth}, score: ${e.score.toFixed(1)})`);
+        console.log(chalk.blue.bold('Intent Detection:'));
+        console.log(`  Concepts: [${result.intent.concepts.join(', ')}]`);
+        console.log(`  Identifiers: [${result.intent.identifiers.join(', ')}]`);
+        console.log(`  Intent Type: ${result.intent.intentType}\n`);
+
+        console.log(
+          chalk.blue.bold(
+            `Retrieved Chunks (${result.chunks.length} results, ${result.latencyMs}ms):`
+          )
+        );
+        result.chunks.slice(0, 5).forEach((c, i) => {
+          console.log(
+            `  ${i + 1}. [${c.layer}] ${c.sectionTitle || 'root'} (score: ${c.score?.toFixed(1)})`
+          );
         });
+        if (result.chunks.length > 5) {
+          console.log(`  ... and ${result.chunks.length - 5} more`);
+        }
         console.log('');
+
+        console.log(chalk.blue.bold('Graph Expansion:'));
+        if (result.expandedEntities.length === 0) {
+          console.log('  No related entities found.\n');
+        } else {
+          result.expandedEntities.slice(0, 5).forEach((e) => {
+            console.log(
+              `  ${e.entity} (discovered via ${e.relationshipType}, depth: ${e.depth}, score: ${e.score.toFixed(1)})`
+            );
+          });
+          console.log('');
+        }
+
+        console.log(chalk.blue.bold(`Compiled Context (${compiled.tokenCount} tokens):`));
+        console.log(compiled.output.substring(0, 500) + '...\n[Output truncated]\n');
       }
 
-      console.log(chalk.blue.bold(`Compiled Context (${compiled.tokenCount} tokens):`));
-      console.log(compiled.output.substring(0, 500) + '...\n[Output truncated]\n');
-    }
-    
       sessionStore.addEvent({
         sessionId: sessionManager.getSessionId(),
         eventType: 'context_retrieved',

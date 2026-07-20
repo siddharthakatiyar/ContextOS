@@ -38,7 +38,7 @@ async function getParser(langName: string): Promise<any> {
     parserInitPromise = TreeSitter.init();
   }
   await parserInitPromise;
-  
+
   if (!parserInstance) {
     parserInstance = new TreeSitter();
   }
@@ -63,25 +63,21 @@ export function detectLanguage(filePath: string): string {
   return LANGUAGE_EXT_MAP[ext] || 'unknown';
 }
 
-const METHOD_TYPES = new Set([
-  'method_definition',
-  'method_declaration',
-  'method_decl',
-]);
+const METHOD_TYPES = new Set(['method_definition', 'method_declaration', 'method_decl']);
 
 const FUNCTION_TYPES = new Set([
   'function_declaration',
   'function_definition',
   'arrow_function',
   'function_item',
-  'func_decl',
+  'func_decl'
 ]);
 
 const INTERFACE_TYPES = new Set([
   'interface_declaration',
   'interface_type',
   'trait_item',
-  'type_alias_declaration',
+  'type_alias_declaration'
 ]);
 
 const CLASS_TYPES = new Set([
@@ -93,7 +89,7 @@ const CLASS_TYPES = new Set([
   'struct_specifier',
   'type_spec',
   'enum_declaration',
-  'enum_specifier',
+  'enum_specifier'
 ]);
 
 const IMPORT_TYPES = new Set([
@@ -101,7 +97,7 @@ const IMPORT_TYPES = new Set([
   'import_declaration',
   'import_from_statement',
   'use_declaration',
-  'import_spec',
+  'import_spec'
 ]);
 
 function symbolKindForNode(nodeType: string): CodeSymbol['kind'] {
@@ -118,7 +114,7 @@ function symbolKindForNode(nodeType: string): CodeSymbol['kind'] {
 function extractDocstring(node: any, isExport: boolean): string | undefined {
   const target = isExport ? node.parent : node;
   let prev = target?.previousSibling;
-  
+
   if (node.type === 'function_definition' || node.type === 'class_definition') {
     const body = node.childForFieldName('body');
     if (body) {
@@ -128,18 +124,26 @@ function extractDocstring(node: any, isExport: boolean): string | undefined {
       }
     }
   }
-  
+
   const comments: string[] = [];
   while (prev && prev.type === 'comment') {
     comments.unshift(prev.text);
     prev = prev.previousSibling;
   }
-  
+
   if (comments.length > 0) {
     const raw = comments.join('\n');
-    const lines = raw.split('\n')
-      .map(l => l.replace(/^\s*\/\*\*?/, '').replace(/\*\/$/, '').replace(/^\s*\*/, '').replace(/^\s*\/\/\/?/, '').trim())
-      .filter(l => l.length > 0);
+    const lines = raw
+      .split('\n')
+      .map((l) =>
+        l
+          .replace(/^\s*\/\*\*?/, '')
+          .replace(/\*\/$/, '')
+          .replace(/^\s*\*/, '')
+          .replace(/^\s*\/\/\/?/, '')
+          .trim()
+      )
+      .filter((l) => l.length > 0);
     return lines.join(' ').replace(/\s+/g, ' ').slice(0, 300) || undefined;
   }
   return undefined;
@@ -190,10 +194,11 @@ function extractImportTargets(node: any): string[] {
   const sourceField =
     node.childForFieldName?.('source') ||
     node.childForFieldName?.('path') ||
-    node.children?.find?.((c: any) =>
-      c.type === 'string' ||
-      c.type === 'interpreted_string_literal' ||
-      c.type === 'raw_string_literal'
+    node.children?.find?.(
+      (c: any) =>
+        c.type === 'string' ||
+        c.type === 'interpreted_string_literal' ||
+        c.type === 'raw_string_literal'
     );
   if (sourceField) {
     add(sourceField.text);
@@ -252,7 +257,7 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
             startLine: node.startPosition.row + 1,
             endLine: node.endPosition.row + 1,
             body: node.text,
-            parent: currentParent,
+            parent: currentParent
           });
         }
         // Don't recurse into import children as functions/classes
@@ -267,33 +272,67 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
           let p = node.parent;
           if (p?.type === 'parenthesized_expression') p = p.parent;
           if (p?.type === 'variable_declarator') {
-            nameNode = p.childForFieldName('name')
-              || p.children?.find((c: any) => c.type === 'identifier');
+            nameNode =
+              p.childForFieldName('name') || p.children?.find((c: any) => c.type === 'identifier');
           }
           // else leave unnamed (anonymous callback) — skipped below
         } else if (!nameNode) {
           nameNode = node.childForFieldName?.('declarator');
-          if (!nameNode) nameNode = node.children?.find((c: any) => c.type === 'function_declarator' || c.type === 'pointer_declarator' || c.type === 'array_declarator' || c.type === 'init_declarator');
-          if (!nameNode) nameNode = node.children?.find((c: any) => c.type === 'identifier' || c.type === 'name' || c.type === 'type_identifier');
+          if (!nameNode)
+            nameNode = node.children?.find(
+              (c: any) =>
+                c.type === 'function_declarator' ||
+                c.type === 'pointer_declarator' ||
+                c.type === 'array_declarator' ||
+                c.type === 'init_declarator'
+            );
+          if (!nameNode)
+            nameNode = node.children?.find(
+              (c: any) =>
+                c.type === 'identifier' || c.type === 'name' || c.type === 'type_identifier'
+            );
         }
 
         // C/C++ AST: function identifier is often inside a nested declarator (e.g. function_declarator)
-        if (nameNode && (nameNode.type === 'function_declarator' || nameNode.type === 'pointer_declarator' || nameNode.type === 'array_declarator' || nameNode.type === 'init_declarator' || nameNode.type === 'type_definition')) {
+        if (
+          nameNode &&
+          (nameNode.type === 'function_declarator' ||
+            nameNode.type === 'pointer_declarator' ||
+            nameNode.type === 'array_declarator' ||
+            nameNode.type === 'init_declarator' ||
+            nameNode.type === 'type_definition')
+        ) {
           let current = nameNode;
           let iterCount = 0;
-          while (current && current.type !== 'identifier' && current.type !== 'type_identifier' && current.type !== 'field_identifier') {
+          while (
+            current &&
+            current.type !== 'identifier' &&
+            current.type !== 'type_identifier' &&
+            current.type !== 'field_identifier'
+          ) {
             iterCount++;
             if (iterCount > 50) {
-               console.error("INFINITE LOOP in AST parser near", current.type);
-               break;
+              console.error('INFINITE LOOP in AST parser near', current.type);
+              break;
             }
             let next = current.childForFieldName?.('declarator');
-            if (!next) next = current.children?.find((c: any) => c.type === 'identifier' || c.type === 'type_identifier' || c.type === 'field_identifier');
+            if (!next)
+              next = current.children?.find(
+                (c: any) =>
+                  c.type === 'identifier' ||
+                  c.type === 'type_identifier' ||
+                  c.type === 'field_identifier'
+              );
             if (!next && current.childCount > 0) next = current.child(0);
             if (!next || next === current) break;
             current = next;
           }
-          if (current && (current.type === 'identifier' || current.type === 'type_identifier' || current.type === 'field_identifier')) {
+          if (
+            current &&
+            (current.type === 'identifier' ||
+              current.type === 'type_identifier' ||
+              current.type === 'field_identifier')
+          ) {
             nameNode = current;
           }
         }
@@ -319,7 +358,11 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
         }
         return;
       } else if (INTERFACE_TYPES.has(node.type) || CLASS_TYPES.has(node.type)) {
-        const nameNode = node.childForFieldName('name') || node.children.find((c: any) => c.type === 'identifier' || c.type === 'type_identifier' || c.type === 'name');
+        const nameNode =
+          node.childForFieldName('name') ||
+          node.children.find(
+            (c: any) => c.type === 'identifier' || c.type === 'type_identifier' || c.type === 'name'
+          );
         if (nameNode) {
           const className = nameNode.text;
           const isExport = node.parent?.type === 'export_statement';
@@ -336,11 +379,16 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
         }
       }
 
-      if ((node.type === 'lexical_declaration' || node.type === 'variable_declaration') && !parentName && !insideFunction) {
+      if (
+        (node.type === 'lexical_declaration' || node.type === 'variable_declaration') &&
+        !parentName &&
+        !insideFunction
+      ) {
         for (let j = 0; j < node.childCount; j++) {
           const child = node.child(j);
           if (child?.type === 'variable_declarator') {
-            const nameNode = child.childForFieldName('name') ||
+            const nameNode =
+              child.childForFieldName('name') ||
               child.children?.find((c: any) => c.type === 'identifier');
             if (nameNode) {
               const isExport = node.parent?.type === 'export_statement';
@@ -379,7 +427,6 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
     language,
     symbols,
     imports: Array.from(new Set(imports)),
-    rawContent,
+    rawContent
   };
 }
-

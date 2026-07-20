@@ -7,16 +7,15 @@ describe('README.md Truth Pass', () => {
   const root = path.resolve(__dirname, '../../');
   const readmePath = path.join(root, 'README.md');
   const pkgPath = path.join(root, 'package.json');
-  
+
   const readme = fs.readFileSync(readmePath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-
 
   it('documents all configuration keys', () => {
     const configKeys = Object.keys(defaultConfig);
     const configSectionMatch = readme.match(/## Configuration\n\n```json\n([\s\S]*?)\n```/);
     expect(configSectionMatch).toBeDefined();
-    
+
     if (configSectionMatch) {
       const documentedConfig = configSectionMatch[1];
       for (const key of configKeys) {
@@ -41,10 +40,10 @@ describe('README.md Truth Pass', () => {
       'learn_fact',
       'forget_fact'
     ];
-    
+
     const toolsSectionMatch = readme.match(/## Available Tools\n\n([\s\S]*?)(?=\n## |\Z)/);
     expect(toolsSectionMatch).toBeDefined();
-    
+
     if (toolsSectionMatch) {
       const section = toolsSectionMatch[1];
       for (const tool of tools) {

@@ -11,11 +11,11 @@ export async function checkForUpdates(): Promise<void> {
     // 1. Get local version
     let localVersion = '0.0.0';
     try {
-      let pkgPath = path.join(__dirname, "../../../package.json");
+      let pkgPath = path.join(__dirname, '../../../package.json');
       if (!fs.existsSync(pkgPath)) {
-        pkgPath = path.join(__dirname, "../../../../package.json");
+        pkgPath = path.join(__dirname, '../../../../package.json');
       }
-      localVersion = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version;
+      localVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
     } catch {
       // fail silently if we can't find package.json
       return;
@@ -33,7 +33,9 @@ export async function checkForUpdates(): Promise<void> {
 
       // 3. Compare versions
       if (isNewerVersion(localVersion, remoteVersion)) {
-        process.stderr.write(`\n[ContextOS] A new version (${remoteVersion}) is available. Please update by running: npm install -g @siddharthakatiyar/contextos@latest\n`);
+        process.stderr.write(
+          `\n[ContextOS] A new version (${remoteVersion}) is available. Please update by running: npm install -g @siddharthakatiyar/contextos@latest\n`
+        );
       }
     });
   } catch (error) {
@@ -48,10 +50,10 @@ function isNewerVersion(local: string, remote: string): boolean {
 
   if (rMajor > lMajor) return true;
   if (rMajor < lMajor) return false;
-  
+
   if (rMinor > lMinor) return true;
   if (rMinor < lMinor) return false;
-  
+
   if (rPatch > lPatch) return true;
   return false;
 }

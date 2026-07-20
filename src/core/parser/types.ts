@@ -21,7 +21,17 @@ export interface Section {
 
 export interface CodeSymbol {
   name: string;
-  kind: 'function' | 'class' | 'interface' | 'method' | 'import' | 'export' | 'variable' | 'type' | 'struct' | 'enum';
+  kind:
+    | 'function'
+    | 'class'
+    | 'interface'
+    | 'method'
+    | 'import'
+    | 'export'
+    | 'variable'
+    | 'type'
+    | 'struct'
+    | 'enum';
   startLine: number;
   endLine: number;
   body: string;

@@ -40,7 +40,19 @@ process.on('unhandledRejection', handleCliError);
 program
   .name('contextos')
   .description('Intelligent context routing for AI coding assistants')
-  .version(pkg.version);
+  .version(pkg.version)
+  .option('--verbose', 'Enable verbose debug logging')
+  .option('--trace', 'Output detailed retrieval traces')
+  .option('--profile', 'Output execution profiling metrics')
+  .hook('preAction', (thisCommand) => {
+    const opts = thisCommand.opts();
+    if (opts.verbose) process.env.DEBUG = '1';
+    if (opts.trace) process.env.TRACE = '1';
+    if (opts.profile) {
+      process.env.PROFILE = '1';
+      performance.mark('contextos_start');
+    }
+  });
 
 program.addCommand(initCommand);
 program.addCommand(serveCommand);
@@ -58,7 +70,16 @@ program.addCommand(visualizeCommand);
 
 // Wrap execution to catch sync errors
 try {
-  program.parse(process.argv);
+  program.parseAsync(process.argv).then(() => {
+    if (process.env.PROFILE === '1') {
+      performance.mark('contextos_end');
+      performance.measure('Execution Time', 'contextos_start', 'contextos_end');
+      const measure = performance.getEntriesByName('Execution Time')[0];
+      console.log(`\n[Profile] Total execution time: ${measure.duration.toFixed(2)}ms`);
+    }
+  }).catch((error) => {
+    handleCliError(error);
+  });
 } catch (error) {
   handleCliError(error);
 }

@@ -48,7 +48,7 @@ export const cleanCommand = new Command('clean')
       '%/.next/%',
       '%/coverage/%',
       '%/__pycache__/%',
-      '%/target/%',
+      '%/target/%'
     ];
 
     for (const db of dbs) {
@@ -56,17 +56,21 @@ export const cleanCommand = new Command('clean')
       const dbName = dbInstance.name || 'in-memory';
 
       const beforeCount = (dbInstance.prepare('SELECT COUNT(*) as c FROM chunks').get() as any).c;
-      
+
       let totalRemoved = 0;
       for (const pattern of JUNK_PATTERNS) {
         // Get chunk IDs first to cascade-delete relationships
-        const junkChunks = dbInstance.prepare('SELECT id, source_file FROM chunks WHERE source_file LIKE ?').all(pattern) as any[];
+        const junkChunks = dbInstance
+          .prepare('SELECT id, source_file FROM chunks WHERE source_file LIKE ?')
+          .all(pattern) as any[];
         if (junkChunks.length === 0) continue;
-        
+
         // Delete relationships sourced from junk chunks
-        const deleteRels = dbInstance.prepare('DELETE FROM relationships WHERE source_chunk_id = ?');
+        const deleteRels = dbInstance.prepare(
+          'DELETE FROM relationships WHERE source_chunk_id = ?'
+        );
         const deleteChunk = dbInstance.prepare('DELETE FROM chunks WHERE id = ?');
-        
+
         const transaction = dbInstance.transaction(() => {
           for (const chunk of junkChunks) {
             deleteRels.run(chunk.id);
@@ -78,15 +82,19 @@ export const cleanCommand = new Command('clean')
           } catch {}
         });
         transaction();
-        
+
         totalRemoved += junkChunks.length;
       }
 
       const afterCount = (dbInstance.prepare('SELECT COUNT(*) as c FROM chunks').get() as any).c;
 
       if (totalRemoved > 0) {
-        console.log(chalk.green(`✔ ${path.basename(dbName)}: removed ${totalRemoved} junk chunks (${beforeCount} → ${afterCount})`));
-        
+        console.log(
+          chalk.green(
+            `✔ ${path.basename(dbName)}: removed ${totalRemoved} junk chunks (${beforeCount} → ${afterCount})`
+          )
+        );
+
         // Vacuum to reclaim space
         dbInstance.exec('VACUUM');
         console.log(chalk.dim(`  Vacuumed database to reclaim disk space.`));

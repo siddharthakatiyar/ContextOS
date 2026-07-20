@@ -53,9 +53,9 @@ function ensureVecTable(db: Database.Database): boolean {
     }
 
     const dims = getEmbeddingDims();
-    const exists = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
-    ).get(VEC_TABLE);
+    const exists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+      .get(VEC_TABLE);
 
     if (!exists) {
       db.exec(`
@@ -85,7 +85,9 @@ export class EmbeddingsStore {
   public upsertEmbedding(chunkId: string, vector: Float32Array, model: string): void {
     const now = Date.now();
     const blob = float32ToBuffer(vector);
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO chunk_embeddings (chunk_id, embedding, dims, model, updated_at)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(chunk_id) DO UPDATE SET
@@ -93,14 +95,16 @@ export class EmbeddingsStore {
         dims = excluded.dims,
         model = excluded.model,
         updated_at = excluded.updated_at
-    `).run(chunkId, blob, vector.length, model, now);
+    `
+      )
+      .run(chunkId, blob, vector.length, model, now);
 
     if (ensureVecTable(this.db)) {
       try {
         this.db.prepare(`DELETE FROM ${VEC_TABLE} WHERE chunk_id = ?`).run(chunkId);
-        this.db.prepare(
-          `INSERT INTO ${VEC_TABLE} (chunk_id, embedding) VALUES (?, ?)`
-        ).run(chunkId, blob);
+        this.db
+          .prepare(`INSERT INTO ${VEC_TABLE} (chunk_id, embedding) VALUES (?, ?)`)
+          .run(chunkId, blob);
       } catch (e: any) {
         logVecOnce(`vec upsert failed: ${e?.message || e}`);
       }
@@ -110,15 +114,15 @@ export class EmbeddingsStore {
   public deleteByChunkIds(chunkIds: string[]): void {
     if (!chunkIds.length) return;
     const placeholders = chunkIds.map(() => '?').join(',');
-    this.db.prepare(
-      `DELETE FROM chunk_embeddings WHERE chunk_id IN (${placeholders})`
-    ).run(...chunkIds);
+    this.db
+      .prepare(`DELETE FROM chunk_embeddings WHERE chunk_id IN (${placeholders})`)
+      .run(...chunkIds);
 
     if (vecExtensionOk !== false && ensureVecTable(this.db)) {
       try {
-        this.db.prepare(
-          `DELETE FROM ${VEC_TABLE} WHERE chunk_id IN (${placeholders})`
-        ).run(...chunkIds);
+        this.db
+          .prepare(`DELETE FROM ${VEC_TABLE} WHERE chunk_id IN (${placeholders})`)
+          .run(...chunkIds);
       } catch {
         // ignore vec delete failures
       }
@@ -132,16 +136,20 @@ export class EmbeddingsStore {
     if (ensureVecTable(this.db)) {
       try {
         const blob = float32ToBuffer(queryVec);
-        const rows = this.db.prepare(`
+        const rows = this.db
+          .prepare(
+            `
           SELECT chunk_id AS chunkId, distance
           FROM ${VEC_TABLE}
           WHERE embedding MATCH ?
             AND k = ?
-        `).all(blob, limit) as { chunkId: string; distance: number }[];
+        `
+          )
+          .all(blob, limit) as { chunkId: string; distance: number }[];
 
-        return rows.map(r => ({
+        return rows.map((r) => ({
           chunkId: r.chunkId,
-          score: 1 / (1 + (r.distance ?? 0)),
+          score: 1 / (1 + (r.distance ?? 0))
         }));
       } catch (e: any) {
         logVecOnce(`vec search failed, using brute-force: ${e?.message || e}`);
@@ -153,16 +161,17 @@ export class EmbeddingsStore {
 
   private bruteForceSearch(queryVec: Float32Array, limit: number): EmbeddingHit[] {
     try {
-      const rows = this.db.prepare(
-        `SELECT chunk_id, embedding FROM chunk_embeddings`
-      ).all() as { chunk_id: string; embedding: Buffer }[];
+      const rows = this.db.prepare(`SELECT chunk_id, embedding FROM chunk_embeddings`).all() as {
+        chunk_id: string;
+        embedding: Buffer;
+      }[];
 
       const scored: EmbeddingHit[] = [];
       for (const row of rows) {
         const vec = bufferToFloat32(row.embedding);
         scored.push({
           chunkId: row.chunk_id,
-          score: cosineSimilarity(queryVec, vec),
+          score: cosineSimilarity(queryVec, vec)
         });
       }
       scored.sort((a, b) => b.score - a.score);

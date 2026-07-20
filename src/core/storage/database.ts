@@ -24,41 +24,49 @@ export class DB {
       fs.mkdirSync(dir, { recursive: true });
     }
     let dbInstance: Database.Database | undefined;
-    
+
     try {
       dbInstance = new Database(resolvedPath);
       dbInstance.pragma('journal_mode = WAL');
       dbInstance.pragma('busy_timeout = 5000');
       dbInstance.pragma('foreign_keys = ON');
-      
+
       // 1. Validate B-Tree structure (faster than integrity_check)
       const check = dbInstance.pragma('quick_check') as { quick_check: string }[];
       if (!check || check.length === 0 || check[0].quick_check !== 'ok') {
         throw new Error('DatabaseCorruptedError: quick_check failed');
       }
-      
+
       this.db = dbInstance;
       // 2. Run migrations
       this.runMigrations();
     } catch (err: any) {
       // If corruption is detected either by quick_check, a SQLITE_CORRUPT error, or "file is not a database"
-      if (err.message.includes('corrupt') || err.message.includes('DatabaseCorruptedError') || err.message.includes('file is not a database')) {
-        console.error(`[ContextOS] Database corruption detected at ${resolvedPath}. Auto-recovering...`);
+      if (
+        err.message.includes('corrupt') ||
+        err.message.includes('DatabaseCorruptedError') ||
+        err.message.includes('file is not a database')
+      ) {
+        console.error(
+          `[ContextOS] Database corruption detected at ${resolvedPath}. Auto-recovering...`
+        );
         if (dbInstance) {
-          try { dbInstance.close(); } catch {}
+          try {
+            dbInstance.close();
+          } catch {}
         }
-        
+
         // Delete all DB files to start fresh
         if (fs.existsSync(resolvedPath)) fs.unlinkSync(resolvedPath);
         if (fs.existsSync(resolvedPath + '-wal')) fs.unlinkSync(resolvedPath + '-wal');
         if (fs.existsSync(resolvedPath + '-shm')) fs.unlinkSync(resolvedPath + '-shm');
-        
+
         // Re-init
         this.db = new Database(resolvedPath);
         this.db.pragma('journal_mode = WAL');
         this.db.pragma('busy_timeout = 5000');
         this.db.pragma('foreign_keys = ON');
-        
+
         // Re-run migrations
         this.runMigrations();
       } else {
@@ -104,14 +112,14 @@ export class DB {
   /**
    * Resolves databases for the current project.
    * Only opens the LOCAL project DB + the GLOBAL DB (max 2 connections).
-   * 
+   *
    * Previously this walked from CWD all the way to filesystem root,
    * opening every .contextos/index.db it found. That caused excessive
    * file descriptor usage when multiple processes were running.
    */
   public static resolveDatabases(startDir: string = process.cwd()): DB[] {
     const dbs: DB[] = [];
-    
+
     // 1. Open the local project DB (CWD)
     const localDbPath = path.join(startDir, '.contextos', 'index.db');
     try {

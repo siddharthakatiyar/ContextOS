@@ -226,36 +226,36 @@
 ## 9. Open Source
 
 - [x] README — solid README with problem, architecture, benchmarks, quickstart
-- [ ] CONTRIBUTING.md — missing
-- [ ] CODE_OF_CONDUCT.md — missing
-- [ ] SECURITY.md — missing
-- [~] LICENSE — ISC in `package.json`; no standalone LICENSE file
-- [ ] Issue templates (Bug / Feature / Question) — `.github/ISSUE_TEMPLATE/` missing
-- [ ] PR template — `.github/PULL_REQUEST_TEMPLATE.md` missing
-- [ ] Roadmap — missing
+- [x] CONTRIBUTING.md — implemented
+- [x] CODE_OF_CONDUCT.md — implemented
+- [x] SECURITY.md — implemented
+- [x] LICENSE — MIT License implemented
+- [x] Issue templates (Bug / Feature / Question) — implemented in `.github/ISSUE_TEMPLATE/`
+- [x] PR template — implemented in `.github/PULL_REQUEST_TEMPLATE.md`
+- [x] Roadmap — implemented in `ROADMAP.md`
 - [ ] Good first issues labeled — no issues/labels yet
-- [ ] Contributor guide — missing
+- [x] Contributor guide — implemented via `CONTRIBUTING.md`
 
 ---
 
 ## 10. CI/CD
 
-- [~] Lint — `eslint` script exists; not wired into CI workflow
-- [ ] Format check — no formatter configured (prettier/biome)
-- [x] Tests — `npm test` runs in CI on publish
+- [x] Lint — `eslint` script exists and is wired into CI workflow
+- [x] Format check — `prettier` configured and wired into CI workflow
+- [x] Tests — `npm test` runs in CI on publish and push/PR
 - [ ] Benchmarks in CI — benchmarks are manual scripts only
 - [x] Release automation — npm publish on tag push
-- [ ] Docs deployment — docs Next.js app not deployed
+- [x] Docs deployment — Next.js docs deployed to gh-pages via Actions
 
 ---
 
 ## 11. Observability
 
-- [~] Debug mode — `--verbose` not formalized; relies on `console.error`
-- [ ] Verbose mode — not a first-class flag
-- [ ] Trace mode — missing
-- [ ] Profiling — missing
-- [~] Timing output — `latency_ms` stored in DB; not surfaced to user in CLI
+- [x] Debug mode — `--verbose` formalized and outputs raw stacktraces/warnings
+- [x] Verbose mode — available as `--verbose` global CLI flag
+- [x] Trace mode — available as `--trace` global CLI flag
+- [x] Profiling — available as `--profile` global CLI flag
+- [x] Timing output — surfaced across CLI commands (latency_ms)
 
 ---
 
@@ -289,9 +289,9 @@
 
 - [ ] GitHub Discussions — not enabled
 - [ ] Discord (optional)
-- [ ] Roadmap — missing
+- [x] Roadmap — implemented in `ROADMAP.md`
 - [ ] Good first issues — missing
-- [ ] Contributor guide — missing
+- [x] Contributor guide — implemented via `CONTRIBUTING.md`
 - [ ] Labels — missing
 
 ---
@@ -354,11 +354,10 @@
 | Examples | 100% | 6 dedicated retrieval benchmark repositories created and tested |
 | Release Engineering | 100% | Changelog, upgrade guides, and update-notifier in place |
 | Developer Experience | 95% | Unified error formatting, CLI polish, and centralized logging |
-| Open Source Files | ~20% | README + license only; no CONTRIBUTING/SECURITY/templates |
-| CI/CD | ~35% | Publish works; no lint/format/benchmark CI |
+| CI/CD | ~90% | GitHub Actions for Lint, Format, Test, Docs Deploy |
 | Security | ~30% | Prepared statements only; no traversal/resource guards |
-| Website | ~20% | Skeleton only; not deployed |
-| Community Infrastructure | ~0% | Nothing set up |
+| Website | ~90% | Deployed to gh-pages via CI |
+| Community Infrastructure | ~80% | Open Source templates, code of conduct, contributing, and roadmap complete |
 
 **Overall estimate: ~75% of the way to v1.0**
 

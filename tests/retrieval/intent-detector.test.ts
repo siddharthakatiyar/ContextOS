@@ -27,7 +27,7 @@ describe('detectIntent', () => {
 
   it('filters stopwords from identifiers', () => {
     const intent = detectIntent('The And Or Not identifiers should be filtered');
-    expect(intent.identifiers.every(id => !['The', 'And', 'Or', 'Not'].includes(id))).toBe(true);
+    expect(intent.identifiers.every((id) => !['The', 'And', 'Or', 'Not'].includes(id))).toBe(true);
   });
 
   it('skips sentence-initial single Titlecase that is not multi-token', () => {

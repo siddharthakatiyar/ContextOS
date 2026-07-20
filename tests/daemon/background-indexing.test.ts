@@ -15,7 +15,10 @@ describe('BackgroundIndexer', () => {
 
     // Create a few dummy files
     fs.writeFileSync(path.join(tempDir, 'file1.ts'), 'export const a = 1;');
-    fs.writeFileSync(path.join(tempDir, 'file2.ts'), 'import { a } from "./file1"; console.log(a);');
+    fs.writeFileSync(
+      path.join(tempDir, 'file2.ts'),
+      'import { a } from "./file1"; console.log(a);'
+    );
 
     // Create context dir
     fs.mkdirSync(path.join(tempDir, '.contextos'), { recursive: true });
@@ -24,20 +27,22 @@ describe('BackgroundIndexer', () => {
   });
 
   afterAll(() => {
-    try { db.close(); } catch {}
+    try {
+      db.close();
+    } catch {}
     if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
   test('indexes repository in background', async () => {
     const indexer = new BackgroundIndexer(db, tempDir);
-    
+
     const config = {
       indexablePatterns: ['**/*.ts'],
       ignorePatterns: []
     };
 
     const indexPromise = indexer.startFullIndex(config);
-    
+
     // Status should immediately show it is indexing
     let status = indexer.getStatus();
     expect(status.isIndexing).toBe(true);

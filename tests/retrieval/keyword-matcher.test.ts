@@ -18,7 +18,7 @@ describe('keyword-matcher', () => {
     const c = { id: 'c', score: 0 } as ScoredChunk;
     const fused = reciprocalRankFusion([
       { list: [{ ...a }, { ...b }, { ...c }], weight: 1 },
-      { list: [{ ...a }, { ...c }, { ...b }], weight: 1 },
+      { list: [{ ...a }, { ...c }, { ...b }], weight: 1 }
     ]);
     expect(fused[0].id).toBe('a');
     expect(fused[0].score).toBeGreaterThan(fused[1].score);
@@ -32,12 +32,12 @@ describe('keyword-matcher', () => {
     const y = { id: 'a-chunk', score: 0 } as ScoredChunk;
     const run1 = reciprocalRankFusion([
       { list: [{ ...x }], weight: 1 },
-      { list: [{ ...y }], weight: 1 },
-    ]).map(c => c.id);
+      { list: [{ ...y }], weight: 1 }
+    ]).map((c) => c.id);
     const run2 = reciprocalRankFusion([
       { list: [{ ...x }], weight: 1 },
-      { list: [{ ...y }], weight: 1 },
-    ]).map(c => c.id);
+      { list: [{ ...y }], weight: 1 }
+    ]).map((c) => c.id);
     // Both runs must be identical (deterministic)
     expect(run1).toEqual(run2);
     // 'a-chunk' < 'z-chunk' lexicographically, so it comes first on a score tie

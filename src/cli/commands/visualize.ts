@@ -12,10 +12,16 @@ export const visualizeCommand = new Command('visualize')
     const db = new DB();
 
     // Query chunks and relationships
-    const chunks = db.getInstance().prepare('SELECT id, source_file, symbol_name FROM chunks').all() as any[];
-    const relationships = db.getInstance().prepare('SELECT source_chunk_id, target, relationship_type FROM relationships').all() as any[];
+    const chunks = db
+      .getInstance()
+      .prepare('SELECT id, source_file, symbol_name FROM chunks')
+      .all() as any[];
+    const relationships = db
+      .getInstance()
+      .prepare('SELECT source_chunk_id, target, relationship_type FROM relationships')
+      .all() as any[];
 
-    // We need to map nodes. 
+    // We need to map nodes.
     // Chunks are nodes, and expanded entities are also nodes.
     const nodes = new Map();
     const edges = [];
@@ -34,8 +40,9 @@ export const visualizeCommand = new Command('visualize')
     for (const r of relationships) {
       const sourceId = r.source_chunk_id;
       // We hash the target entity string to get a consistent ID
-      const targetId = 'entity_' + crypto.createHash('md5').update(r.target).digest('hex').slice(0, 8);
-      
+      const targetId =
+        'entity_' + crypto.createHash('md5').update(r.target).digest('hex').slice(0, 8);
+
       if (!nodes.has(targetId)) {
         nodes.set(targetId, {
           id: targetId,

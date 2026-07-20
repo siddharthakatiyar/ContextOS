@@ -17,8 +17,8 @@ const MIN_ENTITY_LENGTH = 3;
 
 function isQualityEntity(entity: string): boolean {
   if (entity.length < MIN_ENTITY_LENGTH) return false;
-  if (/^\d+$/.test(entity)) return false;                  // pure number
-  if (STOPWORDS.has(entity.toLowerCase())) return false;    // natural language word
+  if (/^\d+$/.test(entity)) return false; // pure number
+  if (STOPWORDS.has(entity.toLowerCase())) return false; // natural language word
   return true;
 }
 
@@ -32,11 +32,16 @@ export class GraphExpander {
   public expand(seeds: string[], maxDepth: number = 2, maxNodes: number = 20): ExpandedEntity[] {
     const visited = new Set<string>();
     const queue: { entity: string; depth: number; weight: number; relType?: string }[] = [];
-    const pushQueue = (item: { entity: string; depth: number; weight: number; relType?: string }) => {
+    const pushQueue = (item: {
+      entity: string;
+      depth: number;
+      weight: number;
+      relType?: string;
+    }) => {
       queue.push(item);
       queue.sort((a, b) => b.weight - a.weight);
     };
-    
+
     const results: ExpandedEntity[] = [];
 
     // Only seed with quality entities
@@ -48,7 +53,7 @@ export class GraphExpander {
 
     while (queue.length > 0 && results.length < maxNodes) {
       const current = queue.shift()!;
-      
+
       if (visited.has(current.entity) || current.depth > maxDepth) {
         continue;
       }
@@ -77,9 +82,9 @@ export class GraphExpander {
 
           const neighbor = rel.source === current.entity ? rel.target : rel.source;
           if (!visited.has(neighbor) && isQualityEntity(neighbor)) {
-            pushQueue({ 
-              entity: neighbor, 
-              depth: current.depth + 1, 
+            pushQueue({
+              entity: neighbor,
+              depth: current.depth + 1,
               weight: rel.weight,
               relType: rel.relationshipType
             });
@@ -97,4 +102,3 @@ export class GraphExpander {
     return results;
   }
 }
-
