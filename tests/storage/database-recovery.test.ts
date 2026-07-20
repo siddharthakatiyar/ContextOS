@@ -11,7 +11,7 @@ describe('Database Auto-Recovery', () => {
     fs.mkdirSync(path.join(tmpdir, '.contextos'), { recursive: true });
 
     // 1. Create a valid DB
-    let db = new DB(dbPath);
+    const db = new DB(dbPath);
     // Write something to ensure it's initialized
     db.getInstance().exec('CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY);');
     db.close();

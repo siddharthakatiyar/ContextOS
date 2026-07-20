@@ -46,7 +46,7 @@ export const watchCommand = new Command('watch')
     // Set up file watcher
     const watcher = chokidar.watch(cwd, {
       ignored: [
-        /(^|[\/\\])\../, // ignore dotfiles
+        /(^|[/\\])\../, // ignore dotfiles
         ...config.ignorePatterns.map((p) => `**/${p}`)
       ],
       persistent: true,

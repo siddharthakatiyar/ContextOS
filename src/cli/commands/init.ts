@@ -58,10 +58,10 @@ export const initCommand = new Command('init')
       const ignore = [...new Set([...SAFETY_IGNORE, ...userIgnore])];
 
       const startTime = Date.now();
-      let totalProcessed = 0;
-      let totalChunks = 0;
-      let totalRels = 0;
-      let totalFilesCount = 0;
+      const totalProcessed = 0;
+      const totalChunks = 0;
+      const totalRels = 0;
+      const totalFilesCount = 0;
 
       const abortController = new AbortController();
       const onSigInt = () => {
