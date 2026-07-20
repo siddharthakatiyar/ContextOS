@@ -1,6 +1,13 @@
 import { DocPage } from "@/components/docs/doc-page";
 import { SourceLink } from "@/components/docs/source-link";
 import { ComplexityTable } from "@/components/docs/complexity-table";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Graph Expansion",
+  description: "The BFS algorithm responsible for traversing AST-derived dependency edges to construct the final LLM context.",
+  path: "/docs/algorithms/graph-expansion",
+});
 
 export default function GraphExpansionDocs() {
   return (

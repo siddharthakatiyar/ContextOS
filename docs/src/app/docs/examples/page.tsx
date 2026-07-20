@@ -1,4 +1,11 @@
 import { DocPage } from "@/components/docs/doc-page";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Framework Examples",
+  description: "Integration examples and best practices across popular technology stacks.",
+  path: "/docs/examples",
+});
 
 export default function ExamplesDocs() {
   return (

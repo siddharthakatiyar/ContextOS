@@ -1,5 +1,12 @@
 import { DocPage } from "@/components/docs/doc-page";
 import { SourceLink } from "@/components/docs/source-link";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Configuration",
+  description: "Configuring the ContextOS retrieval engine via contextos.json.",
+  path: "/docs/reference/configuration",
+});
 
 export default function ConfigurationDocs() {
   return (

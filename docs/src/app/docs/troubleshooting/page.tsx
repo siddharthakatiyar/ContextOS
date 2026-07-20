@@ -1,4 +1,11 @@
 import { DocPage } from "@/components/docs/doc-page";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Troubleshooting & FAQ",
+  description: "Common issues, error codes, and how to resolve them.",
+  path: "/docs/troubleshooting",
+});
 
 export default function TroubleshootingDocs() {
   return (

@@ -1,6 +1,13 @@
 import { DocPage } from "@/components/docs/doc-page";
 import { SourceLink } from "@/components/docs/source-link";
 import { ComplexityTable } from "@/components/docs/complexity-table";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Initialization Sequence",
+  description: "The end-to-end process executed by the 'contextos init' command, powered by the core Indexer.",
+  path: "/docs/initialization",
+});
 
 export default function InitializationDocs() {
   return (

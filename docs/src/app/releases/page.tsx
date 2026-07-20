@@ -3,11 +3,13 @@ import { ArrowRight } from "lucide-react";
 import { CopyCommand } from "@/components/copy-command";
 import { getChangelog, formatReleaseDate } from "@/lib/changelog";
 import { getReleaseBadge } from "@/lib/release-badge";
+import { buildMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "Releases | ContextOS",
+export const metadata = buildMetadata({
+  title: "Releases",
   description: "Changelog and release notes for ContextOS.",
-};
+  path: "/releases",
+});
 
 const MAX_HIGHLIGHTS = 5;
 

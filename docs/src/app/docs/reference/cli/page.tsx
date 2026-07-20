@@ -1,5 +1,12 @@
 import { DocPage } from "@/components/docs/doc-page";
 import { SourceLink } from "@/components/docs/source-link";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "CLI Reference",
+  description: "Command-line interface commands for managing ContextOS in your repository.",
+  path: "/docs/reference/cli",
+});
 
 export default function CliDocs() {
   return (

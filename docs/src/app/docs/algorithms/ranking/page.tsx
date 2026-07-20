@@ -1,6 +1,13 @@
 import { DocPage } from "@/components/docs/doc-page";
 import { SourceLink } from "@/components/docs/source-link";
 import { ComplexityTable } from "@/components/docs/complexity-table";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Ranking & Tie-Breaking",
+  description: "Deterministic scoring and Reciprocal Rank Fusion implementation.",
+  path: "/docs/algorithms/ranking",
+});
 
 export default function RankingDocs() {
   return (

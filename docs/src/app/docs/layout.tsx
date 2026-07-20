@@ -1,11 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-export const metadata = {
-  title: "Documentation | ContextOS",
-  description: "Official technical specification of the ContextOS retrieval engine.",
-};
-
 const navGroups = [
   {
     title: "Overview",
