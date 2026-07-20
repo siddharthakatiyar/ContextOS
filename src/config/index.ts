@@ -8,7 +8,7 @@ export * from './types.js';
 
 let cachedConfig: ContextOSConfig | null = null;
 
-export function loadConfig(opts?: { forceReload?: boolean }): ContextOSConfig {
+export function loadConfig(opts?: { forceReload?: boolean; cwd?: string }): ContextOSConfig {
   if (cachedConfig && !opts?.forceReload) {
     return cachedConfig;
   }
@@ -28,7 +28,8 @@ export function loadConfig(opts?: { forceReload?: boolean }): ContextOSConfig {
     }
   }
 
-  const repoConfigPath = path.join(process.cwd(), '.contextos', 'config.json');
+  const cwd = opts?.cwd || process.cwd();
+  const repoConfigPath = path.join(cwd, '.contextos', 'config.json');
   if (fs.existsSync(repoConfigPath)) {
     try {
       const raw = JSON.parse(fs.readFileSync(repoConfigPath, 'utf8'));

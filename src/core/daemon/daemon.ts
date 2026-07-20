@@ -16,6 +16,7 @@ import { registerKnowledgeTools } from "../../mcp/tools/knowledge.js";
 import { registerFeedbackTools } from "../../mcp/tools/feedback.js";
 import { startWatcher } from '../watcher/index.js';
 import { SessionStore } from '../session/session-store.js';
+import { BackgroundIndexer } from './background-indexer.js';
 
 import { fileURLToPath } from "url";
 import type { FSWatcher } from "chokidar";
@@ -43,6 +44,7 @@ export class ContextOSDaemon {
   private projectDir: string;
   private connections = 0;
   private gcTimer?: NodeJS.Timeout;
+  public backgroundIndexer?: BackgroundIndexer;
 
   constructor(projectDir: string) {
     this.projectDir = projectDir;
@@ -124,7 +126,7 @@ export class ContextOSDaemon {
         reject(err);
       });
       
-      this.server.listen(this.socketPath, () => {
+      this.server.listen(this.socketPath, async () => {
         fs.writeFileSync(this.pidPath, String(process.pid));
         
         // Override console.log and console.error to write to a log file instead
@@ -156,6 +158,27 @@ export class ContextOSDaemon {
 
         console.log(`ContextOS Daemon started on ${this.socketPath}`);
         this.resetGCTimer(); // Start GC timer
+        
+        // Trigger background index if not complete
+        try {
+          const { loadConfig } = await import('../../config/index.js');
+          const config = loadConfig({ cwd: this.projectDir });
+          const statusPath = path.join(this.projectDir, '.contextos', 'status.json');
+          let needsFullIndex = true;
+          if (fs.existsSync(statusPath)) {
+            const status = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
+            if (status.fullIndexCompleted) {
+              needsFullIndex = false;
+            }
+          }
+          if (needsFullIndex) {
+            this.backgroundIndexer = new BackgroundIndexer(this.dbs[0], this.projectDir);
+            this.backgroundIndexer.startFullIndex(config).catch(console.error);
+          }
+        } catch (err: any) {
+          console.error(`Failed to start background index: ${err.message}`);
+        }
+
         resolve();
       });
     });

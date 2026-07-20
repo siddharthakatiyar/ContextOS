@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "contextos": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@siddharthakatiyar/contextos@latest",
+        "serve"
+      ],
+      "env": {
+        "CONTEXTOS_REPO_ROOT": "/Volumes/ExtremeSSD/code/contextOS/retrieval-examples/fastapi-dependencies",
+        "CONTEXTOS_WORKSPACE": ""
+      }
+    }
+  }
+}

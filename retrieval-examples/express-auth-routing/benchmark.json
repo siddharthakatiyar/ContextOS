@@ -1,0 +1,21 @@
+[
+  {
+    "query": "How does authentication work for the profile route?",
+    "expectedFiles": [
+      "routes.ts",
+      "middleware/auth.ts",
+      "services/jwt.ts"
+    ],
+    "maxTokens": 1000,
+    "minRecall": 1.0
+  },
+  {
+    "query": "Where is the database accessed for the user profile?",
+    "expectedFiles": [
+      "controllers/user.ts",
+      "models/user.ts"
+    ],
+    "maxTokens": 800,
+    "minRecall": 1.0
+  }
+]

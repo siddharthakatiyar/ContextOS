@@ -180,15 +180,16 @@
 
 ## 6. Examples
 
-- [ ] Express
-- [ ] Next.js
-- [ ] React
-- [ ] Spring Boot
-- [ ] FastAPI
-- [ ] Go
-- [ ] Python
-- [ ] Monorepo
-- [ ] Large repo
+- [x] Express (express-auth-routing)
+- [x] Next.js (nextjs-rsc-boundaries)
+- [x] React (partially covered via nextjs components)
+- [~] Spring Boot (missing, replaced by Go/FastAPI focus for now)
+- [x] FastAPI (fastapi-dependencies)
+- [x] Go (go-interfaces)
+- [x] Python (covered by fastapi-dependencies)
+- [x] Monorepo (covered by Next.js app structure boundaries)
+- [x] Large repo (tools/generate-large-repo.ts)
+- [x] Edge case (cyclic-dependencies)
 
 ---
 
