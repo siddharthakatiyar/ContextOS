@@ -11,6 +11,9 @@
     "contextos": "./dist/bin/contextos.js"
   },
   "main": "dist/src/index.js",
+  "workspaces": [
+    "docs"
+  ],
   "files": [
     "dist/",
     "bin/",
