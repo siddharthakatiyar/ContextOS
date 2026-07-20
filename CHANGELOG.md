@@ -1,0 +1,38 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.8.0] - 2026-07-20
+
+### Added
+- **Background Daemon Indexing**: ContextOS now spawns a non-blocking daemon on `contextos init`. Massive repositories (50,000+ files) are now indexed seamlessly in the background without blocking your CLI or editor.
+- **Local SQLite Architecture**: Migrated fully away from Redis & Qdrant to a zero-dependency local SQLite architecture using FTS5 (BM25 ranking) and recursive Graph BFS (relationship expansion).
+- **Retrieval Benchmarks**: Added 6 new framework-specific retrieval benchmarks (`nextjs-rsc-boundaries`, `express-auth-routing`, etc.) which achieved 100% recall.
+- **Hybrid Embedding Fusion**: Optionally injects embeddings when keyword confidence is low (enabled via `embeddingsRetrieval: true`).
+- **Update Notifier**: The CLI now notifies you in the background when a new release is available on npm.
+
+### Changed
+- `contextos init` now returns instantly while indexing continues in the background. Check progress via `contextos status`.
+- MCP tools no longer require a running daemon/server to execute local retrieval requests.
+
+### Removed
+- Removed Redis caching and Qdrant vector database requirements. ContextOS is now 100% zero-dependency.
+
+## [0.7.1] - 2026-07-19
+
+### Added
+- Comprehensive Next.js Documentation site at `/docs`.
+- New `contextos status --json` output for IDE plugins and CI tracking.
+- Interactive terminal metrics and visualization for Graph Expansion limits.
+
+### Fixed
+- Fixed cyclical import detection during AST chunking which caused infinite loops in specific Monorepo setups.
+
+## [0.7.0] - 2026-07-16
+
+### Changed
+- **Breaking Change**: Consolidated MCP tools. `ctx_search`, `ctx_graph`, and `ctx_ast` were merged into a single unified `ctx_retrieve` tool for simplicity.
+- Revamped token budget enforcing. ContextOS now physically counts tokens using `gpt-tokenizer` to ensure strictly bound Context Windows.

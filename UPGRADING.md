@@ -1,0 +1,35 @@
+# Upgrading ContextOS
+
+This guide covers breaking changes and migration steps for upgrading ContextOS across major and minor versions.
+
+## 0.7.x to 0.8.x
+
+The `0.8.0` release introduces a massive architectural shift to a zero-dependency local SQLite architecture. 
+
+### 1. Redis and Qdrant are no longer required
+If you previously had `docker-compose` files or local instances of Redis and Qdrant running to support ContextOS, you can safely shut them down. ContextOS now uses `better-sqlite3` and `sqlite-vec` internally.
+
+### 2. Initialization is now non-blocking
+When you run `contextos init`, the CLI will now return instantly. A background daemon is spawned to index the repository. 
+- You can check progress via `contextos status`.
+- You can immediately start using `contextos query`, though results will be limited until the index completes.
+
+### 3. Configuration Changes
+The `contextos.json` schema has been updated. The `redis_url` and `qdrant_url` fields are deprecated and ignored. 
+
+If you want to enable the new Hybrid Embedding Fusion (which uses the Xenova local embedding model), add the following to your `contextos.json`:
+```json
+{
+  "pipeline": {
+    "embeddingFusion": true
+  }
+}
+```
+
+## 0.6.x to 0.7.x
+
+### 1. MCP Tool Consolidation
+The `ctx_search`, `ctx_graph`, and `ctx_ast` tools have been removed. They are replaced by a single, unified `ctx_retrieve` tool. Update your AI Assistant prompts to call `ctx_retrieve` instead.
+
+### 2. Token Budgets
+The `max_results` configuration has been deprecated in favor of `maxTokenBudget`. ContextOS now measures actual LLM tokens instead of arbitrary chunk counts.

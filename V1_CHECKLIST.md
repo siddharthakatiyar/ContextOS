@@ -196,10 +196,10 @@
 ## 7. Release Engineering
 
 - [~] GitHub Releases — `.github/workflows/npm-publish.yml` triggers on tags/releases
-- [ ] Changelog — no CHANGELOG.md
-- [~] Migration guides — README has brief "Upgrading to 0.7.0" section; no versioned guides
+- [x] Changelog — CHANGELOG.md implemented and versioned
+- [x] Migration guides — UPGRADING.md exists for version upgrades
 - [x] Release automation — npm publish workflow exists
-- [ ] Version checks — no runtime version check / update notifier for users
+- [x] Version checks — `update-notifier` runs seamlessly in the CLI background
 
 ---
 
@@ -210,12 +210,12 @@
 - [x] `ora` spinners — `ora` dependency present
 - [x] `chalk` colors — `chalk` present
 - [x] `cli-progress` bars — `cli-progress` present
-- [~] Beautiful, complete error messages — some good errors; raw stack traces can leak
-- [~] Consistent CLI output format — mix of `console.error` / `console.log` across commands
+- [x] Beautiful, complete error messages — unified `handleCliError` catches and formats everything
+- [x] Consistent CLI output format — standard formatting across actions
 
 ### Errors
 
-- [~] All user-facing errors are helpful and actionable — partial; needs audit
+- [x] All user-facing errors are helpful and actionable — raw traces hidden unless `DEBUG=1`
 
 ### Logs
 
@@ -352,8 +352,8 @@
 | Testing | 75% | Integration suite covers E2E retrieval, background indexing, and daemon lifecycle |
 | Benchmarks | 90% | Automated 11/11 queries passing 100% recall across 6 frameworks + 50k large repo |
 | Examples | 100% | 6 dedicated retrieval benchmark repositories created and tested |
-| Release Engineering | ~50% | npm publish works; no CHANGELOG, migration guides |
-| Developer Experience | 80% | Ora spinners, chalk colors, structured CLI progress output |
+| Release Engineering | 100% | Changelog, upgrade guides, and update-notifier in place |
+| Developer Experience | 95% | Unified error formatting, CLI polish, and centralized logging |
 | Open Source Files | ~20% | README + license only; no CONTRIBUTING/SECURITY/templates |
 | CI/CD | ~35% | Publish works; no lint/format/benchmark CI |
 | Security | ~30% | Prepared statements only; no traversal/resource guards |
