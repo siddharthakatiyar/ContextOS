@@ -9,35 +9,36 @@ export const metadata = {
 
 const releases = [
   {
-    version: "v0.7.2",
-    date: "19 Jul 2026",
-    type: "Minor Release",
-    description: "Robust file handling and chunk deduplication for index optimization.",
+    version: "v0.8.0",
+    date: "20 Jul 2026",
+    type: "Major Release",
+    description: "Zero-dependency local SQLite architecture and non-blocking background daemon indexing.",
     highlights: [
-      "Symlink loop prevention",
-      "Binary file sniffing",
-      "Generated code detection",
-      "Cross-file chunk deduplication"
+      "Background Daemon Indexing",
+      "Local SQLite Architecture",
+      "Retrieval Benchmarks (100% recall)",
+      "Hybrid Embedding Fusion",
+      "Update Notifier"
     ],
-    link: "#",
+    link: "https://github.com/siddharthakatiyar/ContextOS/releases/tag/v0.8.0",
     active: true,
   },
   {
     version: "v0.7.1",
     date: "19 Jul 2026",
     type: "Minor Release",
-    description: "Deterministic ranking and configurable retrieval pipeline stages.",
+    description: "Documentation updates and stability improvements for graph expansion.",
     highlights: [
-      "Stable hash tiebreaker",
-      "Configurable pipeline stages",
-      "NPM CI/CD fixes"
+      "Next.js Documentation site",
+      "status --json tracking",
+      "Monorepo AST fix"
     ],
-    link: "#",
+    link: "https://github.com/siddharthakatiyar/ContextOS/releases/tag/v0.7.1",
     active: false,
   },
   {
     version: "v0.7.0",
-    date: "19 Jul 2026",
+    date: "16 Jul 2026",
     type: "Major Release",
     description: "The largest architectural rewrite since ContextOS was created.",
     highlights: [
@@ -176,7 +177,7 @@ export default function ReleasesPage() {
                   ))}
                 </ul>
 
-                {release.active && (
+                {release.link !== "#" && (
                   <div className="mt-4 pt-4 border-t border-neutral-800">
                     <Link href={release.link} className="inline-flex items-center gap-2 text-white font-semibold hover:text-neutral-300 transition-colors">
                       View Release <ArrowRight className="w-4 h-4" />
