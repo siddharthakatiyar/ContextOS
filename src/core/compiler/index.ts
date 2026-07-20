@@ -440,7 +440,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
 
 /** Drop low-value framing sections when over budget (never touches code fences). */
 function trimOutputToBudget(output: string, maxTokens: number): string {
-  let tok = estimateTokens(output);
+  const tok = estimateTokens(output);
   if (tok <= maxTokens) return output;
   return output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
 }

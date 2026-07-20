@@ -111,7 +111,7 @@ export function expandMatchTokens(tokens: string[]): string[] {
     if (t.endsWith('es') && t.length > 5) out.add(t.slice(0, -2));
     if (t.endsWith('s') && t.length > 4) out.add(t.slice(0, -1));
     // Split camelCase / PascalCase / snake into segments
-    for (const part of t.split(/[_\-]+|(?=[A-Z])/)) {
+    for (const part of t.split(/[_-]+|(?=[A-Z])/)) {
       const p = part.toLowerCase();
       if (p.length >= 4) out.add(p);
     }

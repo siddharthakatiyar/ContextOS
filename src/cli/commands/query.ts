@@ -64,7 +64,12 @@ export const queryCommand = new Command('query')
         console.log(chalk.yellow('\n2. Graph Expansion:'));
         console.dir(result.expandedEntities, { depth: null, colors: true });
         console.log(chalk.yellow('\n3. Scored Chunks (Top 10):'));
-        console.dir(result.chunks.slice(0, 10).map(c => ({ id: c.id, score: c.score, layer: c.layer, symbol: c.symbolName })), { depth: null, colors: true });
+        console.dir(
+          result.chunks
+            .slice(0, 10)
+            .map((c) => ({ id: c.id, score: c.score, layer: c.layer, symbol: c.symbolName })),
+          { depth: null, colors: true }
+        );
         console.log(chalk.yellow('----------------------------------\n'));
       }
 

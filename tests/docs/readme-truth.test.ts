@@ -41,7 +41,7 @@ describe('README.md Truth Pass', () => {
       'forget_fact'
     ];
 
-    const toolsSectionMatch = readme.match(/## Available Tools\n\n([\s\S]*?)(?=\n## |\Z)/);
+    const toolsSectionMatch = readme.match(/## Available Tools\n\n([\s\S]*?)(?=\n## |$)/);
     expect(toolsSectionMatch).toBeDefined();
 
     if (toolsSectionMatch) {

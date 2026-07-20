@@ -14,7 +14,7 @@ export const analyticsCommand = new Command('analytics')
     let maxTokens = 0;
     let totalLatency = 0;
     let maxLatency = 0;
-    let allRecent: any[] = [];
+    const allRecent: any[] = [];
 
     for (const db of dbs) {
       const dbInstance = db.getInstance();

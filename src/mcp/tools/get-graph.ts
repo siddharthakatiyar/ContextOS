@@ -68,7 +68,7 @@ export function registerGetGraphTools(server: McpServer, db: DB) {
 
         // 1000-token cap enforcement (if we exceeded, we might want to trim, but the first chunk alone could be big. We just return it, the chunker already caps individual chunks to maxChunkTokens)
         // If the total output > 1000, we trim it? Wait, plan says "with fitContentToBudget caps: 1000 default".
-        let tokens = estimateTokens(output);
+        const tokens = estimateTokens(output);
         if (tokens > 1000) {
           // It's mostly the first chunk that is big
           const lines = output.split('\n');

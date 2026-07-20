@@ -28,7 +28,7 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
         } else {
           titleContext = currentBreadcrumbs.join(' > ');
         }
-        let tokens = estimateTokens(section.content);
+        const tokens = estimateTokens(section.content);
 
         if (tokens > maxTokens) {
           // split by paragraphs if too long
