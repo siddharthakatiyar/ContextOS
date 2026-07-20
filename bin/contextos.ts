@@ -19,6 +19,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { handleCliError } from '../src/cli/utils/errors.js';
+import updateNotifier from 'update-notifier';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 let pkgPath = path.join(__dirname, '../package.json');
@@ -26,6 +29,13 @@ if (!fs.existsSync(pkgPath)) {
   pkgPath = path.join(__dirname, '../../package.json');
 }
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+// Non-blocking update check
+updateNotifier({ pkg }).notify();
+
+// Global error handlers
+process.on('uncaughtException', handleCliError);
+process.on('unhandledRejection', handleCliError);
 
 program
   .name('contextos')
@@ -45,4 +55,10 @@ program.addCommand(reindexCommand);
 program.addCommand(cleanCommand);
 program.addCommand(daemonCommand);
 program.addCommand(visualizeCommand);
-program.parse(process.argv);
+
+// Wrap execution to catch sync errors
+try {
+  program.parse(process.argv);
+} catch (error) {
+  handleCliError(error);
+}
