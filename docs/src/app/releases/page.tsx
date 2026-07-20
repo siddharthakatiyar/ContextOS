@@ -1,119 +1,38 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { CopyCommand } from "@/components/copy-command";
+import { getChangelog, formatReleaseDate } from "@/lib/changelog";
+import { getReleaseBadge } from "@/lib/release-badge";
 
 export const metadata = {
   title: "Releases | ContextOS",
   description: "Changelog and release notes for ContextOS.",
 };
 
-const releases = [
-  {
-    version: "v0.8.0",
-    date: "20 Jul 2026",
-    type: "Major Release",
-    description: "Zero-dependency local SQLite architecture and non-blocking background daemon indexing.",
-    highlights: [
-      "Background Daemon Indexing",
-      "Local SQLite Architecture",
-      "Retrieval Benchmarks (100% recall)",
-      "Hybrid Embedding Fusion",
-      "Update Notifier"
-    ],
-    link: "https://github.com/siddharthakatiyar/ContextOS/releases/tag/v0.8.0",
-    active: true,
-  },
-  {
-    version: "v0.7.1",
-    date: "19 Jul 2026",
-    type: "Minor Release",
-    description: "Documentation updates and stability improvements for graph expansion.",
-    highlights: [
-      "Next.js Documentation site",
-      "status --json tracking",
-      "Monorepo AST fix"
-    ],
-    link: "https://github.com/siddharthakatiyar/ContextOS/releases/tag/v0.7.1",
-    active: false,
-  },
-  {
-    version: "v0.7.0",
-    date: "16 Jul 2026",
-    type: "Major Release",
-    description: "The largest architectural rewrite since ContextOS was created.",
-    highlights: [
-      "10× better token efficiency",
-      "Zero cross contamination",
-      "AST semantic chunking",
-    ],
-    link: "/releases/v0.7.0",
-    active: false,
-  },
-  {
-    version: "v0.6.0",
-    date: "10 Jul 2026",
-    type: "Minor Release",
-    description: "Retrieval overhaul featuring Schema v5, RRF fusion, and local embeddings.",
-    highlights: [
-      "RRF fusion retrieval",
-      "Query-aware compile",
-      "Hardened MCP tools",
-    ],
-    link: "#",
-    active: false,
-  },
-  {
-    version: "v0.5.0",
-    date: "10 Jul 2026",
-    type: "Minor Release",
-    description: "Major token optimization cutting E2E tokens under baseline.",
-    highlights: [
-      "Tiered compile",
-      "Retrieval precision",
-    ],
-    link: "#",
-    active: false,
-  },
-  {
-    version: "v0.4.0",
-    date: "07 Jul 2026",
-    type: "Minor Release",
-    description: "General robustness and security update.",
-    highlights: [
-      "Security patches",
-      "Stability improvements",
-    ],
-    link: "#",
-    active: false,
-  },
-  {
-    version: "v0.3.0",
-    date: "06 Jul 2026",
-    type: "Minor Release",
-    description: "Introduced cross-session memory and smart context assembly.",
-    highlights: [
-      "Cross-session memory",
-      "Smart context assembly",
-      "Graph visualization",
-    ],
-    link: "#",
-    active: false,
-  },
-  {
-    version: "v0.2.0",
-    date: "09 Jun 2026",
-    type: "Initial Release",
-    description: "First public beta of ContextOS.",
-    highlights: [
-      "Basic file retrieval",
-      "CLI interface",
-    ],
-    link: "#",
-    active: false,
-  }
-];
+const MAX_HIGHLIGHTS = 5;
+
+function getHighlights(entry: ReturnType<typeof getChangelog>[number]) {
+  const bullets = entry.sections.flatMap((section) => section.bullets);
+  const leads = bullets.filter((bullet) => bullet.lead).map((bullet) => bullet.lead as string);
+  if (leads.length > 0) return leads.slice(0, MAX_HIGHLIGHTS);
+  return bullets.slice(0, MAX_HIGHLIGHTS).map((bullet) => bullet.rest || bullet.raw);
+}
+
+function getReleases() {
+  const entries = getChangelog();
+  return entries.map((entry, idx) => ({
+    version: entry.slug,
+    date: formatReleaseDate(entry.date),
+    type: getReleaseBadge(entry.version, idx === entries.length - 1),
+    description: entry.summary ?? "",
+    highlights: getHighlights(entry),
+    link: `/releases/${entry.slug}`,
+    active: idx === 0,
+  }));
+}
 
 export default function ReleasesPage() {
+  const releases = getReleases();
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-white/20">
       
@@ -177,13 +96,11 @@ export default function ReleasesPage() {
                   ))}
                 </ul>
 
-                {release.link !== "#" && (
-                  <div className="mt-4 pt-4 border-t border-neutral-800">
-                    <Link href={release.link} className="inline-flex items-center gap-2 text-white font-semibold hover:text-neutral-300 transition-colors">
-                      View Release <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-                )}
+                <div className="mt-4 pt-4 border-t border-neutral-800">
+                  <Link href={release.link} className="inline-flex items-center gap-2 text-white font-semibold hover:text-neutral-300 transition-colors">
+                    View Release <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
               </div>
             </div>
           ))}

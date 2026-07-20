@@ -16,7 +16,9 @@ export function parseMarkdown(filePath: string, rawContent: string): ParsedDocum
         if (key && values.length > 0) {
           let val: any = values.join(':').trim();
           if (val.startsWith('[') && val.endsWith(']')) {
-            try { val = JSON.parse(val.replace(/'/g, '"')); } catch (e) {}
+            try {
+              val = JSON.parse(val.replace(/'/g, '"'));
+            } catch (e) {}
           }
           frontmatter[key.trim()] = val;
         }
@@ -29,7 +31,7 @@ export function parseMarkdown(filePath: string, rawContent: string): ParsedDocum
 
   const lines = content.split('\n');
   const sections: Section[] = [];
-  
+
   let currentSection: Section = createSection(null, 0, 1);
   let currentContentLines: string[] = [];
   let inCodeBlock = false;
@@ -47,7 +49,7 @@ export function parseMarkdown(filePath: string, rawContent: string): ParsedDocum
       currentSection.content = currentContentLines.join('\n').trim();
       currentSection.endLine = i;
       currentSection.metadata = analyzeContent(currentSection.content);
-      
+
       // We push the section if it has content or a title
       if (currentSection.content.length > 0 || currentSection.title) {
         sections.push(currentSection);
@@ -77,7 +79,7 @@ export function parseMarkdown(filePath: string, rawContent: string): ParsedDocum
   return {
     filePath,
     frontmatter,
-    sections: rootSections,
+    sections: rootSections
   };
 }
 
@@ -93,7 +95,7 @@ function createSection(title: string | null, depth: number, startLine: number): 
       hasCodeBlocks: false,
       hasTables: false,
       hasLists: false,
-      wordCount: 0,
+      wordCount: 0
     }
   };
 }
@@ -103,7 +105,7 @@ function analyzeContent(content: string) {
     hasCodeBlocks: /```/.test(content),
     hasTables: /\|.+\|.+\|/.test(content),
     hasLists: /^\s*[-*+]\s|^\s*\d+\.\s/m.test(content),
-    wordCount: content.split(/\s+/).filter(w => w.length > 0).length,
+    wordCount: content.split(/\s+/).filter((w) => w.length > 0).length
   };
 }
 
@@ -112,7 +114,11 @@ function buildTree(sections: Section[]): Section[] {
   const stack: Section[] = [];
 
   for (const section of sections) {
-    while (stack.length > 0 && stack[stack.length - 1].depth >= section.depth && section.depth > 0) {
+    while (
+      stack.length > 0 &&
+      stack[stack.length - 1].depth >= section.depth &&
+      section.depth > 0
+    ) {
       stack.pop();
     }
 

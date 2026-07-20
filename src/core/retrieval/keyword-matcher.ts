@@ -16,7 +16,10 @@ export interface WeightedList {
  * Reciprocal Rank Fusion across per-strategy ranked lists.
  * score(d) = Σ (weight_i * 1/(k + rank_i(d)))
  */
-export function reciprocalRankFusion(weightedLists: WeightedList[], k: number = RRF_K): ScoredChunk[] {
+export function reciprocalRankFusion(
+  weightedLists: WeightedList[],
+  k: number = RRF_K
+): ScoredChunk[] {
   const fused = new Map<string, ScoredChunk>();
 
   for (const { list, weight } of weightedLists) {
@@ -35,14 +38,14 @@ export function reciprocalRankFusion(weightedLists: WeightedList[], k: number = 
   // Scale RRF into ~1–10 range so post-fusion absolute adds don't wash out ranking.
   // Use chunk ID as a stable tiebreaker so equal-score chunks sort consistently.
   return Array.from(fused.values())
-    .map(c => ({ ...c, score: c.score * 100 }))
-    .sort((a, b) => (b.score - a.score) || a.id.localeCompare(b.id));
+    .map((c) => ({ ...c, score: c.score * 100 }))
+    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 }
 
 function rankByBm25(chunks: any[]): ScoredChunk[] {
   const scored = chunks.map((c, i) => ({
     ...c,
-    score: typeof c.score === 'number' ? c.score : (chunks.length - i),
+    score: typeof c.score === 'number' ? c.score : chunks.length - i
   })) as ScoredChunk[];
   scored.sort((a, b) => (b.score || 0) - (a.score || 0));
   return scored;
@@ -69,18 +72,23 @@ function pushList(lists: WeightedList[], hits: any[], weight: number = 1): void 
 }
 
 function stemVariants(stem: string): string[] {
-  const pascalParts = stem.split(/(?=[A-Z])/).map(s => s.toLowerCase()).filter(s => s.length >= 3);
-  return [...new Set([
-    stem,
-    stem.replace(/ing$/, 'er'),
-    stem.replace(/ing$/, ''),
-    stem.replace(/ion$/, ''),
-    stem.replace(/tion$/, 't'),
-    stem.replace(/s$/, ''),
-    stem.replace(/_/g, '-'),
-    stem.replace(/-/g, '_'),
-    ...pascalParts,
-  ])].filter(v => v.length >= 3);
+  const pascalParts = stem
+    .split(/(?=[A-Z])/)
+    .map((s) => s.toLowerCase())
+    .filter((s) => s.length >= 3);
+  return [
+    ...new Set([
+      stem,
+      stem.replace(/ing$/, 'er'),
+      stem.replace(/ing$/, ''),
+      stem.replace(/ion$/, ''),
+      stem.replace(/tion$/, 't'),
+      stem.replace(/s$/, ''),
+      stem.replace(/_/g, '-'),
+      stem.replace(/-/g, '_'),
+      ...pascalParts
+    ])
+  ].filter((v) => v.length >= 3);
 }
 
 /** Expand concept tokens with simple English stems for fuzzy symbol match. */
@@ -103,7 +111,7 @@ export function expandMatchTokens(tokens: string[]): string[] {
     if (t.endsWith('es') && t.length > 5) out.add(t.slice(0, -2));
     if (t.endsWith('s') && t.length > 4) out.add(t.slice(0, -1));
     // Split camelCase / PascalCase / snake into segments
-    for (const part of t.split(/[_\-]+|(?=[A-Z])/)) {
+    for (const part of t.split(/[_-]+|(?=[A-Z])/)) {
       const p = part.toLowerCase();
       if (p.length >= 4) out.add(p);
     }
@@ -131,7 +139,11 @@ export class KeywordMatcher {
   }
 
   /** Strategy 0: Exact match for quoted terms */
-  private strategyQuoted(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): any[] {
+  private strategyQuoted(
+    intent: DetectedIntent,
+    opts?: RetrievalOptions,
+    ftsLimit?: number
+  ): any[] {
     const hits: any[] = [];
     for (const term of intent.quotedTerms) {
       hits.push(...this.runFTS(`"${term.replace(/"/g, '""')}"`, opts, ftsLimit));
@@ -140,17 +152,21 @@ export class KeywordMatcher {
   }
 
   /** Strategy 1: FTS5 OR (recall) + AND (precision) — double-weighted for content markers */
-  private strategyFts(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): WeightedList[] {
+  private strategyFts(
+    intent: DetectedIntent,
+    opts?: RetrievalOptions,
+    ftsLimit?: number
+  ): WeightedList[] {
     const lists: WeightedList[] = [];
     const searchTerms = intent.concepts.slice(0, 15);
     if (searchTerms.length === 0) return lists;
 
-    const ftsQueryOr = searchTerms.map(c => `"${c.replace(/"/g, '""')}"`).join(' OR ');
+    const ftsQueryOr = searchTerms.map((c) => `"${c.replace(/"/g, '""')}"`).join(' OR ');
     const orHits = this.runFTS(ftsQueryOr, opts, ftsLimit);
     pushList(lists, orHits, 2);
 
     if (searchTerms.length >= 2 && searchTerms.length <= 6) {
-      const ftsQueryAnd = searchTerms.map(c => `"${c.replace(/"/g, '""')}"`).join(' AND ');
+      const ftsQueryAnd = searchTerms.map((c) => `"${c.replace(/"/g, '""')}"`).join(' AND ');
       const andHits = this.runFTS(ftsQueryAnd, opts, ftsLimit);
       pushList(lists, andHits, 2);
     }
@@ -158,7 +174,12 @@ export class KeywordMatcher {
     // Per-term FTS for longer concepts — surfaces content-only anchors (allChunksMap, etc.)
     for (const term of searchTerms) {
       if (term.length < 6 || term.includes(' ')) continue;
-      if (/^(function|method|string|number|object|return|const|import|export|class|boolean|array)$/i.test(term)) continue;
+      if (
+        /^(function|method|string|number|object|return|const|import|export|class|boolean|array)$/i.test(
+          term
+        )
+      )
+        continue;
       const limit = Math.min(ftsLimit || 30, 8);
       const hits = this.runFTS(`"${term.replace(/"/g, '""')}"`, opts, limit);
       pushList(lists, hits, 0.4); // Reduced weight so generic unigrams don't wash out multi-term exact matches
@@ -167,7 +188,11 @@ export class KeywordMatcher {
   }
 
   /** Strategy 2: identifiers → keyword / symbol / parent children */
-  private strategyIdentifiers(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): WeightedList[] {
+  private strategyIdentifiers(
+    intent: DetectedIntent,
+    opts?: RetrievalOptions,
+    ftsLimit?: number
+  ): WeightedList[] {
     const lists: WeightedList[] = [];
     if (intent.identifiers.length === 0) return lists;
     const layerOpts = opts?.layers && opts.layers.length > 0 ? { layers: opts.layers } : undefined;
@@ -178,18 +203,18 @@ export class KeywordMatcher {
       for (const repo of this.chunksRepos) {
         idHits.push(...repo.findByKeyword(identifier, layerOpts));
         const symbolHits = repo.findBySymbolName(identifier, layerOpts);
-        exactSymbolHits.push(...symbolHits.map(h => ({ ...h, score: 20 })));
+        exactSymbolHits.push(...symbolHits.map((h) => ({ ...h, score: 20 })));
         idHits.push(...repo.findByParentSymbol(identifier, layerOpts));
 
         let expanded = 0;
         // Prefer longer/more specific class names (SessionStore before Session)
         const classHits = symbolHits
-          .filter(h => (h.symbolKind === 'class' || h.symbolKind === 'struct') && h.symbolName)
-          .sort((a, b) => (b.symbolName!.length - a.symbolName!.length));
+          .filter((h) => (h.symbolKind === 'class' || h.symbolKind === 'struct') && h.symbolName)
+          .sort((a, b) => b.symbolName!.length - a.symbolName!.length);
         for (const hit of classHits) {
           if (expanded >= MAX_CLASS_EXPAND_PER_ID) break;
           exactSymbolHits.push(
-            ...repo.findByParentSymbol(hit.symbolName!, layerOpts).map(h => ({ ...h, score: 15 }))
+            ...repo.findByParentSymbol(hit.symbolName!, layerOpts).map((h) => ({ ...h, score: 15 }))
           );
           expanded++;
         }
@@ -197,9 +222,9 @@ export class KeywordMatcher {
       idHits.push(...this.runFTS(`"${identifier.replace(/"/g, '""')}"`, opts, ftsLimit));
       // Call-site discovery: FTS for the identifier also finds registration/wiring files
       exactSymbolHits.push(
-        ...this.runFTS(`"${identifier.replace(/"/g, '""')}"`, opts, ftsLimit).map(h => ({
+        ...this.runFTS(`"${identifier.replace(/"/g, '""')}"`, opts, ftsLimit).map((h) => ({
           ...h,
-          score: h.symbolKind === 'file' ? 45 : 18,
+          score: h.symbolKind === 'file' ? 45 : 18
         }))
       );
 
@@ -211,8 +236,8 @@ export class KeywordMatcher {
           const siblings = repo.findByFileStem(hit.fileStem, 8, layerOpts);
           exactSymbolHits.push(
             ...siblings
-              .filter(s => s.sourceFile === hit.sourceFile && s.id !== hit.id)
-              .map(s => ({ ...s, score: 14 }))
+              .filter((s) => s.sourceFile === hit.sourceFile && s.id !== hit.id)
+              .map((s) => ({ ...s, score: 14 }))
           );
         }
       }
@@ -226,7 +251,7 @@ export class KeywordMatcher {
   /** Strategy 3: Section title exact match (unigrams only) */
   private strategyTitleMatch(intent: DetectedIntent, opts?: RetrievalOptions): any[] {
     const layerOpts = opts?.layers && opts.layers.length > 0 ? { layers: opts.layers } : undefined;
-    const unigrams = intent.concepts.filter(c => c.split(' ').length === 1);
+    const unigrams = intent.concepts.filter((c) => c.split(' ').length === 1);
     const titleHits: any[] = [];
     for (const concept of unigrams) {
       // Penalize/skip extremely generic words that drown out structural intent
@@ -242,7 +267,11 @@ export class KeywordMatcher {
    * Strategy 4: Intent-aware boosting
    * Routes error/fix/implement/pr queries via semantic FTS expansions.
    */
-  private strategyIntentAware(intent: DetectedIntent, opts?: RetrievalOptions, ftsLimit?: number): any[] {
+  private strategyIntentAware(
+    intent: DetectedIntent,
+    opts?: RetrievalOptions,
+    ftsLimit?: number
+  ): any[] {
     const limit = Math.min(ftsLimit || 30, 8); // strict limit for generic intent words
     if (intent.intentType === 'fix') {
       return this.runFTS('"error" OR "bug" OR "exception" OR "fix"', opts, limit);
@@ -262,17 +291,17 @@ export class KeywordMatcher {
     const lists: WeightedList[] = [];
     const layerOpts = opts?.layers && opts.layers.length > 0 ? { layers: opts.layers } : undefined;
     const stemCandidates = new Set<string>([
-      ...intent.concepts.filter(c => c.split(' ').length === 1 && c.length >= 3),
-      ...intent.identifiers,
+      ...intent.concepts.filter((c) => c.split(' ').length === 1 && c.length >= 3),
+      ...intent.identifiers
     ]);
     const stemHits: any[] = [];
     const exactStemHits: any[] = [];
-    const idLower = new Set(intent.identifiers.map(i => i.toLowerCase()));
+    const idLower = new Set(intent.identifiers.map((i) => i.toLowerCase()));
 
     for (const stem of stemCandidates) {
       for (const v of stemVariants(stem)) {
         // Short generic stems (chunk, file, path) are noisy unless from an identifier
-        const weak = v.length < 5 && ![...idLower].some(i => i.includes(v.toLowerCase()));
+        const weak = v.length < 5 && ![...idLower].some((i) => i.includes(v.toLowerCase()));
         for (const repo of this.chunksRepos) {
           const fileHits = repo.findByFileStem(v, weak ? 8 : 20, layerOpts);
           for (const h of fileHits) {
@@ -304,7 +333,8 @@ export class KeywordMatcher {
         const stem = h.fileStem || path.basename(h.sourceFile).replace(/\.[^.]+$/, '');
         if (!stem || stem.length < 3) continue;
         siblingHits.push(
-          ...repo.findByFileStem(stem, 8, layerOpts)
+          ...repo
+            .findByFileStem(stem, 8, layerOpts)
             .filter((s: any) => s.sourceFile === h.sourceFile)
             .map((s: any) => ({ ...s, score: 12 }))
         );
@@ -322,28 +352,30 @@ export class KeywordMatcher {
     const exactHits: any[] = [];
     const tokens = expandMatchTokens([
       ...intent.identifiers,
-      ...intent.concepts.filter(c => !c.includes(' ')),
+      ...intent.concepts.filter((c) => !c.includes(' '))
     ]);
 
     for (const token of tokens) {
       if (token.length < 4) continue;
       // Avoid suffix-only fuzzy noise (command → watchCommand/statusCommand/…)
-      const weakFuzzy = token.length < 7 || /^(command|config|store|event|index|file|test|data|type|name)$/i.test(token);
+      const weakFuzzy =
+        token.length < 7 ||
+        /^(command|config|store|event|index|file|test|data|type|name)$/i.test(token);
       for (const repo of this.chunksRepos) {
         const exact = repo.findBySymbolName(token, layerOpts);
-        exactHits.push(...exact.map(h => ({ ...h, score: 20 })));
+        exactHits.push(...exact.map((h) => ({ ...h, score: 20 })));
         if (!weakFuzzy) {
           const fuzzy = repo.findBySymbolFuzzy(token, layerOpts);
-          symbolHits.push(...fuzzy.map(h => ({ ...h, score: 8 })));
+          symbolHits.push(...fuzzy.map((h) => ({ ...h, score: 8 })));
         }
         let expanded = 0;
         const classHits = exact
-          .filter(h => (h.symbolKind === 'class' || h.symbolKind === 'struct') && h.symbolName)
-          .sort((a, b) => (b.symbolName!.length - a.symbolName!.length));
+          .filter((h) => (h.symbolKind === 'class' || h.symbolKind === 'struct') && h.symbolName)
+          .sort((a, b) => b.symbolName!.length - a.symbolName!.length);
         for (const hit of classHits) {
           if (expanded >= MAX_CLASS_EXPAND_PER_ID) break;
           exactHits.push(
-            ...repo.findByParentSymbol(hit.symbolName!, layerOpts).map(h => ({ ...h, score: 16 }))
+            ...repo.findByParentSymbol(hit.symbolName!, layerOpts).map((h) => ({ ...h, score: 16 }))
           );
           expanded++;
         }
@@ -361,19 +393,19 @@ export class KeywordMatcher {
 
     // Strategy 0: Exact match for quoted terms
     pushList(strategyLists, this.strategyQuoted(intent, opts, ftsLimit));
-    
+
     // Strategy 1: FTS5 OR (recall) + AND (precision) — double-weighted for content markers
     strategyLists.push(...this.strategyFts(intent, opts, ftsLimit));
-    
+
     // Strategy 2: Identifiers
     strategyLists.push(...this.strategyIdentifiers(intent, opts, ftsLimit));
-    
+
     // Strategy 3: Section title exact match (unigrams only)
     pushList(strategyLists, this.strategyTitleMatch(intent, opts), 0.5); // reduced weight
-    
+
     // Strategy 4: Intent-aware boosting (intentType === 'fix' | implement | pr)
     pushList(strategyLists, this.strategyIntentAware(intent, opts, ftsLimit), 1);
-    
+
     // Strategy 5: Filename / path stem matching via findByFileStem
     strategyLists.push(...this.strategyFileStem(intent, opts));
     strategyLists.push(...this.strategyConceptSymbols(intent, opts));

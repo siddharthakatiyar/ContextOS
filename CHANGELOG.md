@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0] - 2026-07-20
 
+Zero-dependency local SQLite architecture and non-blocking background daemon indexing.
+
 ### Added
 - **Background Daemon Indexing**: ContextOS now spawns a non-blocking daemon on `contextos init`. Massive repositories (50,000+ files) are now indexed seamlessly in the background without blocking your CLI or editor.
 - **Local SQLite Architecture**: Migrated fully away from Redis & Qdrant to a zero-dependency local SQLite architecture using FTS5 (BM25 ranking) and recursive Graph BFS (relationship expansion).
@@ -23,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.1] - 2026-07-19
 
+Documentation updates and stability improvements for graph expansion.
+
 ### Added
 - Comprehensive Next.js Documentation site at `/docs`.
 - New `contextos status --json` output for IDE plugins and CI tracking.
@@ -33,6 +37,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2026-07-16
 
+The largest architectural rewrite since ContextOS was created.
+
 ### Changed
 - **Breaking Change**: Consolidated MCP tools. `ctx_search`, `ctx_graph`, and `ctx_ast` were merged into a single unified `ctx_retrieve` tool for simplicity.
 - Revamped token budget enforcing. ContextOS now physically counts tokens using `gpt-tokenizer` to ensure strictly bound Context Windows.
+
+## [0.6.0] - 2026-07-10
+
+Retrieval overhaul featuring Schema v5, RRF fusion, and local embeddings.
+
+### Changed
+- **RRF Fusion Retrieval**: Combined ranking signals using Reciprocal Rank Fusion.
+- **Query-Aware Compile**: Compilation now adapts to the query intent.
+- **Hardened MCP Tools**: Improved robustness of MCP tool execution.
+
+## [0.5.0] - 2026-07-10
+
+Major token optimization cutting E2E tokens under baseline.
+
+### Changed
+- **Tiered Compile**: Introduced a tiered compilation strategy to reduce token usage.
+- **Retrieval Precision**: Improved precision of retrieved context.
+
+## [0.4.0] - 2026-07-07
+
+General robustness and security update.
+
+### Changed
+- **Security Patches**: Addressed known security issues.
+- **Stability Improvements**: General reliability fixes across the CLI.
+
+## [0.3.0] - 2026-07-06
+
+Introduced cross-session memory and smart context assembly.
+
+### Added
+- **Cross-Session Memory**: Context now persists across sessions.
+- **Smart Context Assembly**: Automatically assembles relevant context for a query.
+- **Graph Visualization**: Visualize the relationship graph between files.
+
+## [0.2.0] - 2026-06-09
+
+First public beta of ContextOS.
+
+### Added
+- **Basic File Retrieval**: Initial retrieval implementation.
+- **CLI Interface**: First version of the command-line interface.

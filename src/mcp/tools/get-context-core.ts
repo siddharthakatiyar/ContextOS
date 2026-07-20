@@ -1,14 +1,14 @@
-import crypto from "crypto";
-import { RetrievalEngine } from "../../core/retrieval/index.js";
-import { compile } from "../../core/compiler/index.js";
-import { SessionStore } from "../../core/session/session-store.js";
-import { SessionManager } from "../../core/session/index.js";
-import { KnowledgeStore } from "../../core/memory/knowledge-store.js";
-import { PromptsRepo } from "../../core/storage/prompts-repo.js";
-import { estimateTokens } from "../../utils/tokens.js";
-import { recordRetrievedChunks } from "./feedback.js";
-import { loadConfig } from "../../config/index.js";
-import type { ScoredChunk } from "../../core/retrieval/types.js";
+import crypto from 'crypto';
+import { RetrievalEngine } from '../../core/retrieval/index.js';
+import { compile } from '../../core/compiler/index.js';
+import { SessionStore } from '../../core/session/session-store.js';
+import { SessionManager } from '../../core/session/index.js';
+import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
+import { PromptsRepo } from '../../core/storage/prompts-repo.js';
+import { estimateTokens } from '../../utils/tokens.js';
+import { recordRetrievedChunks } from './feedback.js';
+import { loadConfig } from '../../config/index.js';
+import type { ScoredChunk } from '../../core/retrieval/types.js';
 
 import { mergeMemoryPipeline } from '../../core/session/memory-merge.js';
 import { globalSentRegistry } from '../../core/session/sent-registry.js';
@@ -16,7 +16,7 @@ import { globalSentRegistry } from '../../core/session/sent-registry.js';
 export interface GetContextOpts {
   maxTokens?: number;
   layers?: string[];
-  outputFormat?: "markdown" | "xml";
+  outputFormat?: 'markdown' | 'xml';
   repoRoot?: string;
 }
 
@@ -35,8 +35,8 @@ export async function executeGetContext(
 ) {
   const { engine, sessionManager, knowledgeStore, promptsRepo, sessionStore } = deps;
   const maxTokens = opts.maxTokens ?? loadConfig().maxTokenBudget;
-  const layers = opts.layers ?? ["session", "workspace", "repo"];
-  const outputFormat = opts.outputFormat ?? "markdown";
+  const layers = opts.layers ?? ['session', 'workspace', 'repo'];
+  const outputFormat = opts.outputFormat ?? 'markdown';
   const repoRoot = opts.repoRoot ?? process.cwd();
 
   // Record user prompt event
@@ -50,7 +50,7 @@ export async function executeGetContext(
   const result = await engine.retrieve(prompt, {
     maxChunks: loadConfig().maxRetrievalResults,
     layers,
-    repoRoot,
+    repoRoot
   });
 
   const sessionChunks = await sessionManager.getSessionContext();
@@ -78,11 +78,8 @@ export async function executeGetContext(
 
   const compiled = compile(result, {
     maxTokens,
-    outputFormat: "markdown",
-    signalTerms: [
-      ...(result.intent?.identifiers || []),
-      ...(result.intent?.concepts || []),
-    ],
+    outputFormat: 'markdown',
+    signalTerms: [...(result.intent?.identifiers || []), ...(result.intent?.concepts || [])]
   });
 
   recordRetrievedChunks(result.chunks);
@@ -91,7 +88,7 @@ export async function executeGetContext(
     id: crypto.randomUUID(),
     prompt: prompt.length > 2000 ? prompt.substring(0, 2000) + '... [truncated]' : prompt,
     extractedConcepts: JSON.stringify(result.intent.concepts),
-    retrievedChunkIds: JSON.stringify(result.chunks.map(c => c.id)),
+    retrievedChunkIds: JSON.stringify(result.chunks.map((c) => c.id)),
     compiledTokenCount: compiled.tokenCount,
     latencyMs: result.latencyMs,
     createdAt: Date.now()

@@ -7,7 +7,9 @@ import { initCommand } from '../../src/cli/commands/init.js';
 // Mock dependencies that we don't want to actually run in the init test
 vi.mock('../../src/core/indexer/index.js', () => ({
   Indexer: class {
-    indexFile = vi.fn().mockResolvedValue({ processed: 0, chunksCreated: 0, relationshipsFound: 0, durationMs: 0 });
+    indexFile = vi
+      .fn()
+      .mockResolvedValue({ processed: 0, chunksCreated: 0, relationshipsFound: 0, durationMs: 0 });
   }
 }));
 
@@ -41,12 +43,12 @@ describe('CLI init command', () => {
     tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-cli-init-'));
     originalCwd = process.cwd;
     process.cwd = () => tmpCwd;
-    
+
     originalHome = process.env.HOME;
     process.env.HOME = tmpCwd;
-    
+
     homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(tmpCwd);
-    
+
     const globalHome = path.join(os.tmpdir(), 'contextos-home-test');
     if (fs.existsSync(globalHome)) {
       fs.rmSync(globalHome, { recursive: true, force: true });
@@ -57,25 +59,27 @@ describe('CLI init command', () => {
     process.cwd = originalCwd;
     process.env.HOME = originalHome;
     homedirSpy.mockRestore();
-    try { fs.rmSync(tmpCwd, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(tmpCwd, { recursive: true, force: true });
+    } catch {}
   });
 
   it('creates local .contextos directory and global home', async () => {
     // Suppress console output for the test
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    
+
     // We mock glob to return nothing so it finishes quickly
     await initCommand.parseAsync(['node', 'test']);
-    
+
     const repoContextDir = path.join(tmpCwd, '.contextos');
     const globalContextDir = path.join(os.tmpdir(), 'contextos-home-test', 'global');
-    
+
     expect(fs.existsSync(repoContextDir)).toBe(true);
     expect(fs.existsSync(globalContextDir)).toBe(true);
-    
+
     const defaultGlobalDoc = path.join(globalContextDir, 'engineering.md');
     expect(fs.existsSync(defaultGlobalDoc)).toBe(true);
-    
+
     consoleSpy.mockRestore();
   });
 });

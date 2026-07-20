@@ -40,7 +40,7 @@ export class FilesRepo {
 
   public listByLayer(layer: Layer): FileRecord[] {
     const stmt = this.db.prepare('SELECT * FROM files WHERE layer = ?');
-    return (stmt.all(layer) as any[]).map(r => this.mapRow(r));
+    return (stmt.all(layer) as any[]).map((r) => this.mapRow(r));
   }
 
   private mapRow(row: any): FileRecord {

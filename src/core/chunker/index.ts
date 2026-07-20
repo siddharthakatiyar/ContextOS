@@ -19,11 +19,16 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
       if (section.content.trim().length > 0) {
         let titleContext = '';
         if (currentBreadcrumbs.length > 3) {
-          titleContext = [currentBreadcrumbs[0], '...', currentBreadcrumbs[currentBreadcrumbs.length - 2], currentBreadcrumbs[currentBreadcrumbs.length - 1]].join(' > ');
+          titleContext = [
+            currentBreadcrumbs[0],
+            '...',
+            currentBreadcrumbs[currentBreadcrumbs.length - 2],
+            currentBreadcrumbs[currentBreadcrumbs.length - 1]
+          ].join(' > ');
         } else {
           titleContext = currentBreadcrumbs.join(' > ');
         }
-        let tokens = estimateTokens(section.content);
+        const tokens = estimateTokens(section.content);
 
         if (tokens > maxTokens) {
           // split by paragraphs if too long
@@ -36,7 +41,16 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
             const pTokens = estimateTokens(para);
             if (currentTokens + pTokens > maxTokens && currentChunkContent.trim().length > 0) {
               const segTitleContext = `${titleContext}#seg${segIndex++}`;
-              chunks.push(createChunk(currentChunkContent.trim(), segTitleContext, section.depth, doc.filePath, options, doc.frontmatter));
+              chunks.push(
+                createChunk(
+                  currentChunkContent.trim(),
+                  segTitleContext,
+                  section.depth,
+                  doc.filePath,
+                  options,
+                  doc.frontmatter
+                )
+              );
               currentChunkContent = para + '\n\n';
               currentTokens = pTokens;
             } else {
@@ -46,10 +60,28 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
           }
           if (currentChunkContent.trim().length > 0) {
             const segTitleContext = `${titleContext}#seg${segIndex++}`;
-            chunks.push(createChunk(currentChunkContent.trim(), segTitleContext, section.depth, doc.filePath, options, doc.frontmatter));
+            chunks.push(
+              createChunk(
+                currentChunkContent.trim(),
+                segTitleContext,
+                section.depth,
+                doc.filePath,
+                options,
+                doc.frontmatter
+              )
+            );
           }
         } else {
-          chunks.push(createChunk(section.content, titleContext, section.depth, doc.filePath, options, doc.frontmatter));
+          chunks.push(
+            createChunk(
+              section.content,
+              titleContext,
+              section.depth,
+              doc.filePath,
+              options,
+              doc.frontmatter
+            )
+          );
         }
       }
 
@@ -63,15 +95,28 @@ export function chunkDocument(doc: ParsedDocument, options: ChunkCreationOptions
   return chunks;
 }
 
-function createChunk(content: string, titleContext: string, depth: number, filePath: string, options: ChunkCreationOptions, frontmatter?: Record<string, unknown>): Chunk {
+function createChunk(
+  content: string,
+  titleContext: string,
+  depth: number,
+  filePath: string,
+  options: ChunkCreationOptions,
+  frontmatter?: Record<string, unknown>
+): Chunk {
   const keywords = extractKeywords(content, titleContext);
-  
+
   if (frontmatter) {
-    const customKeys = Array.isArray(frontmatter.triggers) ? frontmatter.triggers 
-      : (typeof frontmatter.triggers === 'string' ? frontmatter.triggers.split(',') : []);
-    const customKws = Array.isArray(frontmatter.keywords) ? frontmatter.keywords 
-      : (typeof frontmatter.keywords === 'string' ? frontmatter.keywords.split(',') : []);
-    
+    const customKeys = Array.isArray(frontmatter.triggers)
+      ? frontmatter.triggers
+      : typeof frontmatter.triggers === 'string'
+        ? frontmatter.triggers.split(',')
+        : [];
+    const customKws = Array.isArray(frontmatter.keywords)
+      ? frontmatter.keywords
+      : typeof frontmatter.keywords === 'string'
+        ? frontmatter.keywords.split(',')
+        : [];
+
     for (const k of [...customKeys, ...customKws]) {
       if (typeof k === 'string') keywords.push(k.trim().toLowerCase());
     }
@@ -139,5 +184,5 @@ export function extractKeywords(content: string, title: string | null): string[]
     }
   }
 
-  return Array.from(keywords).filter(w => !STOPWORDS.has(w));
+  return Array.from(keywords).filter((w) => !STOPWORDS.has(w));
 }

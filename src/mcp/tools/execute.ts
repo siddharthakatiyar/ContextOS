@@ -1,18 +1,16 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import path from "path";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
 /** Dangerous find(1) predicates that can execute commands or delete files. */
-const FIND_DANGEROUS_FLAGS = new Set([
-  '-exec', '-execdir', '-delete', '-ok', '-okdir',
-]);
+const FIND_DANGEROUS_FLAGS = new Set(['-exec', '-execdir', '-delete', '-ok', '-okdir']);
 
 function hasDangerousFindFlag(args: string[]): boolean {
-  return args.some(arg => FIND_DANGEROUS_FLAGS.has(arg.toLowerCase()));
+  return args.some((arg) => FIND_DANGEROUS_FLAGS.has(arg.toLowerCase()));
 }
 
 /** Block git flags that write output to an arbitrary file. */
@@ -33,59 +31,92 @@ function hasDangerousGitOutputFlag(args: string[]): boolean {
 
 export function registerExecuteTool(server: McpServer) {
   server.tool(
-    "ctx_execute",
-    "Execute a shell command within the workspace. Use this to run tests, build the project, or check status. SECURITY WARNING: Only allowed commands are permitted (ls, cat, head, tail, wc, find, grep, tree, npm, npx, tsc, git). Directory traversal outside cwd is not allowed.",
+    'ctx_execute',
+    'Execute a shell command within the workspace. Use this to run tests, build the project, or check status. SECURITY WARNING: Only allowed commands are permitted (ls, cat, head, tail, wc, find, grep, tree, npm, npx, tsc, git). Directory traversal outside cwd is not allowed.',
     {
-      command: z.string().describe("The shell command to execute"),
-      cwd: z.string().optional().describe("Working directory for the command (defaults to current directory)"),
+      command: z.string().describe('The shell command to execute'),
+      cwd: z
+        .string()
+        .optional()
+        .describe('Working directory for the command (defaults to current directory)')
     },
     async ({ command, cwd }) => {
       try {
         const cmdParts = command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
         if (cmdParts.length === 0) {
-          return { content: [{ type: "text", text: "Empty command." }], isError: true };
+          return { content: [{ type: 'text', text: 'Empty command.' }], isError: true };
         }
-        
+
         const exe = cmdParts[0] as string;
-        const args: string[] = cmdParts.slice(1).map(arg => {
-          if ((arg.startsWith('"') && arg.endsWith('"')) || (arg.startsWith("'") && arg.endsWith("'"))) {
+        const args: string[] = cmdParts.slice(1).map((arg) => {
+          if (
+            (arg.startsWith('"') && arg.endsWith('"')) ||
+            (arg.startsWith("'") && arg.endsWith("'"))
+          ) {
             return arg.slice(1, -1);
           }
           return arg;
         });
 
         const allowedCommands = [
-          'ls', 'cat', 'head', 'tail', 'wc', 'find', 'grep', 'tree',
-          'npm', 'npx', 'tsc', 'git'
+          'ls',
+          'cat',
+          'head',
+          'tail',
+          'wc',
+          'find',
+          'grep',
+          'tree',
+          'npm',
+          'npx',
+          'tsc',
+          'git'
         ];
-        
+
         if (!allowedCommands.includes(exe)) {
           return {
-            content: [{ type: "text", text: `Command not allowed. Allowed executables are: ${allowedCommands.join(', ')}` }],
-            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: `Command not allowed. Allowed executables are: ${allowedCommands.join(', ')}`
+              }
+            ],
+            isError: true
           };
         }
 
         if (exe === 'find' && hasDangerousFindFlag(args)) {
           return {
-            content: [{ type: "text", text: "Dangerous find flags (-exec, -execdir, -delete, -ok, -okdir) are not allowed." }],
-            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: 'Dangerous find flags (-exec, -execdir, -delete, -ok, -okdir) are not allowed.'
+              }
+            ],
+            isError: true
           };
         }
 
         if (exe === 'npm') {
           if (args[0] !== 'test' && args[0] !== 'run') {
             return {
-              content: [{ type: "text", text: `Arbitrary npm commands are not allowed. Allowed: test, run` }],
-              isError: true,
+              content: [
+                { type: 'text', text: `Arbitrary npm commands are not allowed. Allowed: test, run` }
+              ],
+              isError: true
             };
           }
           if (args[0] === 'run') {
             const allowedScripts = ['test', 'build', 'lint'];
             if (!allowedScripts.includes(args[1])) {
               return {
-                content: [{ type: "text", text: `Arbitrary npm run scripts are not allowed. Allowed scripts: ${allowedScripts.join(', ')}` }],
-                isError: true,
+                content: [
+                  {
+                    type: 'text',
+                    text: `Arbitrary npm run scripts are not allowed. Allowed scripts: ${allowedScripts.join(', ')}`
+                  }
+                ],
+                isError: true
               };
             }
           }
@@ -95,8 +126,13 @@ export function registerExecuteTool(server: McpServer) {
           const allowedNpx = ['vitest', 'jest'];
           if (!allowedNpx.includes(args[0])) {
             return {
-              content: [{ type: "text", text: `Arbitrary npx commands are not allowed. Allowed: ${allowedNpx.join(', ')}` }],
-              isError: true,
+              content: [
+                {
+                  type: 'text',
+                  text: `Arbitrary npx commands are not allowed. Allowed: ${allowedNpx.join(', ')}`
+                }
+              ],
+              isError: true
             };
           }
         }
@@ -105,14 +141,21 @@ export function registerExecuteTool(server: McpServer) {
           const allowedGit = ['status', 'log', 'diff', 'branch'];
           if (!allowedGit.includes(args[0])) {
             return {
-              content: [{ type: "text", text: `Arbitrary git commands are not allowed. Allowed: ${allowedGit.join(', ')}` }],
-              isError: true,
+              content: [
+                {
+                  type: 'text',
+                  text: `Arbitrary git commands are not allowed. Allowed: ${allowedGit.join(', ')}`
+                }
+              ],
+              isError: true
             };
           }
           if (hasDangerousGitOutputFlag(args)) {
             return {
-              content: [{ type: "text", text: "Git output-redirect flags (--output, -o) are not allowed." }],
-              isError: true,
+              content: [
+                { type: 'text', text: 'Git output-redirect flags (--output, -o) are not allowed.' }
+              ],
+              isError: true
             };
           }
         }
@@ -120,14 +163,14 @@ export function registerExecuteTool(server: McpServer) {
         for (const arg of args) {
           if (path.isAbsolute(arg) || arg.startsWith('/')) {
             return {
-              content: [{ type: "text", text: "Absolute paths are not allowed in arguments." }],
-              isError: true,
+              content: [{ type: 'text', text: 'Absolute paths are not allowed in arguments.' }],
+              isError: true
             };
           }
           if (arg.includes('../') || arg.includes('..\\')) {
             return {
-              content: [{ type: "text", text: "Directory traversal is not allowed in arguments." }],
-              isError: true,
+              content: [{ type: 'text', text: 'Directory traversal is not allowed in arguments.' }],
+              isError: true
             };
           }
         }
@@ -138,17 +181,19 @@ export function registerExecuteTool(server: McpServer) {
         const rootResolved = path.resolve(root);
         if (resolvedCwd !== rootResolved && !resolvedCwd.startsWith(rootResolved + path.sep)) {
           return {
-            content: [{ type: "text", text: `Execution outside workspace root (${root}) is not allowed.` }],
-            isError: true,
+            content: [
+              { type: 'text', text: `Execution outside workspace root (${root}) is not allowed.` }
+            ],
+            isError: true
           };
         }
 
-        const { stdout, stderr } = await execFileAsync(exe, args, { 
+        const { stdout, stderr } = await execFileAsync(exe, args, {
           cwd: resolvedCwd,
           timeout: 30000,
           maxBuffer: 1024 * 1024
         });
-        
+
         const capOutput = (output: string) => {
           const lines = output.split('\n');
           if (lines.length <= 250) return output;
@@ -157,12 +202,14 @@ export function registerExecuteTool(server: McpServer) {
           return `${head}\n\n... [${lines.length - 250} lines omitted by ContextOS] ...\n\n${tail}`;
         };
 
-        let output = "";
+        let output = '';
         if (stdout) output += `STDOUT:\n${capOutput(stdout)}\n`;
         if (stderr) output += `STDERR:\n${capOutput(stderr)}\n`;
 
         return {
-          content: [{ type: "text", text: output || "Command completed successfully with no output." }],
+          content: [
+            { type: 'text', text: output || 'Command completed successfully with no output.' }
+          ]
         };
       } catch (error: any) {
         const capOutput = (output: string) => {
@@ -175,12 +222,12 @@ export function registerExecuteTool(server: McpServer) {
         };
         return {
           content: [
-            { 
-              type: "text", 
-              text: `Command failed with exit code ${error.code}:\n\nSTDOUT:\n${capOutput(error.stdout)}\n\nSTDERR:\n${capOutput(error.stderr)}\n\nError Message:\n${error.message}` 
+            {
+              type: 'text',
+              text: `Command failed with exit code ${error.code}:\n\nSTDOUT:\n${capOutput(error.stdout)}\n\nSTDERR:\n${capOutput(error.stderr)}\n\nError Message:\n${error.message}`
             }
           ],
-          isError: true,
+          isError: true
         };
       }
     }

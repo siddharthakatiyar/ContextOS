@@ -31,7 +31,7 @@ describe('code-parser', () => {
       }
     `;
     const doc = await parseCode('calc.js', code);
-    const clazz = doc.symbols.find(s => s.kind === 'class');
+    const clazz = doc.symbols.find((s) => s.kind === 'class');
     expect(clazz).toBeDefined();
     expect(clazz?.name).toBe('Calculator');
   });

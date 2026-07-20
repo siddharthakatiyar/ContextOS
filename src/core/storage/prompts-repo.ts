@@ -17,7 +17,7 @@ export class PromptsRepo {
 
   public getRecent(limit: number = 5): PromptHistory[] {
     const stmt = this.db.prepare('SELECT * FROM prompts ORDER BY created_at DESC LIMIT ?');
-    return (stmt.all(limit) as any[]).map(r => this.mapRow(r));
+    return (stmt.all(limit) as any[]).map((r) => this.mapRow(r));
   }
 
   private mapRow(row: any): PromptHistory {

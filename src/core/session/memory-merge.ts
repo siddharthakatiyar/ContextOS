@@ -11,13 +11,19 @@ function contentHash(content: string): string {
 
 export function mergeMemoryPipeline(
   codeChunks: ScoredChunk[],
-  sessionChunks: Array<{ id: string; content: string; layer: string; importance: number; eventType?: string }>,
+  sessionChunks: Array<{
+    id: string;
+    content: string;
+    layer: string;
+    importance: number;
+    eventType?: string;
+  }>,
   knowledgeFacts: Array<{ id: string; fact: string; category: string; confidence: number }>,
-  intent: DetectedIntent,
+  intent: DetectedIntent
 ): ScoredChunk[] {
   const config = loadConfig();
   const injection = config.memoryInjection || 'relevant';
-  
+
   if (injection === 'off') {
     return codeChunks;
   }
@@ -25,9 +31,9 @@ export function mergeMemoryPipeline(
   const memory: ScoredChunk[] = [];
   const intentLower = intent.intentType?.toLowerCase() || '';
   const promptTokens = new Set([
-    ...intent.identifiers.map(i => i.toLowerCase()),
-    ...intent.concepts.map(c => c.toLowerCase()),
-    ...intent.quotedTerms.map(q => q.toLowerCase())
+    ...intent.identifiers.map((i) => i.toLowerCase()),
+    ...intent.concepts.map((c) => c.toLowerCase()),
+    ...intent.quotedTerms.map((q) => q.toLowerCase())
   ]);
 
   for (const sc of sessionChunks) {
@@ -51,10 +57,12 @@ export function mergeMemoryPipeline(
         if (hasError && intentLower !== 'fix') {
           continue; // never echo errors unless intent=fix
         }
-        
+
         // Term overlap
         const contentLower = content.toLowerCase();
-        const overlap = Array.from(promptTokens).some(t => t.length > 3 && contentLower.includes(t));
+        const overlap = Array.from(promptTokens).some(
+          (t) => t.length > 3 && contentLower.includes(t)
+        );
         if (overlap) {
           include = true;
           score = 5; // imp 9 -> 5
@@ -82,13 +90,14 @@ export function mergeMemoryPipeline(
         score: score,
         fileType: 'text',
         createdAt: Date.now(),
-        updatedAt: Date.now(),
+        updatedAt: Date.now()
       } as ScoredChunk);
     }
   }
 
   for (const fact of knowledgeFacts) {
-    if (injection === 'relevant' && fact.confidence < 0.6) { // fact score floor
+    if (injection === 'relevant' && fact.confidence < 0.6) {
+      // fact score floor
       continue;
     }
     const content = `**[${fact.category.toUpperCase()}]**: ${fact.fact}`;
@@ -110,7 +119,7 @@ export function mergeMemoryPipeline(
       fileType: 'text',
       language: undefined,
       createdAt: Date.now(),
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     } as ScoredChunk);
   }
 
@@ -132,7 +141,5 @@ export function mergeMemoryPipeline(
     }
   }
 
-  return [...codeChunks, ...cappedMemory].sort(
-    (a, b) => (b.score || 0) - (a.score || 0),
-  );
+  return [...codeChunks, ...cappedMemory].sort((a, b) => (b.score || 0) - (a.score || 0));
 }

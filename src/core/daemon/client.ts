@@ -26,11 +26,11 @@ function getSocketPath(projectDir: string): string {
 function connectToDaemon(socketPath: string): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath);
-    
+
     socket.once('connect', () => {
       resolve(socket);
     });
-    
+
     socket.once('error', (err) => {
       reject(err);
     });
@@ -83,10 +83,12 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
         } catch (err) {
           retries--;
           if (retries === 0) {
-            process.stderr.write(`Failed to connect to ContextOS Daemon at ${socketPath}: ${err}\n`);
+            process.stderr.write(
+              `Failed to connect to ContextOS Daemon at ${socketPath}: ${err}\n`
+            );
             process.exit(1);
           }
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise((r) => setTimeout(r, 200));
         }
       }
     }
@@ -95,7 +97,7 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
 
   const wireSocket = async () => {
     const socket = await connectWithRetry();
-    
+
     process.stdin.pipe(socket);
     socket.pipe(process.stdout);
 
@@ -103,13 +105,17 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
       // Cleanup existing bindings
       process.stdin.unpipe(socket);
       socket.unpipe(process.stdout);
-      
+
       // The daemon died or dropped us. Reconnect transparently.
       // Wait 100ms before trying to reconnect to let the port cleanup
-      setTimeout(() => wireSocket().catch(e => {
-        process.stderr.write(`Fatal reconnect error: ${e.message}\n`);
-        process.exit(1);
-      }), 100);
+      setTimeout(
+        () =>
+          wireSocket().catch((e) => {
+            process.stderr.write(`Fatal reconnect error: ${e.message}\n`);
+            process.exit(1);
+          }),
+        100
+      );
     };
 
     socket.once('close', onDisconnect);

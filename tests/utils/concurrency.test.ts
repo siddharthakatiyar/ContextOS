@@ -12,7 +12,7 @@ describe('pLimit', () => {
       if (activeCount > maxActiveCount) {
         maxActiveCount = activeCount;
       }
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
       activeCount--;
       return id;
     };
@@ -22,7 +22,7 @@ describe('pLimit', () => {
       limit(() => task(2, 20)),
       limit(() => task(3, 10)),
       limit(() => task(4, 10)),
-      limit(() => task(5, 10)),
+      limit(() => task(5, 10))
     ];
 
     const results = await Promise.all(promises);

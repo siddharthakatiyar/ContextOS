@@ -11,7 +11,7 @@ describe('Database Auto-Recovery', () => {
     fs.mkdirSync(path.join(tmpdir, '.contextos'), { recursive: true });
 
     // 1. Create a valid DB
-    let db = new DB(dbPath);
+    const db = new DB(dbPath);
     // Write something to ensure it's initialized
     db.getInstance().exec('CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY);');
     db.close();
@@ -32,9 +32,12 @@ describe('Database Auto-Recovery', () => {
     // 4. Verify it actually recovered by checking schema tables
     expect(recoveredDb).toBeDefined();
     if (recoveredDb) {
-      const tables = recoveredDb.getInstance().prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+      const tables = recoveredDb
+        .getInstance()
+        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all() as { name: string }[];
       // Should contain the standard contextOS schema tables like 'chunks', 'files', etc.
-      expect(tables.some(t => t.name === 'chunks')).toBe(true);
+      expect(tables.some((t) => t.name === 'chunks')).toBe(true);
       recoveredDb.close();
     }
 

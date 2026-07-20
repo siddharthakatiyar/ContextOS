@@ -164,23 +164,25 @@ function extractCompactSignature(c: ScoredChunk): string | null {
   const sigLines = [];
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) continue;
+    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*'))
+      continue;
     if (trimmed.startsWith('@')) continue; // skip decorators
     sigLines.push(trimmed);
     if (trimmed.includes('{')) break;
     if (sigLines.length > 4) break;
   }
-  let sig = sigLines.join(' ').replace(/\s*\{.*$/, '').trim();
+  let sig = sigLines
+    .join(' ')
+    .replace(/\s*\{.*$/, '')
+    .trim();
   if (sig.length > 120) sig = sig.slice(0, 117) + '...';
   return sig;
 }
 
 function toStub(c: ScoredChunk): ScoredChunk {
   const loc = stubLocLabel(c);
-  let sig = c.symbolName
-    ? `${c.symbolKind || 'symbol'} ${c.symbolName}`
-    : (c.sectionTitle || loc);
-  
+  let sig = c.symbolName ? `${c.symbolKind || 'symbol'} ${c.symbolName}` : c.sectionTitle || loc;
+
   const extracted = extractCompactSignature(c);
   if (extracted && extracted.includes(c.symbolName!)) {
     sig = extracted;
@@ -190,7 +192,7 @@ function toStub(c: ScoredChunk): ScoredChunk {
     ...c,
     content,
     tokenCount: Math.max(8, estimateTokens(content)),
-    summary: '[stub]',
+    summary: '[stub]'
   };
 }
 
@@ -207,13 +209,13 @@ function toStubOrSnippet(c: ScoredChunk, signalTerms?: string[], concepts?: stri
     const content = [
       head,
       ...slice,
-      ...(signalLines.length > 16 ? ['// [...truncated]'] : []),
+      ...(signalLines.length > 16 ? ['// [...truncated]'] : [])
     ].join('\n');
     return {
       ...c,
       content,
       tokenCount: estimateTokens(content),
-      summary: null,
+      summary: null
     };
   }
   return toStub(c);
@@ -227,7 +229,7 @@ function pushStubOrMini(
   used: number,
   budget: number,
   signalTerms?: string[],
-  concepts?: string[],
+  concepts?: string[]
 ): number {
   const mini = toStubOrSnippet(c, signalTerms, concepts);
   if (mini.summary !== '[stub]' && used + mini.tokenCount <= budget) {
@@ -243,16 +245,73 @@ function escapeRegExp(s: string): string {
 }
 
 const WEAK_STOP = new Set([
-  'the', 'and', 'for', 'how', 'with', 'from', 'that', 'this', 'into', 'during', 'using',
-  'are', 'was', 'what', 'when', 'where', 'which', 'than', 'then', 'also', 'just',
-  'a', 'an', 'or', 'to', 'of', 'in', 'on', 'is', 'be', 'by', 'as', 'at',
+  'the',
+  'and',
+  'for',
+  'how',
+  'with',
+  'from',
+  'that',
+  'this',
+  'into',
+  'during',
+  'using',
+  'are',
+  'was',
+  'what',
+  'when',
+  'where',
+  'which',
+  'than',
+  'then',
+  'also',
+  'just',
+  'a',
+  'an',
+  'or',
+  'to',
+  'of',
+  'in',
+  'on',
+  'is',
+  'be',
+  'by',
+  'as',
+  'at',
   // Generic code fragments that flood signal matching when split from camelCase
-  'score', 'file', 'path', 'chunk', 'type', 'name', 'data', 'list', 'item', 'info',
-  'value', 'index', 'count', 'total', 'result', 'error', 'test', 'config', 'option',
-  'source', 'target', 'start', 'final', 'merge', 'store', 'manager', 'handler',
+  'score',
+  'file',
+  'path',
+  'chunk',
+  'type',
+  'name',
+  'data',
+  'list',
+  'item',
+  'info',
+  'value',
+  'index',
+  'count',
+  'total',
+  'result',
+  'error',
+  'test',
+  'config',
+  'option',
+  'source',
+  'target',
+  'start',
+  'final',
+  'merge',
+  'store',
+  'manager',
+  'handler'
 ]);
 
-export function collectSignalTerms(signalTerms: string[] | undefined, concepts?: string[]): string[] {
+export function collectSignalTerms(
+  signalTerms: string[] | undefined,
+  concepts?: string[]
+): string[] {
   const terms = new Set<string>();
   for (const raw of concepts || []) {
     if (raw && typeof raw === 'string') terms.add(raw.trim());
@@ -289,7 +348,9 @@ export function collectSignalTerms(signalTerms: string[] | undefined, concepts?:
       const camel = base
         .split(/[-_]+/)
         .filter(Boolean)
-        .map((p, i) => (i === 0 ? p.toLowerCase() : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()))
+        .map((p, i) =>
+          i === 0 ? p.toLowerCase() : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
+        )
         .join('');
       if (camel.length >= 5) terms.add(camel);
     }
@@ -310,7 +371,10 @@ function longestSignalHit(line: string, terms: string[]): number {
   return best;
 }
 
-export function buildSignalRegex(signalTerms: string[] | undefined, concepts?: string[]): RegExp | null {
+export function buildSignalRegex(
+  signalTerms: string[] | undefined,
+  concepts?: string[]
+): RegExp | null {
   const list = collectSignalTerms(signalTerms, concepts);
   if (list.length === 0) return null;
   try {
@@ -327,7 +391,7 @@ export function truncatePreservingSignals(
   content: string,
   ratio: number,
   signalTerms?: string[],
-  concepts?: string[],
+  concepts?: string[]
 ): string {
   const lines = content.split('\n');
   const keep = Math.max(3, Math.floor(lines.length * Math.max(0.05, Math.min(1, ratio))));
@@ -335,9 +399,7 @@ export function truncatePreservingSignals(
 
   // Force-keep dotted call sites / pipeline markers — collectSignalTerms caps at 40 and
   // can drop short-but-critical terms like expander.expand under noisy prompts.
-  const forced = (signalTerms || []).filter(
-    (t) => typeof t === 'string' && t.includes('.')
-  );
+  const forced = (signalTerms || []).filter((t) => typeof t === 'string' && t.includes('.'));
   const termList = [...new Set([...forced, ...collectSignalTerms(signalTerms, concepts)])];
   const signalRe = buildSignalRegex(termList);
   const selected = new Set<number>();
@@ -358,8 +420,16 @@ export function truncatePreservingSignals(
     const isComment = /^\s*\/\//.test(lines[i]) || /^\s*\/\*/.test(lines[i]);
     // Comments often head multi-line if/blocks — look farther ahead
     const ahead = isComment
-      ? (rank >= 5 ? 16 : 10)
-      : (rank >= 12 ? 14 : rank >= 8 ? 10 : rank >= 6 ? 5 : 2);
+      ? rank >= 5
+        ? 16
+        : 10
+      : rank >= 12
+        ? 14
+        : rank >= 8
+          ? 10
+          : rank >= 6
+            ? 5
+            : 2;
     for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + ahead); j++) {
       selected.add(j);
     }
@@ -378,7 +448,7 @@ export function truncatePreservingSignals(
       callSites.push(i);
     }
   }
-      const callBudget = Math.max(4, Math.floor(keep * 0.35));
+  const callBudget = Math.max(4, Math.floor(keep * 0.35));
   const chosenCalls: number[] = [];
   // Prefer unique indices; prioritize call sites that mention signal terms
   const uniqCalls = [...new Set(callSites)];
@@ -421,9 +491,7 @@ export function truncatePreservingSignals(
       // Prefer comments that sit near a declaration
       const nearDecl =
         i + 1 < lines.length &&
-        /^\s*(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var)\b/.test(
-          lines[i + 1],
-        );
+        /^\s*(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var)\b/.test(lines[i + 1]);
       if (nearDecl) {
         selected.add(i);
         if (i + 1 < lines.length) selected.add(i + 1);
@@ -448,8 +516,16 @@ export function truncatePreservingSignals(
       must.add(i);
       const isComment = /^\s*\/\//.test(lines[i]) || /^\s*\/\*/.test(lines[i]);
       const ahead = isComment
-        ? (rank >= 5 ? 16 : 10)
-        : (rank >= 12 ? 14 : rank >= 8 ? 10 : rank >= 6 ? 5 : 2);
+        ? rank >= 5
+          ? 16
+          : 10
+        : rank >= 12
+          ? 14
+          : rank >= 8
+            ? 10
+            : rank >= 6
+              ? 5
+              : 2;
       for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + ahead); j++) {
         must.add(j);
       }
@@ -468,7 +544,7 @@ export function truncatePreservingSignals(
       for (const { i, rank } of rankedSignalHits.slice(0, Math.max(4, Math.floor(keep * 0.35)))) {
         priority.add(i);
         const isComment = /^\s*\/\//.test(lines[i]) || /^\s*\/\*/.test(lines[i]);
-        const ahead = isComment ? 14 : (rank >= 12 ? 10 : rank >= 8 ? 6 : 3);
+        const ahead = isComment ? 14 : rank >= 12 ? 10 : rank >= 8 ? 6 : 3;
         for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + ahead); j++) {
           priority.add(j);
         }
@@ -502,7 +578,7 @@ function fitContentToBudget(
   content: string,
   maxTok: number,
   signalTerms?: string[],
-  concepts?: string[],
+  concepts?: string[]
 ): { content: string; tokenCount: number } {
   let tok = estimateTokens(content);
   if (tok <= maxTok) return { content, tokenCount: tok };
@@ -528,12 +604,16 @@ function fitContentToBudget(
     for (const { i, rank } of ranked) {
       if (keepIdx.size >= 40) break;
       const isComment = /^\s*\/\//.test(lines[i]) || /^\s*\/\*/.test(lines[i]);
-      const ahead = isComment ? 16 : (rank >= 10 ? 12 : rank >= 6 ? 4 : 1);
+      const ahead = isComment ? 16 : rank >= 10 ? 12 : rank >= 6 ? 4 : 1;
       for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + ahead); j++) {
         keepIdx.add(j);
       }
     }
-    out = [...keepIdx].sort((a, b) => a - b).map((i) => lines[i]).join('\n') + '\n//…';
+    out =
+      [...keepIdx]
+        .sort((a, b) => a - b)
+        .map((i) => lines[i])
+        .join('\n') + '\n//…';
     tok = estimateTokens(out);
   }
   if (tok > maxTok) {
@@ -550,7 +630,12 @@ function fitContentToBudget(
 
 function prepareContent(c: ScoredChunk): ScoredChunk {
   let content = c.content;
-  if (c.fileType === 'config' || c.language === 'json' || c.language === 'yaml' || c.language === 'yml') {
+  if (
+    c.fileType === 'config' ||
+    c.language === 'json' ||
+    c.language === 'yaml' ||
+    c.language === 'yml'
+  ) {
     content = minifyConfigContent(content, c.language);
   } else {
     content = canonicalizeWhitespace(content);
@@ -579,10 +664,7 @@ function normKey(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-export function buildCompressCtx(
-  signalList: string[],
-  idSet: Set<string>,
-): CompressCtx {
+export function buildCompressCtx(signalList: string[], idSet: Set<string>): CompressCtx {
   /** True when prompt names this symbol, or a camelCase/compound extension of it (compile↔compileLayer). */
   const symbolNamedInPrompt = (symbol: string | null | undefined): boolean => {
     if (!symbol) return false;
@@ -603,34 +685,47 @@ export function buildCompressCtx(
       [...signalKeys].some(
         (k) =>
           (k.length >= 6 && (stem.includes(k) || k.includes(stem))) ||
-          (sym.length >= 4 && (sym === k || (k.length >= 6 && (sym.includes(k) || k.includes(sym))))),
+          (sym.length >= 4 &&
+            (sym === k || (k.length >= 6 && (sym.includes(k) || k.includes(sym)))))
       )
     );
   };
   const contentHitsSignal = (c: ScoredChunk): boolean => {
     const sym = (c.symbolName || '').toLowerCase();
-    if (sym && signalList.some((t) => {
-      const tl = t.toLowerCase();
-      return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
-    })) return true;
+    if (
+      sym &&
+      signalList.some((t) => {
+        const tl = t.toLowerCase();
+        return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
+      })
+    )
+      return true;
     // CamelCase parts (getSessionContext → session) vs multi-word signals
     if (c.symbolName) {
       const parts = c.symbolName
         .split(/(?=[A-Z])|[_\-.]+/)
         .map((p) => p.toLowerCase())
         .filter((p) => p.length >= 5);
-      if (parts.some((p) => signalList.some((t) => {
-        const tl = t.toLowerCase();
-        // Word-level only — avoid "knowledge" matching KnowledgeStore/registerKnowledgeTools
-        return tl === p || tl.split(/[\s_-]+/).includes(p);
-      }))) return true;
+      if (
+        parts.some((p) =>
+          signalList.some((t) => {
+            const tl = t.toLowerCase();
+            // Word-level only — avoid "knowledge" matching KnowledgeStore/registerKnowledgeTools
+            return tl === p || tl.split(/[\s_-]+/).includes(p);
+          })
+        )
+      )
+        return true;
     }
     if (c.symbolKind === 'segment' && c.parentSymbol) {
       const ps = c.parentSymbol.toLowerCase();
-      if (signalList.some((t) => {
-        const tl = t.toLowerCase();
-        return ps === tl || (tl.length >= 5 && (ps.includes(tl) || tl.includes(ps)));
-      })) return true;
+      if (
+        signalList.some((t) => {
+          const tl = t.toLowerCase();
+          return ps === tl || (tl.length >= 5 && (ps.includes(tl) || tl.includes(ps)));
+        })
+      )
+        return true;
     }
     if (stemMatch(c)) return true;
     const lower = c.content.toLowerCase();
@@ -665,16 +760,14 @@ export function deriveChunkSignalTerms(deduped: ScoredChunk[]): string[] {
     if (count >= 2) terms.add(target);
   }
 
-  return [...terms]
-    .filter((t) => typeof t === 'string' && t.length >= 4)
-    .slice(0, 16);
+  return [...terms].filter((t) => typeof t === 'string' && t.length >= 4).slice(0, 16);
 }
 
 /** Leader selection, dedup-prompt leader, segment-vs-parent preference. */
 export function pickPrimaries(
   deduped: ScoredChunk[],
   maxTokens: number,
-  ctx: CompressCtx,
+  ctx: CompressCtx
 ): ScoredChunk[] {
   const { signalList, idSet, symbolNamedInPrompt, stemMatch } = ctx;
 
@@ -683,25 +776,26 @@ export function pickPrimaries(
 
   const maxScore = Math.max(...candidates.map((c) => c.score || 0), 1);
   const approxBudget = Math.max(380, maxTokens - 140);
-  
-  const termRegexes = signalList.map(t => new RegExp(escapeRegExp(t), 'i'));
+
+  const termRegexes = signalList.map((t) => new RegExp(escapeRegExp(t), 'i'));
   const getCoverage = (content: string) => {
     let coverCount = 0;
     for (const re of termRegexes) {
       if (re.test(content)) coverCount++;
     }
-    return signalList.length > 0 ? (coverCount / signalList.length) : 0;
+    return signalList.length > 0 ? coverCount / signalList.length : 0;
   };
 
-  const scoredCandidates = candidates.map(c => {
+  const scoredCandidates = candidates.map((c) => {
     const normScore = (c.score || 0) / maxScore;
     const coverage = getCoverage(c.content);
     const hasSymbolNamed = symbolNamedInPrompt(c.symbolName) ? 1.0 : 0.0;
     const hasStemMatch = stemMatch(c) ? 1.0 : 0.0;
-    const wontFit = ((c.tokenCount || 0) > approxBudget * 0.92) ? 1.0 : 0.0;
-    
+    const wontFit = (c.tokenCount || 0) > approxBudget * 0.92 ? 1.0 : 0.0;
+
     // leadScore = normScore + 1.5·coverage + 1.0·symbolNamed + 0.5·stemMatch − 0.4·wontFit
-    const leadScore = normScore + (1.5 * coverage) + (1.0 * hasSymbolNamed) + (0.5 * hasStemMatch) - (0.4 * wontFit);
+    const leadScore =
+      normScore + 1.5 * coverage + 1.0 * hasSymbolNamed + 0.5 * hasStemMatch - 0.4 * wontFit;
     return { chunk: c, leadScore };
   });
 
@@ -733,7 +827,7 @@ export function pickPrimaries(
         (c) =>
           c.symbolKind === 'segment' &&
           c.sourceFile === giant.sourceFile &&
-          c.parentSymbol === giant.symbolName,
+          c.parentSymbol === giant.symbolName
       )
       .sort((a, b) => (b.score || 0) - (a.score || 0))
       .slice(0, 3);
@@ -741,7 +835,7 @@ export function pickPrimaries(
       primary = [
         ...rankedSegs,
         giant,
-        ...primary.filter((c) => c.id !== giant.id && !rankedSegs.some((s) => s.id === c.id)),
+        ...primary.filter((c) => c.id !== giant.id && !rankedSegs.some((s) => s.id === c.id))
       ];
     }
   }
@@ -753,7 +847,7 @@ export function pickPrimaries(
 export function collectCompanions(
   deduped: ScoredChunk[],
   primary: ScoredChunk[],
-  ctx: CompressCtx,
+  ctx: CompressCtx
 ): ScoredChunk[] {
   const { contentHitsSignal } = ctx;
   const leaderFile = primary[0]?.sourceFile;
@@ -783,7 +877,7 @@ export function collectCompanions(
 
   if (leaderFile) {
     const sameFile = deduped.filter(
-      (s) => s.sourceFile === leaderFile && !primaryIds.has(s.id) && !isTestFile(s),
+      (s) => s.sourceFile === leaderFile && !primaryIds.has(s.id) && !isTestFile(s)
     );
     sameFile.sort((a, b) => Number(contentHitsSignal(b)) - Number(contentHitsSignal(a)));
     for (const s of sameFile) {
@@ -799,7 +893,12 @@ export function collectCompanions(
     if (!contentHitsSignal(c)) continue;
     if (!tryPushCompanion(c)) continue;
     for (const s of deduped) {
-      if (s.sourceFile === c.sourceFile && !primaryIds.has(s.id) && !isTestFile(s) && s.tokenCount <= 550) {
+      if (
+        s.sourceFile === c.sourceFile &&
+        !primaryIds.has(s.id) &&
+        !isTestFile(s) &&
+        s.tokenCount <= 550
+      ) {
         tryPushCompanion(s);
         break;
       }
@@ -815,7 +914,7 @@ export function collectCompanions(
 export function orderForPacking(
   primary: ScoredChunk[],
   companions: ScoredChunk[],
-  ctx: CompressCtx,
+  ctx: CompressCtx
 ): ScoredChunk[] {
   const { idSet, contentHitsSignal } = ctx;
   const leaderFile = primary[0]?.sourceFile;
@@ -832,7 +931,7 @@ export function orderForPacking(
       c.symbolKind === 'segment' ||
       (c.tokenCount || 0) <= 550 ||
       (!!c.symbolName && idSet.has(c.symbolName.toLowerCase())) ||
-      (!!c.parentSymbol && idSet.has(c.parentSymbol.toLowerCase())),
+      (!!c.parentSymbol && idSet.has(c.parentSymbol.toLowerCase()))
   );
   const restCold = restPrimary.filter((c) => !restHot.includes(c));
   const orderedSources = [
@@ -842,7 +941,7 @@ export function orderForPacking(
     ...companions.filter((c) => c.sourceFile === leaderFile && contentHitsSignal(c)),
     ...companions.filter((c) => c.sourceFile !== leaderFile && contentHitsSignal(c)),
     ...companions.filter((c) => !contentHitsSignal(c)),
-    ...restCold,
+    ...restCold
   ];
   for (const c of orderedSources) {
     if (seen.has(c.id)) continue;
@@ -858,7 +957,7 @@ export function packToBudget(
   remainder: ScoredChunk[],
   budget: number,
   leaderFile: string | undefined,
-  ctx: CompressCtx,
+  ctx: CompressCtx
 ): ScoredChunk[] {
   const { signalList, idSet, symbolNamedInPrompt, contentHitsSignal } = ctx;
   const isExactTier = ctx.opts?.tier === 'exact' || ctx.opts?.tier === 'exact-implementation';
@@ -874,7 +973,7 @@ export function packToBudget(
 
   const finalCandidates: ScoredChunk[] = [];
   if (candidates.length > 0) finalCandidates.push(candidates[0]);
-  
+
   if (suppressSent) {
     for (let i = 1; i < candidates.length; i++) {
       const c = candidates[i];
@@ -906,17 +1005,15 @@ export function packToBudget(
           (x) =>
             x.id !== c.id &&
             x.tokenCount <= 550 &&
-            (x.sourceFile === c.sourceFile || contentHitsSignal(x)),
+            (x.sourceFile === c.sourceFile || contentHitsSignal(x))
         )
         .slice(0, 3);
       const siblingNeed = intactSiblings.reduce((s, x) => s + x.tokenCount, 0);
-      const minCompanionReserve = intactSiblings.length > 0
-        ? Math.min(400, Math.max(...intactSiblings.map((x) => x.tokenCount)))
-        : 0;
-      const reserve = Math.min(
-        budget * 0.4,
-        Math.max(siblingNeed * 0.9, minCompanionReserve),
-      );
+      const minCompanionReserve =
+        intactSiblings.length > 0
+          ? Math.min(400, Math.max(...intactSiblings.map((x) => x.tokenCount)))
+          : 0;
+      const reserve = Math.min(budget * 0.4, Math.max(siblingNeed * 0.9, minCompanionReserve));
       let leaderBudget = reserve > 0 ? Math.max(280, budget - reserve) : budget;
       // Huge leaders must leave room for companions — unless the prompt names this
       // symbol (or its parent class) exactly, then prefer a near-full body.
@@ -928,7 +1025,7 @@ export function packToBudget(
       } else if ((c.tokenCount > 800 || exactSymbolLeader) && exactSymbolLeader) {
         leaderBudget = Math.min(leaderBudget, Math.floor(budget * 0.92));
       }
-      
+
       if (ctx.opts?.tier === 'exact-implementation' && exactSymbolLeader) {
         leaderBudget = Math.max(leaderBudget, c.tokenCount + 100);
       } else {
@@ -959,7 +1056,8 @@ export function packToBudget(
           if (full[0].tokenCount > maxLeader) {
             const lterms = full[0].symbolName ? [...truncTerms, full[0].symbolName] : truncTerms;
             const ratio = Math.max(0.2, maxLeader / full[0].tokenCount);
-            const content = truncatePreservingSignals(full[0].content, ratio, lterms) + '\n\n[...truncated]';
+            const content =
+              truncatePreservingSignals(full[0].content, ratio, lterms) + '\n\n[...truncated]';
             const newTok = estimateTokens(content);
             used -= full[0].tokenCount - newTok;
             full[0] = { ...full[0], content, tokenCount: newTok };
@@ -987,7 +1085,10 @@ export function packToBudget(
     }
 
     // Large same-file or signal-hit chunks: truncate generously
-    if ((contentHitsSignal(c) || c.sourceFile === leaderFile) && (budget - used > 100 || full.length > 0)) {
+    if (
+      (contentHitsSignal(c) || c.sourceFile === leaderFile) &&
+      (budget - used > 100 || full.length > 0)
+    ) {
       // Free room from non-signal bodies
       for (let j = full.length - 1; j >= 1 && budget - used < 400; j--) {
         if (contentHitsSignal(full[j]) || full[j].sourceFile === leaderFile) continue;
@@ -1001,7 +1102,8 @@ export function packToBudget(
         if (full[0].tokenCount > maxLeader) {
           const lterms = full[0].symbolName ? [...truncTerms, full[0].symbolName] : truncTerms;
           const ratio = maxLeader / full[0].tokenCount;
-          const content = truncatePreservingSignals(full[0].content, ratio, lterms) + '\n\n[...truncated]';
+          const content =
+            truncatePreservingSignals(full[0].content, ratio, lterms) + '\n\n[...truncated]';
           const newTok = estimateTokens(content);
           used -= full[0].tokenCount - newTok;
           full[0] = { ...full[0], content, tokenCount: newTok };
@@ -1040,7 +1142,7 @@ export function packToBudget(
     } else {
       used = pushStubOrMini(c, full, stubs, used, budget, terms);
     }
-    
+
     if (isExactTier && used >= budget && full.length > 0) {
       // Don't fill budget with distant companions if we have the exact hit
       break;
@@ -1136,10 +1238,10 @@ export function packToBudget(
   // Interval-overlap test: if parent is intact, drop overlapping segments
   const intactParentKeys = new Set(
     full
-      .filter(c => c.symbolKind !== 'segment' && !c.content.includes('[...truncated]'))
-      .map(c => `${c.sourceFile}::${c.symbolName}`)
+      .filter((c) => c.symbolKind !== 'segment' && !c.content.includes('[...truncated]'))
+      .map((c) => `${c.sourceFile}::${c.symbolName}`)
   );
-  
+
   const finalFull: ScoredChunk[] = [];
   for (const c of full) {
     if (c.symbolKind === 'segment' && c.parentSymbol) {
@@ -1169,11 +1271,11 @@ export function packToBudget(
 export function compressChunks(
   chunks: ScoredChunk[],
   maxTokens: number,
-  opts?: CompressOptions | string[],
+  opts?: CompressOptions | string[]
 ): ScoredChunk[] {
   const signalTerms = Array.isArray(opts) ? opts : opts?.signalTerms;
-  const identifiers = Array.isArray(opts) ? [] : (opts?.identifiers || []);
-  const concepts = Array.isArray(opts) ? [] : (opts?.concepts || []);
+  const identifiers = Array.isArray(opts) ? [] : opts?.identifiers || [];
+  const concepts = Array.isArray(opts) ? [] : opts?.concepts || [];
   const idSet = new Set(identifiers.map((id) => id.toLowerCase()));
   const signalList = collectSignalTerms(signalTerms, concepts);
   const ctx = buildCompressCtx(signalList, idSet);
@@ -1194,24 +1296,35 @@ export function compressChunks(
       if ((c.tokenCount || 0) < 60 && (c.score || 0) >= cutoff * 0.4) return true;
       const sym = (c.symbolName || '').toLowerCase();
       if (!sym) return false;
-      if (signalList.some((t) => {
-        const tl = t.toLowerCase();
-        return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
-      })) return true;
+      if (
+        signalList.some((t) => {
+          const tl = t.toLowerCase();
+          return sym === tl || (tl.length >= 5 && (sym.includes(tl) || tl.includes(sym)));
+        })
+      )
+        return true;
       // CamelCase parts (getSessionContext → session, context) vs multi-word signals
       const parts = (c.symbolName || '')
         .split(/(?=[A-Z])|[_\-.]+/)
         .map((p) => p.toLowerCase())
         .filter((p) => p.length >= 5);
-      if (parts.some((p) => signalList.some((t) => {
-        const tl = t.toLowerCase();
-        return tl === p || tl.split(/[\s_-]+/).includes(p);
-      }))) return true;
+      if (
+        parts.some((p) =>
+          signalList.some((t) => {
+            const tl = t.toLowerCase();
+            return tl === p || tl.split(/[\s_-]+/).includes(p);
+          })
+        )
+      )
+        return true;
       // Keep same-file siblings of must-keep hits (not whole directories — too noisy)
-      if ([...mustKeep].some((id) => {
-        const keep = keepChunks.find((x) => x.id === id);
-        return keep && keep.sourceFile === c.sourceFile;
-      })) return true;
+      if (
+        [...mustKeep].some((id) => {
+          const keep = keepChunks.find((x) => x.id === id);
+          return keep && keep.sourceFile === c.sourceFile;
+        })
+      )
+        return true;
       return false;
     });
   }

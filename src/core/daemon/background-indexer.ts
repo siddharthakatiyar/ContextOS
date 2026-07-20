@@ -44,14 +44,20 @@ export class BackgroundIndexer {
         '**/*.min.css',
         '**/*.map',
         '**/*.lock',
-        '**/vendor/**',
+        '**/vendor/**'
       ];
       const userIgnore = config.ignorePatterns || [];
       const ignore = [...new Set([...SAFETY_IGNORE, ...userIgnore])];
 
       const allRepoFiles = new Set<string>();
       for (const pattern of config.indexablePatterns) {
-        const files = await glob(pattern, { cwd: this.projectDir, ignore, absolute: true, nodir: true, follow: false });
+        const files = await glob(pattern, {
+          cwd: this.projectDir,
+          ignore,
+          absolute: true,
+          nodir: true,
+          follow: false
+        });
         for (const f of files) allRepoFiles.add(f);
       }
 
@@ -62,41 +68,51 @@ export class BackgroundIndexer {
 
       // Process in batches yielding to the event loop
       const BATCH_SIZE = 10;
-      
+
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         const batch = files.slice(i, i + BATCH_SIZE);
-        
-        await Promise.all(batch.map(async (file) => {
-          try {
-            const fileStat = fs.statSync(file);
-            if (fileStat.size <= 100 * 1024) {
-              await this.indexer.indexFile(file, 'repo');
+
+        await Promise.all(
+          batch.map(async (file) => {
+            try {
+              const fileStat = fs.statSync(file);
+              if (fileStat.size <= 100 * 1024) {
+                await this.indexer.indexFile(file, 'repo');
+              }
+            } catch (e) {
+              // Silently skip failed parses
             }
-          } catch (e) {
-            // Silently skip failed parses
-          }
-          this.processedFiles++;
-        }));
+            this.processedFiles++;
+          })
+        );
 
         // Yield to the event loop so MCP server remains responsive
-        await new Promise(resolve => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
 
         if (this.processedFiles % 1000 === 0) {
           console.log(`[BackgroundIndexer] Progress: ${this.processedFiles} / ${this.totalFiles}`);
           const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
-          fs.writeFileSync(statusFile, JSON.stringify({ 
-            fullIndexCompleted: false, 
-            processed: this.processedFiles, 
-            total: this.totalFiles,
-            progressPercentage: Math.round((this.processedFiles / this.totalFiles) * 100)
-          }));
+          fs.writeFileSync(
+            statusFile,
+            JSON.stringify({
+              fullIndexCompleted: false,
+              processed: this.processedFiles,
+              total: this.totalFiles,
+              progressPercentage: Math.round((this.processedFiles / this.totalFiles) * 100)
+            })
+          );
         }
       }
 
       // Mark full index as complete
       const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
-      fs.writeFileSync(statusFile, JSON.stringify({ fullIndexCompleted: true, lastIndexTime: Date.now() }));
-      console.log(`[BackgroundIndexer] Full index completed in ${(Date.now() - this.startTime) / 1000}s`);
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify({ fullIndexCompleted: true, lastIndexTime: Date.now() })
+      );
+      console.log(
+        `[BackgroundIndexer] Full index completed in ${(Date.now() - this.startTime) / 1000}s`
+      );
     } catch (err: any) {
       console.error(`[BackgroundIndexer] Error during indexing: ${err.message}`);
     } finally {
@@ -109,7 +125,8 @@ export class BackgroundIndexer {
       isIndexing: this.isIndexing,
       processedFiles: this.processedFiles,
       totalFiles: this.totalFiles,
-      progressPercentage: this.totalFiles > 0 ? Math.round((this.processedFiles / this.totalFiles) * 100) : 0,
+      progressPercentage:
+        this.totalFiles > 0 ? Math.round((this.processedFiles / this.totalFiles) * 100) : 0,
       runningTimeMs: this.isIndexing ? Date.now() - this.startTime : 0
     };
   }

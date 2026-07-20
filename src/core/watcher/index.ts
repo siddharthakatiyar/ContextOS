@@ -7,10 +7,7 @@ import { Indexer } from '../indexer/index.js';
 import { loadConfig } from '../../config/index.js';
 
 /** Dotfile/dir paths that should still be watched (B8). */
-const ALLOWED_DOT_SEGMENTS = new Set([
-  '.cursor',
-  '.contextos',
-]);
+const ALLOWED_DOT_SEGMENTS = new Set(['.cursor', '.contextos']);
 
 /**
  * Ignore most dotfiles/dirs, but allow `.cursor/rules` and similar indexable paths.
@@ -39,7 +36,7 @@ function isIgnoredDotPath(filePath: string): boolean {
 function matchesIndexablePatterns(filePath: string, patterns: string[], cwd: string): boolean {
   const relative = path.relative(cwd, filePath).split(path.sep).join('/');
   if (!relative || relative.startsWith('..')) return false;
-  return patterns.some(pattern =>
+  return patterns.some((pattern) =>
     minimatch(relative, pattern, { dot: true, nocase: process.platform === 'win32' })
   );
 }
@@ -57,14 +54,22 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
       (p: string) => isIgnoredDotPath(p),
       (p: string) => {
         const normalized = p.replace(/\\/g, '/');
-        return normalized.includes('/node_modules/') || normalized.endsWith('/node_modules') ||
-               normalized.includes('/.git/') || normalized.endsWith('/.git') ||
-               normalized.includes('/.next/') || normalized.endsWith('/.next') ||
-               normalized.includes('/dist/') || normalized.endsWith('/dist') ||
-               normalized.includes('/build/') || normalized.endsWith('/build') ||
-               normalized.includes('/coverage/') || normalized.endsWith('/coverage');
+        return (
+          normalized.includes('/node_modules/') ||
+          normalized.endsWith('/node_modules') ||
+          normalized.includes('/.git/') ||
+          normalized.endsWith('/.git') ||
+          normalized.includes('/.next/') ||
+          normalized.endsWith('/.next') ||
+          normalized.includes('/dist/') ||
+          normalized.endsWith('/dist') ||
+          normalized.includes('/build/') ||
+          normalized.endsWith('/build') ||
+          normalized.includes('/coverage/') ||
+          normalized.endsWith('/coverage')
+        );
       },
-      ...config.ignorePatterns.map(p => `**/${p}`)
+      ...config.ignorePatterns.map((p) => `**/${p}`)
     ],
     persistent: true,
     ignoreInitial: true,
@@ -72,8 +77,8 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
     followSymlinks: false,
     awaitWriteFinish: {
       stabilityThreshold: 400,
-      pollInterval: 100,
-    },
+      pollInterval: 100
+    }
   });
 
   const maybeIndex = async (filePath: string) => {
