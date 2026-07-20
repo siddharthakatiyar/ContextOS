@@ -15,3 +15,4 @@ scripts/bench/fixtures/
 # Local planning files
 V1_CHECKLIST.md
 runs.json
+retrieval-examples/large-generated/

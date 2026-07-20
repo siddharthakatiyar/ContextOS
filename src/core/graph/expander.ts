@@ -9,7 +9,7 @@ export interface ExpandedEntity {
 }
 
 // Minimum weight to traverse an edge (low-weight = noise)
-const MIN_EDGE_WEIGHT = 0.9;
+const MIN_EDGE_WEIGHT = 0.5;
 // If a node has more connections than this, it's a hub (e.g., "license") — skip it
 const MAX_CONNECTIONS_THRESHOLD = 30;
 // Minimum entity length to consider

@@ -73,11 +73,20 @@ export const statusCommand = new Command('status')
       totalRels += relCount;
     }
 
+    let indexingStatus = null;
+    const statusPath = path.join(cwd, '.contextos', 'status.json');
+    if (fs.existsSync(statusPath)) {
+      try {
+        indexingStatus = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
+      } catch (e) {}
+    }
+
     if (options.json) {
       console.log(JSON.stringify({
         daemon: {
           status: daemonStatus,
-          pid: daemonPid
+          pid: daemonPid,
+          indexing: indexingStatus
         },
         databases: results,
         totals: {
@@ -97,6 +106,11 @@ export const statusCommand = new Command('status')
     console.log(chalk.magenta.bold(`[Daemon]`));
     console.log(`Status:        ${daemonStatus === 'Running' ? chalk.green('Running') : chalk.yellow(daemonStatus)}`);
     if (daemonPid) console.log(`PID:           ${daemonPid}`);
+    if (indexingStatus && !indexingStatus.fullIndexCompleted) {
+      console.log(`Indexing:      ${chalk.yellow('In Progress')} (${indexingStatus.processed || 0} / ${indexingStatus.total || '?'} files - ${indexingStatus.progressPercentage || 0}%)`);
+    } else if (indexingStatus && indexingStatus.fullIndexCompleted) {
+      console.log(`Indexing:      ${chalk.green('Completed')}`);
+    }
     console.log('');
 
     for (const res of results) {

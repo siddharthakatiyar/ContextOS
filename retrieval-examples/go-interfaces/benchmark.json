@@ -1,0 +1,20 @@
+[
+  {
+    "query": "Where is the UserStore interface defined, and how is it implemented in Postgres?",
+    "expectedFiles": [
+      "internal/store/store.go",
+      "internal/store/postgres.go"
+    ],
+    "maxTokens": 800,
+    "minRecall": 1.0
+  },
+  {
+    "query": "What fields exist on the User struct that the PostgresStore returns?",
+    "expectedFiles": [
+      "internal/store/postgres.go",
+      "internal/store/store.go"
+    ],
+    "maxTokens": 800,
+    "minRecall": 1.0
+  }
+]

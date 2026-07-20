@@ -1,0 +1,20 @@
+[
+  {
+    "query": "How are users authenticated in the /me route?",
+    "expectedFiles": [
+      "routers/users.py",
+      "dependencies.py"
+    ],
+    "maxTokens": 800,
+    "minRecall": 1.0
+  },
+  {
+    "query": "What fields are returned when fetching the current user?",
+    "expectedFiles": [
+      "routers/users.py",
+      "models/user.py"
+    ],
+    "maxTokens": 800,
+    "minRecall": 1.0
+  }
+]

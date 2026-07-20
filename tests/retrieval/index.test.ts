@@ -3,6 +3,7 @@ import { deduplicateChunks } from '../../src/core/retrieval/index.js';
 import { ScoredChunk } from '../../src/core/retrieval/types.js';
 import { RetrievalEngine } from '../../src/core/retrieval/index.js';
 import { ChunksRepo } from '../../src/core/storage/chunks-repo.js';
+import { RelationshipsRepo } from '../../src/core/storage/relationships-repo.js';
 import { DB } from '../../src/core/storage/database.js';
 import * as path from 'path';
 import * as os from 'os';
@@ -56,7 +57,8 @@ describe('RetrievalEngine', () => {
     
     const db = new DB(dbPath);
     const repo = new ChunksRepo(db.getInstance());
-    const engine = new RetrievalEngine(repo);
+    const relsRepo = new RelationshipsRepo(db.getInstance());
+    const engine = new RetrievalEngine(repo, relsRepo);
     
     const controller = new AbortController();
     controller.abort();

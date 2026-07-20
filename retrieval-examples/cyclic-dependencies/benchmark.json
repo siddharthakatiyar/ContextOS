@@ -1,0 +1,11 @@
+[
+  {
+    "query": "What does doSomethingInA call?",
+    "expectedFiles": [
+      "a.ts",
+      "b.ts"
+    ],
+    "maxTokens": 400,
+    "minRecall": 1.0
+  }
+]

@@ -13,7 +13,8 @@ import chalk from 'chalk';
 export const queryCommand = new Command('query')
   .description('Test the retrieval engine with a prompt')
   .argument('<prompt>', 'The user prompt to test')
-  .action(async (prompt: string) => {
+  .option('--json', 'Output results in JSON format')
+  .action(async (prompt: string, options: { json?: boolean }) => {
     const dbs = DB.resolveDatabases();
     const chunksRepos = dbs.map(db => new ChunksRepo(db.getInstance()));
     const relsRepos = dbs.map(db => new RelationshipsRepo(db.getInstance()));
@@ -24,7 +25,9 @@ export const queryCommand = new Command('query')
     const engine = new RetrievalEngine(chunksRepos, relsRepos);
 
     try {
-      console.log(chalk.bold(`\nQuerying ContextOS with: "${prompt}"\n`));
+      if (!options.json) {
+        console.log(chalk.bold(`\nQuerying ContextOS with: "${prompt}"\n`));
+      }
 
       sessionStore.addEvent({
         sessionId: sessionManager.getSessionId(),
@@ -51,34 +54,46 @@ export const queryCommand = new Command('query')
       } as any);
     }
 
-    console.log(chalk.blue.bold('Intent Detection:'));
-    console.log(`  Concepts: [${result.intent.concepts.join(', ')}]`);
-    console.log(`  Identifiers: [${result.intent.identifiers.join(', ')}]`);
-    console.log(`  Intent Type: ${result.intent.intentType}\n`);
-
-    console.log(chalk.blue.bold(`Retrieved Chunks (${result.chunks.length} results, ${result.latencyMs}ms):`));
-    result.chunks.slice(0, 5).forEach((c, i) => {
-      console.log(`  ${i + 1}. [${c.layer}] ${c.sectionTitle || 'root'} (score: ${c.score?.toFixed(1)})`);
-    });
-    if (result.chunks.length > 5) {
-      console.log(`  ... and ${result.chunks.length - 5} more`);
-    }
-    console.log('');
-
-    console.log(chalk.blue.bold('Graph Expansion:'));
-    if (result.expandedEntities.length === 0) {
-      console.log('  No related entities found.\n');
-    } else {
-      result.expandedEntities.slice(0, 5).forEach(e => {
-        console.log(`  ${e.entity} (discovered via ${e.relationshipType}, depth: ${e.depth}, score: ${e.score.toFixed(1)})`);
-      });
-      console.log('');
-    }
-
     const config = loadConfig();
     const compiled = compile(result, { maxTokens: config.maxTokenBudget });
-    console.log(chalk.blue.bold(`Compiled Context (${compiled.tokenCount} tokens):`));
-    console.log(compiled.output.substring(0, 500) + '...\n[Output truncated]\n');
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        intent: result.intent,
+        latencyMs: result.latencyMs,
+        chunks: result.chunks,
+        expandedEntities: result.expandedEntities,
+        context: compiled.output,
+        tokens: compiled.tokenCount
+      }, null, 2));
+    } else {
+      console.log(chalk.blue.bold('Intent Detection:'));
+      console.log(`  Concepts: [${result.intent.concepts.join(', ')}]`);
+      console.log(`  Identifiers: [${result.intent.identifiers.join(', ')}]`);
+      console.log(`  Intent Type: ${result.intent.intentType}\n`);
+
+      console.log(chalk.blue.bold(`Retrieved Chunks (${result.chunks.length} results, ${result.latencyMs}ms):`));
+      result.chunks.slice(0, 5).forEach((c, i) => {
+        console.log(`  ${i + 1}. [${c.layer}] ${c.sectionTitle || 'root'} (score: ${c.score?.toFixed(1)})`);
+      });
+      if (result.chunks.length > 5) {
+        console.log(`  ... and ${result.chunks.length - 5} more`);
+      }
+      console.log('');
+
+      console.log(chalk.blue.bold('Graph Expansion:'));
+      if (result.expandedEntities.length === 0) {
+        console.log('  No related entities found.\n');
+      } else {
+        result.expandedEntities.slice(0, 5).forEach(e => {
+          console.log(`  ${e.entity} (discovered via ${e.relationshipType}, depth: ${e.depth}, score: ${e.score.toFixed(1)})`);
+        });
+        console.log('');
+      }
+
+      console.log(chalk.blue.bold(`Compiled Context (${compiled.tokenCount} tokens):`));
+      console.log(compiled.output.substring(0, 500) + '...\n[Output truncated]\n');
+    }
     
       sessionStore.addEvent({
         sessionId: sessionManager.getSessionId(),

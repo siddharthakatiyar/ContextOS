@@ -68,85 +68,16 @@ export const initCommand = new Command('init')
     process.on('SIGINT', onSigInt);
 
     try {
-      // Index repo layer
-      console.log(chalk.blue.bold('\nIndexing repo context...'));
-    const allRepoFiles = new Set<string>();
-    for (const pattern of config.indexablePatterns) {
-      const files = await glob(pattern, { cwd, ignore, absolute: true, nodir: true, follow: false });
-      for (const f of files) allRepoFiles.add(f);
-    }
-    
-    // Index global layer
-    const globalFiles = await glob('**/*.md', { cwd: globalContextDir, absolute: true, nodir: true, follow: false });
-    
-    totalFilesCount = allRepoFiles.size + globalFiles.length;
-    
-    const bar = new cliProgress.SingleBar({
-      format: 'Indexing [{bar}] {percentage}% | {value}/{total} files | {chunks} chunks | {rels} relationships',
-      barCompleteChar: '\u2588',
-      barIncompleteChar: '\u2591',
-      hideCursor: true
-    });
-    
-    bar.start(totalFilesCount, 0, { chunks: 0, rels: 0 });
-    
-    const limit = pLimit(8);
-    const promises: Promise<void>[] = [];
-    
-    for (const file of allRepoFiles) {
-      promises.push(limit(async () => {
-        if (abortController.signal.aborted) return;
-        try {
-          // Skip files larger than 100KB (usually generated/minified)
-          const fileStat = fs.statSync(file);
-          if (fileStat.size > 100 * 1024) {
-            bar.increment({ chunks: totalChunks, rels: totalRels });
-            return;
-          }
-          const stats = await indexer.indexFile(file, 'repo', undefined, abortController.signal);
-          if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
-            totalProcessed++;
-            totalChunks += stats.chunksCreated;
-            totalRels += stats.relationshipsFound;
-          }
-        } catch (e) {
-          // Silently skip failed parses for the progress bar
-        }
-        bar.increment({ chunks: totalChunks, rels: totalRels });
-      }));
-    }
-
-    for (const file of globalFiles) {
-      promises.push(limit(async () => {
-        if (abortController.signal.aborted) return;
-        try {
-          const stats = await indexer.indexFile(file, 'global', undefined, abortController.signal);
-          if (stats.chunksCreated > 0 || stats.relationshipsFound > 0) {
-            totalProcessed++;
-            totalChunks += stats.chunksCreated;
-            totalRels += stats.relationshipsFound;
-          }
-        } catch (e) {}
-        bar.increment({ chunks: totalChunks, rels: totalRels });
-      }));
-    }
-    
-    await Promise.all(promises);
-
-    bar.stop();
-
-    if (abortController.signal.aborted) {
-      console.log(chalk.yellow('\nInitialization was cancelled by user. Partial index saved.'));
-      process.exit(1);
-    }
+      // Mark repo as needing a full index so the daemon will pick it up
+      const statusPath = path.join(repoContextDir, 'status.json');
+      fs.writeFileSync(statusPath, JSON.stringify({ fullIndexCompleted: false }));
     } finally {
       process.off('SIGINT', onSigInt);
     }
 
     const elapsedMs = Date.now() - startTime;
-    console.log(chalk.green.bold(`\n\u2714 Initialization complete in ${(elapsedMs/1000).toFixed(1)}s`));
-    console.log(`Indexed ${totalProcessed} changed files (out of ${totalFilesCount} total files).`);
-    console.log(`Generated ${totalChunks} knowledge chunks and ${totalRels} semantic relationships.\n`);
+    console.log(chalk.green.bold(`\n\u2714 Initialized ContextOS in ${(elapsedMs/1000).toFixed(1)}s`));
+    console.log(`Repository is scheduled for background indexing.\n`);
 
     // Generate cursor config if .cursor exists
     if (fs.existsSync(path.join(cwd, '.cursor'))) {
@@ -289,7 +220,7 @@ export const initCommand = new Command('init')
     // Auto-start daemon in background for zero-config DX
     try {
       const { spawn } = await import('child_process');
-      const daemonProcess = spawn('npx', ['contextos', 'daemon'], {
+      const daemonProcess = spawn('npx', ['contextos', 'daemon', 'start'], {
         detached: true,
         stdio: 'ignore'
       });

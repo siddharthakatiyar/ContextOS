@@ -1,0 +1,21 @@
+[
+  {
+    "query": "How does login work from the form to the database?",
+    "expectedFiles": [
+      "components/auth-form.tsx",
+      "actions/db.ts"
+    ],
+    "maxTokens": 1200,
+    "minRecall": 1.0
+  },
+  {
+    "query": "How is the user session loaded in the root layout?",
+    "expectedFiles": [
+      "app/layout.tsx",
+      "lib/session.ts",
+      "actions/db.ts"
+    ],
+    "maxTokens": 1200,
+    "minRecall": 1.0
+  }
+]
