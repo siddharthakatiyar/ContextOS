@@ -1,11 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { Chunk } from '../storage/types.js';
 import { ChunksRepo, type ScoredChunk } from '../storage/chunks-repo.js';
-import {
-  embedTexts,
-  getEmbeddingModelId,
-  isEmbeddingsAvailable,
-} from './embedder.js';
+import { embedTexts, getEmbeddingModelId, isEmbeddingsAvailable } from './embedder.js';
 import { EmbeddingsStore } from './embeddings-store.js';
 
 export {
@@ -13,7 +9,7 @@ export {
   isEmbeddingsAvailable,
   getEmbeddingModelId,
   getEmbeddingDims,
-  _resetEmbedderForTests,
+  _resetEmbedderForTests
 } from './embedder.js';
 export { EmbeddingsStore, _resetVecStateForTests } from './embeddings-store.js';
 export type { EmbeddingHit } from './embeddings-store.js';
@@ -70,7 +66,9 @@ export async function indexChunkEmbeddings(
         try {
           store.upsertEmbedding(batch[j].id, vectors[j], model);
         } catch (e: any) {
-          console.error(`[contextos] embedding upsert failed for ${batch[j].id}: ${e?.message || e}`);
+          console.error(
+            `[contextos] embedding upsert failed for ${batch[j].id}: ${e?.message || e}`
+          );
         }
       }
     }
@@ -99,8 +97,8 @@ export async function searchEmbeddingChunks(
     if (!hits.length) return [];
 
     const repo = new ChunksRepo(db);
-    const chunks = repo.getByIds(hits.map(h => h.chunkId));
-    const byId = new Map(chunks.map(c => [c.id, c]));
+    const chunks = repo.getByIds(hits.map((h) => h.chunkId));
+    const byId = new Map(chunks.map((c) => [c.id, c]));
 
     const scored: ScoredChunk[] = [];
     for (const hit of hits) {
@@ -119,7 +117,10 @@ export async function searchEmbeddingChunks(
  * Backfill embeddings for every chunk in the database.
  * Used by `contextos reindex --embeddings`.
  */
-export async function backfillAllEmbeddings(db: Database.Database, signal?: AbortSignal): Promise<number> {
+export async function backfillAllEmbeddings(
+  db: Database.Database,
+  signal?: AbortSignal
+): Promise<number> {
   if (!isEmbeddingsAvailable()) return 0;
   try {
     const rows = db.prepare(`SELECT * FROM chunks`).all() as any[];
@@ -127,7 +128,7 @@ export async function backfillAllEmbeddings(db: Database.Database, signal?: Abor
 
     const repo = new ChunksRepo(db);
     // Re-map via getByIds to get camelCase Chunk objects
-    const ids = rows.map(r => r.id as string);
+    const ids = rows.map((r) => r.id as string);
     const chunks: Chunk[] = [];
     for (let i = 0; i < ids.length; i += 200) {
       signal?.throwIfAborted();

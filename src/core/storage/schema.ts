@@ -196,9 +196,9 @@ CREATE INDEX IF NOT EXISTS idx_feedback_chunk ON feedback_signals(chunk_id);
 `;
 
 function getSchemaVersion(db: Database.Database): number {
-  const versionRow = db.prepare(
-    'SELECT version FROM schema_version ORDER BY version DESC LIMIT 1'
-  ).get() as { version: number } | undefined;
+  const versionRow = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
   return versionRow ? versionRow.version : 0;
 }
 
@@ -233,9 +233,9 @@ END;
 
 /** Create or recreate chunks_fts with porter+prefix, falling back to unicode61+prefix. */
 function ensureChunksFts(db: Database.Database, rebuild: boolean): void {
-  const hasFts = db.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_fts'"
-  ).get();
+  const hasFts = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_fts'")
+    .get();
 
   if (hasFts && !rebuild) {
     // Ensure triggers exist for existing FTS table
@@ -328,7 +328,7 @@ function migrateToV5(db: Database.Database): void {
   for (const col of [
     'ALTER TABLE chunks ADD COLUMN start_line INTEGER',
     'ALTER TABLE chunks ADD COLUMN end_line INTEGER',
-    'ALTER TABLE chunks ADD COLUMN file_stem TEXT',
+    'ALTER TABLE chunks ADD COLUMN file_stem TEXT'
   ]) {
     try {
       db.exec(col);
@@ -339,9 +339,9 @@ function migrateToV5(db: Database.Database): void {
 
   // Backfill file_stem from source_file basename
   try {
-    const rows = db.prepare(
-      `SELECT id, source_file FROM chunks WHERE file_stem IS NULL OR file_stem = ''`
-    ).all() as { id: string; source_file: string }[];
+    const rows = db
+      .prepare(`SELECT id, source_file FROM chunks WHERE file_stem IS NULL OR file_stem = ''`)
+      .all() as { id: string; source_file: string }[];
     const update = db.prepare('UPDATE chunks SET file_stem = ? WHERE id = ?');
     for (const row of rows) {
       const base = row.source_file.replace(/\\/g, '/').split('/').pop() || row.source_file;
@@ -396,7 +396,9 @@ export function applyMigrations(db: Database.Database) {
     if (currentVersion === 0) {
       // We are either a new database or upgrading from 0.1.0 where schema_version didn't exist
       // If files table exists, it's an upgrade
-      const hasFiles = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='files'").get();
+      const hasFiles = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='files'")
+        .get();
 
       if (hasFiles) {
         console.error('Migrating ContextOS database to v0.2.0...');
@@ -482,7 +484,9 @@ export function applyMigrations(db: Database.Database) {
       if (afterVersion === 3) {
         try {
           db.exec(`ALTER TABLE chunks ADD COLUMN parent_symbol TEXT;`);
-        } catch { /* exists */ }
+        } catch {
+          /* exists */
+        }
         setSchemaVersion(db, 4);
       }
       if (getSchemaVersion(db) === 4) {

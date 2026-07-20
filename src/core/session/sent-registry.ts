@@ -17,12 +17,12 @@ export class SentRegistry {
   public hasBeenSent(hash: string): boolean {
     const entry = this.sentChunks.get(hash);
     if (!entry) return false;
-    
+
     if (Date.now() - entry.timestamp > this.TTL_MS) {
       this.sentChunks.delete(hash);
       return false;
     }
-    
+
     return true;
   }
 

@@ -3,12 +3,14 @@ import { queryCommand } from '../../src/cli/commands/query.js';
 
 vi.mock('../../src/core/storage/database.js', () => ({
   DB: {
-    resolveDatabases: vi.fn(() => [{
-      getInstance: vi.fn(),
-      prepare: vi.fn(),
-      exec: vi.fn(),
-      close: vi.fn()
-    }])
+    resolveDatabases: vi.fn(() => [
+      {
+        getInstance: vi.fn(),
+        prepare: vi.fn(),
+        exec: vi.fn(),
+        close: vi.fn()
+      }
+    ])
   },
   getContextOSHome: vi.fn(() => '/mock/home')
 }));
@@ -66,7 +68,7 @@ describe('CLI query command', () => {
 
   it('runs query and outputs result', async () => {
     await queryCommand.parseAsync(['node', 'test', 'how does indexing work?']);
-    
+
     // Check if console.log was called which signifies command executed properly
     expect(consoleLogSpy).toHaveBeenCalled();
     const calls = consoleLogSpy.mock.calls.map((call: any) => call.join(' '));

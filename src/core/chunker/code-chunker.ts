@@ -14,9 +14,12 @@ function fileStemFromPath(filePath: string): string {
 }
 
 function tokenizeName(name: string): string[] {
-  return name.split(/_|-|\./).flatMap(p => 
-    p.toUpperCase() === p ? [p.toLowerCase()] : p.split(/(?=[A-Z])/).map(s => s.toLowerCase())
-  ).filter(s => s.length > 2);
+  return name
+    .split(/_|-|\./)
+    .flatMap((p) =>
+      p.toUpperCase() === p ? [p.toLowerCase()] : p.split(/(?=[A-Z])/).map((s) => s.toLowerCase())
+    )
+    .filter((s) => s.length > 2);
 }
 
 /** Stable chunk ID: survives content edits (B7). Hash field still tracks content changes. */
@@ -27,7 +30,7 @@ function stableChunkId(filePath: string, symbolPathOrTitle: string): string {
 function isJunkSymbol(symbol: CodeSymbol): boolean {
   // Anonymous / trivial lambdas pollute ranking (e.g. function c, function w)
   if (!symbol.name || symbol.name.length <= 2) return true;
-  const lines = symbol.body.split('\n').filter(l => l.trim().length > 0);
+  const lines = symbol.body.split('\n').filter((l) => l.trim().length > 0);
   // Require both tiny line count AND tiny token count to drop — avoids
   // discarding short-but-real helpers that are still useful to retrieve.
   if (lines.length < 3 && estimateTokens(symbol.body) < 30) return true;
@@ -39,12 +42,21 @@ function isSegmentBoundary(line: string, prevNonEmpty: string | null): boolean {
   const t = line.trim();
   if (!t) return false;
   if (/^\/\*\*/.test(t) || /^\/\//.test(t)) return true;
-  if (/^(?:}?\s*)?(?:else\s+if|else|case\s|default\s*:|catch\s*\(|finally\s*\{)/.test(t)) return true;
-  if (/^(?:if|switch|for|while|try)\b/.test(t) && prevNonEmpty && !/[{,]$/.test(prevNonEmpty.trim())) {
+  if (/^(?:}?\s*)?(?:else\s+if|else|case\s|default\s*:|catch\s*\(|finally\s*\{)/.test(t))
+    return true;
+  if (
+    /^(?:if|switch|for|while|try)\b/.test(t) &&
+    prevNonEmpty &&
+    !/[{,]$/.test(prevNonEmpty.trim())
+  ) {
     return true;
   }
   // Blank line already consumed — treat next non-empty as soft boundary when prev ended a block
-  if (prevNonEmpty && /[;}]$/.test(prevNonEmpty.trim()) && /^(?:const|let|var|return|await|this\.|export)/.test(t)) {
+  if (
+    prevNonEmpty &&
+    /[;}]$/.test(prevNonEmpty.trim()) &&
+    /^(?:const|let|var|return|await|this\.|export)/.test(t)
+  ) {
     return true;
   }
   return false;
@@ -64,7 +76,7 @@ export interface SymbolSegment {
  */
 export function segmentLargeSymbol(
   symbol: CodeSymbol,
-  targetTokens: number = 320,
+  targetTokens: number = 320
 ): SymbolSegment[] {
   const lines = symbol.body.split('\n');
   if (lines.length === 0) return [];
@@ -98,36 +110,51 @@ export function segmentLargeSymbol(
         }
         if (/^\/\*/.test(t) || (started && /^\*/.test(t))) {
           started = true;
-          commentLines.push(t.replace(/^\/\*+\s?/, '').replace(/\*\/\s*$/, '').replace(/^\*\s?/, ''));
+          commentLines.push(
+            t
+              .replace(/^\/\*+\s?/, '')
+              .replace(/\*\/\s*$/, '')
+              .replace(/^\*\s?/, '')
+          );
           if (/\*\//.test(t)) break;
           continue;
         }
         if (started) break;
         // Skip one-line function/signature boilerplate before the first comment
-        if (/^(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|if|for|while|switch|return|}\s*else)\b/.test(t) ||
-            /^[{}()[\];,]*$/.test(t)) {
+        if (
+          /^(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|if|for|while|switch|return|}\s*else)\b/.test(
+            t
+          ) ||
+          /^[{}()[\];,]*$/.test(t)
+        ) {
           continue;
         }
         // Non-comment code before any comment — no semantic title
         break;
       }
-      const joined = commentLines.map((c) => c.trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ');
+      const joined = commentLines
+        .map((c) => c.trim())
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ');
       return joined.length >= 8 ? joined.slice(0, 72) : null;
     })();
     const firstUseful =
       buf.find((l) => {
         const t = l.trim();
         return t.length > 0 && !/^[{}()[\];,]*$/.test(t) && !/^\/[/*]/.test(t);
-      }) || buf.find((l) => {
+      }) ||
+      buf.find((l) => {
         const t = l.trim();
         return t.length > 0 && !/^[{}()[\];,]*$/.test(t);
-      }) || buf[0];
+      }) ||
+      buf[0];
     const label = commentLabel || firstUseful.trim().replace(/\s+/g, ' ').slice(0, 72);
     segments.push({
       content,
       startLine: parentStart + bufStartIdx,
       endLine: parentStart + endIdx,
-      label,
+      label
     });
     buf = [];
   };
@@ -187,7 +214,7 @@ function createSegmentChunks(
   language: string,
   options: ChunkCreationOptions,
   stem: string,
-  maxSymbolTokens: number,
+  maxSymbolTokens: number
 ): Chunk[] {
   const bodyTokens = estimateTokens(symbol.body);
   if (bodyTokens <= maxSymbolTokens) return [];
@@ -226,7 +253,7 @@ function createSegmentChunks(
       endLine: seg.endLine,
       fileStem: stem,
       createdAt: Date.now(),
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     };
   });
 }
@@ -257,35 +284,49 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
     // Avoid double-indexing: class body duplicates all methods. Emit a compact
     // outline (declaration + member list) when the class has nested symbols.
     if (symbol.kind === 'class' || symbol.kind === 'struct' || symbol.kind === 'interface') {
-      const children = doc.symbols.filter(s => s.parent === symbol.name);
+      const children = doc.symbols.filter((s) => s.parent === symbol.name);
       if (children.length > 0) {
-        const firstLine = symbol.body.split('\n').find(l => l.trim().length > 0) || `${symbol.kind} ${symbol.name}`;
-        const memberList = children.map(s => `  ${s.kind} ${s.name}`).join('\n');
+        const firstLine =
+          symbol.body.split('\n').find((l) => l.trim().length > 0) ||
+          `${symbol.kind} ${symbol.name}`;
+        const memberList = children.map((s) => `  ${s.kind} ${s.name}`).join('\n');
         emitSymbol = {
           ...symbol,
-          body: `${firstLine}\n${memberList}\n}`,
+          body: `${firstLine}\n${memberList}\n}`
         };
       }
     }
 
-    const titleContext = emitSymbol.parent ? `${emitSymbol.parent} > ${emitSymbol.name}` : emitSymbol.name;
-    chunks.push(createCodeChunk(emitSymbol, titleContext, doc.filePath, doc.language, options, stem));
+    const titleContext = emitSymbol.parent
+      ? `${emitSymbol.parent} > ${emitSymbol.name}`
+      : emitSymbol.name;
+    chunks.push(
+      createCodeChunk(emitSymbol, titleContext, doc.filePath, doc.language, options, stem)
+    );
 
     // Additive segments for oversized function/method bodies (parent kept)
     if (emitSymbol === symbol) {
       chunks.push(
-        ...createSegmentChunks(symbol, titleContext, doc.filePath, doc.language, options, stem, maxSymbolTokens),
+        ...createSegmentChunks(
+          symbol,
+          titleContext,
+          doc.filePath,
+          doc.language,
+          options,
+          stem,
+          maxSymbolTokens
+        )
       );
     }
   }
 
   // Also create a "File Summary" chunk that lists all symbols for high-level graph
   // Exclude segment chunks from the summary (they are not top-level symbols)
-  const meaningful = doc.symbols.filter(s =>
-    s.kind !== 'import' &&
-    !((s.kind === 'function' || s.kind === 'method') && isJunkSymbol(s))
+  const meaningful = doc.symbols.filter(
+    (s) =>
+      s.kind !== 'import' && !((s.kind === 'function' || s.kind === 'method') && isJunkSymbol(s))
   );
-  const summaryContent = meaningful.map(s => `- [${s.kind}] ${s.name}`).join('\n');
+  const summaryContent = meaningful.map((s) => `- [${s.kind}] ${s.name}`).join('\n');
   if (summaryContent.trim().length > 0) {
     const storedContent = `File: ${doc.filePath}\nLanguage: ${doc.language}\n\nSymbols:\n${summaryContent}`;
     const summaryHashVal = hashContent(storedContent);
@@ -300,10 +341,12 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
       sectionDepth: 1,
       content: storedContent,
       summary: null,
-      keywords: Array.from(new Set([
-        ...extractKeywords(summaryContent, 'File Structure'),
-        ...tokenizeName(path.basename(doc.filePath))
-      ])).join(', '),
+      keywords: Array.from(
+        new Set([
+          ...extractKeywords(summaryContent, 'File Structure'),
+          ...tokenizeName(path.basename(doc.filePath))
+        ])
+      ).join(', '),
       hash: summaryHashVal,
       importance: options.importance ?? 5,
       tokenCount: estimateTokens(storedContent),
@@ -317,7 +360,9 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
   }
 
   // Whole-file fallback only when no real symbol chunks exist (B26)
-  const realSymbolChunks = chunks.filter(c => c.sectionTitle !== 'File Structure' && c.symbolKind !== 'segment');
+  const realSymbolChunks = chunks.filter(
+    (c) => c.sectionTitle !== 'File Structure' && c.symbolKind !== 'segment'
+  );
   if (realSymbolChunks.length === 0 && doc.rawContent && doc.rawContent.trim().length > 40) {
     const body = doc.rawContent.length > 8000 ? doc.rawContent.slice(0, 8000) : doc.rawContent;
     const contentHashVal = hashContent(body);

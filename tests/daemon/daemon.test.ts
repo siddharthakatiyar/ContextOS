@@ -11,7 +11,9 @@ vi.mock('../../src/core/watcher/index.js', () => ({
 // Mock DB resolution to not attempt real schema migrations during this test
 vi.mock('../../src/core/storage/database.js', () => ({
   DB: {
-    resolveDatabases: vi.fn(() => [{ getInstance: vi.fn(() => ({ pragma: vi.fn() })), close: vi.fn() }])
+    resolveDatabases: vi.fn(() => [
+      { getInstance: vi.fn(() => ({ pragma: vi.fn() })), close: vi.fn() }
+    ])
   }
 }));
 
@@ -37,7 +39,7 @@ vi.mock('net', () => ({
 describe('ContextOSDaemon Lifecycle', () => {
   let tmpdir: string;
   let projectDir: string;
-  
+
   beforeEach(() => {
     tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-test-daemon-'));
     projectDir = path.join(tmpdir, 'project');
@@ -48,17 +50,17 @@ describe('ContextOSDaemon Lifecycle', () => {
     const ctxDir = path.join(projectDir, '.contextos');
     fs.mkdirSync(ctxDir);
     const pidPath = path.join(ctxDir, 'daemon.pid');
-    
+
     // Write a fake PID that definitely does not exist
     const fakePid = 999999;
     fs.writeFileSync(pidPath, String(fakePid));
-    
+
     const daemon = new ContextOSDaemon(projectDir);
-    
+
     // Inject a short local socket path so it doesn't exceed macOS 104 char limit
     const shortSocket = path.join(os.tmpdir(), `d-test-${Date.now()}.sock`);
     (daemon as any).socketPath = shortSocket;
-    
+
     // Since PID doesn't exist, process.kill(999999, 0) throws ESRCH
     // The daemon should catch this and delete the PID file
     // Note: on Windows process.kill behavior might differ, but ESRCH is standard in Node's shim
@@ -78,20 +80,21 @@ describe('ContextOSDaemon Lifecycle', () => {
       // We don't actually await start because it binds a server which makes the test hang if not stopped cleanly
       // Instead, we just execute it and immediately stop it once the socket is open
       const startPromise = daemon.start();
-      
+
       // Wait for PID file to be rewritten by the new daemon process
-      await new Promise(r => setTimeout(r, 200));
-      
+      await new Promise((r) => setTimeout(r, 200));
+
       expect(caughtESRCH).toBe(true);
-      
+
       // It should have overwritten the PID file with our own PID
       const currentPidStr = fs.readFileSync(pidPath, 'utf-8');
       expect(parseInt(currentPidStr)).toBe(process.pid);
-      
     } finally {
       process.kill = originalKill;
       daemon.stop();
-      try { fs.rmSync(tmpdir, { recursive: true, force: true }); } catch {}
+      try {
+        fs.rmSync(tmpdir, { recursive: true, force: true });
+      } catch {}
     }
   });
 });

@@ -11,13 +11,15 @@ function tokenize(text: string): string[] {
     .replace(/\b([A-Za-z]+)'(?:ll)\b/gi, '$1 will')
     .replace(/\b([A-Za-z]+)'(?:d)\b/gi, '$1 would')
     .replace(/\b([Nn])'t\b/g, '$1ot');
-  return expanded
-    .split(/[^\w\d_.-]+/)
-    .filter(Boolean)
-    // Drop bare punctuation tokens (e.g. "-" from "events - how")
-    .filter(t => !/^[-_.]+$/.test(t))
-    // Drop leftover single-letter noise from failed contraction splits
-    .filter(t => t.length > 1);
+  return (
+    expanded
+      .split(/[^\w\d_.-]+/)
+      .filter(Boolean)
+      // Drop bare punctuation tokens (e.g. "-" from "events - how")
+      .filter((t) => !/^[-_.]+$/.test(t))
+      // Drop leftover single-letter noise from failed contraction splits
+      .filter((t) => t.length > 1)
+  );
 }
 
 function generateNgrams(words: string[], n: number): string[] {
@@ -60,25 +62,29 @@ function extractQuotedTerms(prompt: string): string[] {
 
 export function detectIntent(prompt: string): DetectedIntent {
   const tokens = tokenize(prompt);
-  const meaningful = tokens.filter(t => !STOPWORDS.has(t.toLowerCase()));
+  const meaningful = tokens.filter((t) => !STOPWORDS.has(t.toLowerCase()));
 
-  const unigramsRaw = meaningful.map(t => t.toLowerCase()).slice(0, 12);
+  const unigramsRaw = meaningful.map((t) => t.toLowerCase()).slice(0, 12);
   const unigrams: string[] = [];
   for (const u of unigramsRaw) {
     unigrams.push(u);
     const noExt = u.replace(/\.(ts|tsx|js|jsx|mjs|cjs|md)$/i, '');
     if (noExt !== u && noExt.length >= 3) unigrams.push(noExt);
   }
-  const bigrams = generateNgrams(meaningful, 2).map(t => t.toLowerCase()).slice(0, 5);
-  const trigrams = generateNgrams(meaningful, 3).map(t => t.toLowerCase()).slice(0, 3);
+  const bigrams = generateNgrams(meaningful, 2)
+    .map((t) => t.toLowerCase())
+    .slice(0, 5);
+  const trigrams = generateNgrams(meaningful, 3)
+    .map((t) => t.toLowerCase())
+    .slice(0, 3);
 
   const rawIds: string[] = [];
   const patterns: RegExp[] = [
-    /\b[a-z]+(?:[A-Z][a-z0-9]*)+\b/g,       // camelCase
-    /\b[a-z]+(?:_[a-z0-9]+)+\b/g,           // snake_case
-    /\b[a-z]+(?:\.[a-z]+)+\b/g,             // dot.notation
-    /\b[A-Z][a-zA-Z0-9]+\b/g,               // PascalCase / Titlecase
-    /\b[A-Z][A-Z0-9_]{2,}\b/g,              // UPPER_CASE
+    /\b[a-z]+(?:[A-Z][a-z0-9]*)+\b/g, // camelCase
+    /\b[a-z]+(?:_[a-z0-9]+)+\b/g, // snake_case
+    /\b[a-z]+(?:\.[a-z]+)+\b/g, // dot.notation
+    /\b[A-Z][a-zA-Z0-9]+\b/g, // PascalCase / Titlecase
+    /\b[A-Z][A-Z0-9_]{2,}\b/g // UPPER_CASE
   ];
 
   for (const re of patterns) {
@@ -112,8 +118,11 @@ export function detectIntent(prompt: string): DetectedIntent {
     if (looksLikeRealIdentifier(camel) || /^[a-z]+[A-Z]/.test(camel)) {
       synthesized.push(camel);
     }
-    const pascal = a.charAt(0).toUpperCase() + a.slice(1).toLowerCase()
-      + b.charAt(0).toUpperCase() + b.slice(1).toLowerCase();
+    const pascal =
+      a.charAt(0).toUpperCase() +
+      a.slice(1).toLowerCase() +
+      b.charAt(0).toUpperCase() +
+      b.slice(1).toLowerCase();
     if (looksLikeRealIdentifier(pascal)) {
       synthesized.push(pascal);
     }
@@ -136,7 +145,7 @@ export function detectIntent(prompt: string): DetectedIntent {
   }
 
   // Keep multi-token / clearly-identifier shapes; drop leftover stopword-ish singles
-  const identifiers = [...new Set([...rawIds, ...synthesized])].filter(id => {
+  const identifiers = [...new Set([...rawIds, ...synthesized])].filter((id) => {
     if (STOPWORDS.has(id.toLowerCase())) return false;
     if (looksLikeRealIdentifier(id)) return true;
     if (/^[A-Z][a-z]+$/.test(id) && id.length >= 4) return true;
@@ -160,7 +169,7 @@ export function detectIntent(prompt: string): DetectedIntent {
     identifiers: [...new Set(cappedIdentifiers)],
     quotedTerms: [...new Set(quoted)],
     intentType,
-    rawPrompt: prompt,
+    rawPrompt: prompt
   };
 }
 

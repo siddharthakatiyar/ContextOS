@@ -15,14 +15,14 @@ export function generateCursorConfig(options: {
   return {
     mcpServers: {
       contextos: {
-        command: "npx",
-        args: ["-y", "@siddharthakatiyar/contextos@latest", "serve"],
+        command: 'npx',
+        args: ['-y', '@siddharthakatiyar/contextos@latest', 'serve'],
         env: {
           CONTEXTOS_REPO_ROOT: options.projectRoot,
-          CONTEXTOS_WORKSPACE: options.workspaceName ?? "",
-        },
-      },
-    },
+          CONTEXTOS_WORKSPACE: options.workspaceName ?? ''
+        }
+      }
+    }
   };
 }
 
@@ -30,9 +30,9 @@ export function generateCursorConfigGlobal(): CursorMcpConfig {
   return {
     mcpServers: {
       contextos: {
-        command: "contextos",
-        args: ["serve"],
-      },
-    },
+        command: 'contextos',
+        args: ['serve']
+      }
+    }
   };
 }

@@ -6,7 +6,7 @@ export const analyticsCommand = new Command('analytics')
   .description('Show context retrieval analytics and prompt history stats')
   .action(async () => {
     const dbs = DB.resolveDatabases();
-    
+
     console.log(chalk.bold(`\nContextOS Analytics\n`));
 
     let totalQueries = 0;
@@ -18,18 +18,22 @@ export const analyticsCommand = new Command('analytics')
 
     for (const db of dbs) {
       const dbInstance = db.getInstance();
-      
+
       const totalPrompts = dbInstance.prepare('SELECT COUNT(*) as count FROM prompts').get() as any;
       if (!totalPrompts || totalPrompts.count === 0) continue;
 
-      const stats = dbInstance.prepare(`
+      const stats = dbInstance
+        .prepare(
+          `
         SELECT 
           SUM(compiled_token_count) as sumTokens,
           MAX(compiled_token_count) as maxTokens,
           SUM(latency_ms) as sumLatency,
           MAX(latency_ms) as maxLatency
         FROM prompts
-      `).get() as any;
+      `
+        )
+        .get() as any;
 
       totalQueries += totalPrompts.count;
       totalTokens += stats.sumTokens || 0;
@@ -37,10 +41,14 @@ export const analyticsCommand = new Command('analytics')
       totalLatency += stats.sumLatency || 0;
       maxLatency = Math.max(maxLatency, stats.maxLatency || 0);
 
-      const recent = dbInstance.prepare('SELECT prompt, compiled_token_count, latency_ms, created_at FROM prompts ORDER BY created_at DESC LIMIT 5').all() as any[];
+      const recent = dbInstance
+        .prepare(
+          'SELECT prompt, compiled_token_count, latency_ms, created_at FROM prompts ORDER BY created_at DESC LIMIT 5'
+        )
+        .all() as any[];
       allRecent.push(...recent);
     }
-    
+
     if (totalQueries === 0) {
       console.log('No prompt history found.');
       return;
@@ -59,7 +67,9 @@ export const analyticsCommand = new Command('analytics')
     console.log(chalk.blue('Recent Queries:'));
     allRecent.sort((a, b) => b.created_at - a.created_at);
     for (const row of allRecent.slice(0, 5)) {
-      console.log(`  - "${row.prompt.substring(0, 50)}${row.prompt.length > 50 ? '...' : ''}" (${row.compiled_token_count} tokens, ${row.latency_ms}ms)`);
+      console.log(
+        `  - "${row.prompt.substring(0, 50)}${row.prompt.length > 50 ? '...' : ''}" (${row.compiled_token_count} tokens, ${row.latency_ms}ms)`
+      );
     }
     console.log();
   });

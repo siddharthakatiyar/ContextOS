@@ -50,12 +50,15 @@ export function loadConfig(opts?: { forceReload?: boolean; cwd?: string }): Cont
  * Validate a loaded config.json object against the known-key schema.
  * Unknown keys are stripped (with a warning). Returns null if validation fails hard.
  */
-export function validateConfigJson(raw: unknown, sourcePath?: string): Record<string, unknown> | null {
+export function validateConfigJson(
+  raw: unknown,
+  sourcePath?: string
+): Record<string, unknown> | null {
   const result = configJsonSchema.safeParse(raw);
   if (!result.success) {
     console.error(
       `Invalid config${sourcePath ? ` at ${sourcePath}` : ''}:`,
-      result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
+      result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
     );
     return null;
   }
@@ -66,7 +69,9 @@ export function validateConfigJson(raw: unknown, sourcePath?: string): Record<st
   for (const key of Object.keys(data)) {
     const baseKey = key.endsWith('!') ? key.slice(0, -1) : key;
     if (!knownKeys.has(baseKey)) {
-      console.warn(`Unknown config key "${key}"${sourcePath ? ` in ${sourcePath}` : ''} — ignoring.`);
+      console.warn(
+        `Unknown config key "${key}"${sourcePath ? ` in ${sourcePath}` : ''} — ignoring.`
+      );
       delete data[key];
     }
   }
@@ -109,7 +114,7 @@ function mergeDeep(target: any, source: any): any {
 }
 
 function isObject(item: any) {
-  return (item && typeof item === 'object' && !Array.isArray(item));
+  return item && typeof item === 'object' && !Array.isArray(item);
 }
 
 /** Exported for tests. */

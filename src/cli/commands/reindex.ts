@@ -8,7 +8,10 @@ import { backfillAllEmbeddings, isEmbeddingsAvailable } from '../../core/embeddi
 
 export const reindexCommand = new Command('reindex')
   .description('Force a complete re-index of the repository by clearing the local database')
-  .option('--embeddings', 'Backfill chunk embeddings without wiping the DB (or after a full reindex)')
+  .option(
+    '--embeddings',
+    'Backfill chunk embeddings without wiping the DB (or after a full reindex)'
+  )
   .action(async (opts: { embeddings?: boolean }) => {
     const cwd = process.cwd();
     const repoContextDir = path.join(cwd, '.contextos');
@@ -26,51 +29,57 @@ export const reindexCommand = new Command('reindex')
 
     try {
       if (opts.embeddings && fs.existsSync(dbPath)) {
-      if (!isEmbeddingsAvailable()) {
-        console.log(chalk.yellow(
-          'Embeddings are disabled (CONTEXTOS_EMBEDDINGS=0 or embeddingsEnabled=false). Nothing to do.'
-        ));
+        if (!isEmbeddingsAvailable()) {
+          console.log(
+            chalk.yellow(
+              'Embeddings are disabled (CONTEXTOS_EMBEDDINGS=0 or embeddingsEnabled=false). Nothing to do.'
+            )
+          );
+          return;
+        }
+        console.log(chalk.blue.bold('Backfilling embeddings for existing chunks...'));
+        console.log(
+          chalk.dim('(Normal indexing also embeds on upsert; this forces a full backfill.)')
+        );
+        const db = new DB(dbPath);
+        try {
+          const n = await backfillAllEmbeddings(db.getInstance(), abortController.signal);
+          console.log(chalk.green(`Embedding backfill complete (${n} chunks processed).`));
+        } finally {
+          db.close();
+        }
         return;
       }
-      console.log(chalk.blue.bold('Backfilling embeddings for existing chunks...'));
-      console.log(chalk.dim('(Normal indexing also embeds on upsert; this forces a full backfill.)'));
-      const db = new DB(dbPath);
-      try {
-        const n = await backfillAllEmbeddings(db.getInstance(), abortController.signal);
-        console.log(chalk.green(`Embedding backfill complete (${n} chunks processed).`));
-      } finally {
-        db.close();
-      }
-      return;
-    }
 
-    console.log(chalk.yellow.bold(`Clearing local database at ${dbPath}...`));
-    
-    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-    if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-    if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+      console.log(chalk.yellow.bold(`Clearing local database at ${dbPath}...`));
 
-    console.log(chalk.green('Database cleared. Starting fresh initialization...'));
-    console.log(chalk.dim('Embeddings are built automatically during indexFile when available.'));
-    
-    // Call the init command logic
-    await initCommand.parseAsync(['node', 'contextos']);
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
 
-    // Optional post-init embedding backfill (covers any chunks that skipped embed during index)
-    if (opts.embeddings) {
-      if (!isEmbeddingsAvailable()) {
-        console.log(chalk.yellow('Embeddings unavailable after reindex — keyword-only index is ready.'));
-        return;
+      console.log(chalk.green('Database cleared. Starting fresh initialization...'));
+      console.log(chalk.dim('Embeddings are built automatically during indexFile when available.'));
+
+      // Call the init command logic
+      await initCommand.parseAsync(['node', 'contextos']);
+
+      // Optional post-init embedding backfill (covers any chunks that skipped embed during index)
+      if (opts.embeddings) {
+        if (!isEmbeddingsAvailable()) {
+          console.log(
+            chalk.yellow('Embeddings unavailable after reindex — keyword-only index is ready.')
+          );
+          return;
+        }
+        console.log(chalk.blue.bold('\nEnsuring embeddings are backfilled...'));
+        const db = new DB(dbPath);
+        try {
+          const n = await backfillAllEmbeddings(db.getInstance(), abortController.signal);
+          console.log(chalk.green(`Embedding backfill complete (${n} chunks processed).`));
+        } finally {
+          db.close();
+        }
       }
-      console.log(chalk.blue.bold('\nEnsuring embeddings are backfilled...'));
-      const db = new DB(dbPath);
-      try {
-        const n = await backfillAllEmbeddings(db.getInstance(), abortController.signal);
-        console.log(chalk.green(`Embedding backfill complete (${n} chunks processed).`));
-      } finally {
-        db.close();
-      }
-    }
     } finally {
       process.off('SIGINT', onSigInt);
     }

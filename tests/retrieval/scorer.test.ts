@@ -4,7 +4,7 @@ import {
   applyPoisonPenalty,
   applyWorkspacePenalty,
   applyNoiseDemotion,
-  applyGenericAdjustments,
+  applyGenericAdjustments
 } from '../../src/core/retrieval/scorer.js';
 import { ScoredChunk } from '../../src/core/retrieval/types.js';
 
@@ -24,7 +24,7 @@ function chunk(partial: Partial<ScoredChunk> & { id: string }): ScoredChunk {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     score: 1,
-    ...partial,
+    ...partial
   } as ScoredChunk;
 }
 
@@ -40,27 +40,31 @@ describe('scoreChunks helpers', () => {
     const foreign = chunk({
       id: '1',
       layer: 'workspace',
-      workspaceName: '/other/project',
+      workspaceName: '/other/project'
     });
     const ctx = {
       repoRoot: '/Volumes/ExtremeSSD/code/contextOS',
       matchTokens: [] as string[],
-      identifiers: new Set<string>(),
+      identifiers: new Set<string>()
     };
     expect(applyWorkspacePenalty(foreign, 10, ctx)).toBeCloseTo(3);
   });
 
   it('applyNoiseDemotion demotes tests and README', () => {
-    expect(applyNoiseDemotion(chunk({ id: '1', sourceFile: 'src/foo.test.ts' }), 10)).toBeCloseTo(5.5);
+    expect(applyNoiseDemotion(chunk({ id: '1', sourceFile: 'src/foo.test.ts' }), 10)).toBeCloseTo(
+      5.5
+    );
     expect(applyNoiseDemotion(chunk({ id: '2', sourceFile: 'README.md' }), 10)).toBeCloseTo(4);
-    expect(applyNoiseDemotion(chunk({ id: '3', sectionTitle: 'File Structure' }), 10)).toBeCloseTo(4.5);
+    expect(applyNoiseDemotion(chunk({ id: '3', sectionTitle: 'File Structure' }), 10)).toBeCloseTo(
+      4.5
+    );
   });
 
   it('applyGenericAdjustments is symbol-name neutral (no hardcoded dedup/watcher boosts)', () => {
     const ctx = {
       repoRoot: '/x',
       matchTokens: ['deduplicate'],
-      identifiers: new Set<string>(),
+      identifiers: new Set<string>()
     };
     const retrieve = chunk({ id: '1', symbolName: 'retrieve', score: 10 });
     const genericChunk = chunk({ id: '2', symbolName: 'someFunction', score: 10 });
@@ -76,9 +80,14 @@ describe('scoreChunks', () => {
       id: '1',
       layer: 'workspace',
       workspaceName: '/other/project',
-      score: 10,
+      score: 10
     });
-    const scored = scoreChunks([foreign], [], {}, { repoRoot: '/Volumes/ExtremeSSD/code/contextOS' });
+    const scored = scoreChunks(
+      [foreign],
+      [],
+      {},
+      { repoRoot: '/Volumes/ExtremeSSD/code/contextOS' }
+    );
     expect(scored[0].score).toBeLessThan(10);
   });
 
@@ -96,8 +105,8 @@ describe('scoreChunks', () => {
     const chunks = Array.from({ length: 10 }, (_, i) =>
       chunk({ id: `chunk-${String(i).padStart(3, '0')}`, score: 5, symbolName: `fn${i}` })
     );
-    const run1 = scoreChunks([...chunks], [], {}).map(c => c.id);
-    const run2 = scoreChunks([...chunks], [], {}).map(c => c.id);
+    const run1 = scoreChunks([...chunks], [], {}).map((c) => c.id);
+    const run2 = scoreChunks([...chunks], [], {}).map((c) => c.id);
     expect(run1).toEqual(run2);
   });
 
@@ -108,7 +117,7 @@ describe('scoreChunks', () => {
       chunk({ id: `f${i}`, sourceFile: 'src/big.ts', score: 5 })
     );
     const withDiversity = scoreChunks([...chunks], [], {}, { diversityFilter: true });
-    const noDiversity   = scoreChunks([...chunks], [], {}, { diversityFilter: false });
+    const noDiversity = scoreChunks([...chunks], [], {}, { diversityFilter: false });
 
     // With diversity the last few chunks are demoted; without it they keep their score
     const lastWithDiv = withDiversity[withDiversity.length - 1].score;

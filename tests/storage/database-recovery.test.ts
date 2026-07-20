@@ -32,9 +32,12 @@ describe('Database Auto-Recovery', () => {
     // 4. Verify it actually recovered by checking schema tables
     expect(recoveredDb).toBeDefined();
     if (recoveredDb) {
-      const tables = recoveredDb.getInstance().prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+      const tables = recoveredDb
+        .getInstance()
+        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all() as { name: string }[];
       // Should contain the standard contextOS schema tables like 'chunks', 'files', etc.
-      expect(tables.some(t => t.name === 'chunks')).toBe(true);
+      expect(tables.some((t) => t.name === 'chunks')).toBe(true);
       recoveredDb.close();
     }
 

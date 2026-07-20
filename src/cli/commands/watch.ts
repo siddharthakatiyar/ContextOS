@@ -16,7 +16,7 @@ export const watchCommand = new Command('watch')
     const db = new DB();
     const indexer = new Indexer(db);
     const cwd = process.cwd();
-    
+
     console.log(chalk.blue.bold(`\nContextOS Watch Mode Started`));
     console.log(`Watching: ${cwd}\n`);
 
@@ -25,7 +25,11 @@ export const watchCommand = new Command('watch')
     // Re-index all existing files on startup to ensure we're up to date
     try {
       const files = await glob(config.indexablePatterns, {
-        cwd, ignore: config.ignorePatterns, absolute: true, nodir: true, follow: false
+        cwd,
+        ignore: config.ignorePatterns,
+        absolute: true,
+        nodir: true,
+        follow: false
       });
 
       let processed = 0;
@@ -43,18 +47,18 @@ export const watchCommand = new Command('watch')
     const watcher = chokidar.watch(cwd, {
       ignored: [
         /(^|[\/\\])\../, // ignore dotfiles
-        ...config.ignorePatterns.map(p => `**/${p}`)
+        ...config.ignorePatterns.map((p) => `**/${p}`)
       ],
       persistent: true,
       ignoreInitial: true,
-      followSymlinks: false,
+      followSymlinks: false
     });
 
     watcher
       .on('add', async (filePath) => {
         const ext = path.extname(filePath);
         if (!ext) return;
-        
+
         console.log(chalk.gray(`[ADD] ${path.relative(cwd, filePath)}`));
         try {
           await indexer.indexFile(filePath, 'workspace', options.workspace);

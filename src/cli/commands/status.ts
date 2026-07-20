@@ -12,7 +12,7 @@ export const statusCommand = new Command('status')
     const cwd = process.cwd();
     const config = loadConfig();
     const dbs = DB.resolveDatabases(cwd);
-    
+
     // Check daemon status
     let daemonStatus = 'Stopped';
     let daemonPid: number | null = null;
@@ -43,85 +43,96 @@ export const statusCommand = new Command('status')
       let totalChunks = 0;
       let totalRels = 0;
 
-    for (const dbInst of dbs) {
-      const db = dbInst.getInstance();
-      
-      const fileCount = (db.prepare('SELECT COUNT(*) as count FROM files').get() as any).count;
-      const chunkCount = (db.prepare('SELECT COUNT(*) as count FROM chunks').get() as any).count;
-      const relCount = (db.prepare('SELECT COUNT(*) as count FROM relationships').get() as any).count;
-      
-      let dbSize = 0;
-      if (fs.existsSync(db.name)) {
-        dbSize = fs.statSync(db.name).size;
-      }
-      
-      const layerType = db.name.includes(getContextOSHome()) ? 'Global' : 'Local';
+      for (const dbInst of dbs) {
+        const db = dbInst.getInstance();
 
-      results.push({
-        path: db.name,
-        layer: layerType,
-        sizeBytes: dbSize,
-        sizeMb: (dbSize / (1024 * 1024)).toFixed(2),
-        files: fileCount,
-        chunks: chunkCount,
-        relationships: relCount
-      });
+        const fileCount = (db.prepare('SELECT COUNT(*) as count FROM files').get() as any).count;
+        const chunkCount = (db.prepare('SELECT COUNT(*) as count FROM chunks').get() as any).count;
+        const relCount = (db.prepare('SELECT COUNT(*) as count FROM relationships').get() as any)
+          .count;
 
-      totalSize += dbSize;
-      totalFiles += fileCount;
-      totalChunks += chunkCount;
-      totalRels += relCount;
-    }
-
-    let indexingStatus = null;
-    const statusPath = path.join(cwd, '.contextos', 'status.json');
-    if (fs.existsSync(statusPath)) {
-      try {
-        indexingStatus = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
-      } catch (e) {}
-    }
-
-    if (options.json) {
-      console.log(JSON.stringify({
-        daemon: {
-          status: daemonStatus,
-          pid: daemonPid,
-          indexing: indexingStatus
-        },
-        databases: results,
-        totals: {
-          sizeBytes: totalSize,
-          sizeMb: parseFloat((totalSize / (1024 * 1024)).toFixed(2)),
-          files: totalFiles,
-          chunks: totalChunks,
-          relationships: totalRels
+        let dbSize = 0;
+        if (fs.existsSync(db.name)) {
+          dbSize = fs.statSync(db.name).size;
         }
-      }, null, 2));
-      return;
-    }
 
-    console.log(chalk.bold(`\nContextOS Status`));
-    console.log(`==================\n`);
-    
-    console.log(chalk.magenta.bold(`[Daemon]`));
-    console.log(`Status:        ${daemonStatus === 'Running' ? chalk.green('Running') : chalk.yellow(daemonStatus)}`);
-    if (daemonPid) console.log(`PID:           ${daemonPid}`);
-    if (indexingStatus && !indexingStatus.fullIndexCompleted) {
-      console.log(`Indexing:      ${chalk.yellow('In Progress')} (${indexingStatus.processed || 0} / ${indexingStatus.total || '?'} files - ${indexingStatus.progressPercentage || 0}%)`);
-    } else if (indexingStatus && indexingStatus.fullIndexCompleted) {
-      console.log(`Indexing:      ${chalk.green('Completed')}`);
-    }
-    console.log('');
+        const layerType = db.name.includes(getContextOSHome()) ? 'Global' : 'Local';
 
-    for (const res of results) {
-      console.log(chalk.blue.bold(`[${res.layer} Database]`));
-      console.log(`Path:          ${res.path}`);
-      console.log(`Size:          ${res.sizeMb} MB`);
-      console.log(`Files Indexed: ${res.files}`);
-      console.log(`Chunks:        ${res.chunks}`);
-      console.log(`Relationships: ${res.relationships}`);
+        results.push({
+          path: db.name,
+          layer: layerType,
+          sizeBytes: dbSize,
+          sizeMb: (dbSize / (1024 * 1024)).toFixed(2),
+          files: fileCount,
+          chunks: chunkCount,
+          relationships: relCount
+        });
+
+        totalSize += dbSize;
+        totalFiles += fileCount;
+        totalChunks += chunkCount;
+        totalRels += relCount;
+      }
+
+      let indexingStatus = null;
+      const statusPath = path.join(cwd, '.contextos', 'status.json');
+      if (fs.existsSync(statusPath)) {
+        try {
+          indexingStatus = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
+        } catch (e) {}
+      }
+
+      if (options.json) {
+        console.log(
+          JSON.stringify(
+            {
+              daemon: {
+                status: daemonStatus,
+                pid: daemonPid,
+                indexing: indexingStatus
+              },
+              databases: results,
+              totals: {
+                sizeBytes: totalSize,
+                sizeMb: parseFloat((totalSize / (1024 * 1024)).toFixed(2)),
+                files: totalFiles,
+                chunks: totalChunks,
+                relationships: totalRels
+              }
+            },
+            null,
+            2
+          )
+        );
+        return;
+      }
+
+      console.log(chalk.bold(`\nContextOS Status`));
+      console.log(`==================\n`);
+
+      console.log(chalk.magenta.bold(`[Daemon]`));
+      console.log(
+        `Status:        ${daemonStatus === 'Running' ? chalk.green('Running') : chalk.yellow(daemonStatus)}`
+      );
+      if (daemonPid) console.log(`PID:           ${daemonPid}`);
+      if (indexingStatus && !indexingStatus.fullIndexCompleted) {
+        console.log(
+          `Indexing:      ${chalk.yellow('In Progress')} (${indexingStatus.processed || 0} / ${indexingStatus.total || '?'} files - ${indexingStatus.progressPercentage || 0}%)`
+        );
+      } else if (indexingStatus && indexingStatus.fullIndexCompleted) {
+        console.log(`Indexing:      ${chalk.green('Completed')}`);
+      }
       console.log('');
-    }
+
+      for (const res of results) {
+        console.log(chalk.blue.bold(`[${res.layer} Database]`));
+        console.log(`Path:          ${res.path}`);
+        console.log(`Size:          ${res.sizeMb} MB`);
+        console.log(`Files Indexed: ${res.files}`);
+        console.log(`Chunks:        ${res.chunks}`);
+        console.log(`Relationships: ${res.relationships}`);
+        console.log('');
+      }
 
       console.log(chalk.green.bold(`[Total Aggregated]`));
       console.log(`Size:          ${(totalSize / (1024 * 1024)).toFixed(2)} MB`);

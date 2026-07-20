@@ -4,33 +4,33 @@ import os from 'os';
 import crypto from 'crypto';
 import path from 'path';
 import { DB } from '../storage/database.js';
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerGetContextTool } from "../../mcp/tools/get-context.js";
-import { registerIndexFilesTool } from "../../mcp/tools/index-files.js";
-import { registerGetStatusTool } from "../../mcp/tools/get-status.js";
-import { registerGetGraphTools } from "../../mcp/tools/get-graph.js";
-import { registerExecuteTool } from "../../mcp/tools/execute.js";
-import { registerListTopicsTool } from "../../mcp/tools/list-topics.js";
-import { registerKnowledgeTools } from "../../mcp/tools/knowledge.js";
-import { registerFeedbackTools } from "../../mcp/tools/feedback.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { registerGetContextTool } from '../../mcp/tools/get-context.js';
+import { registerIndexFilesTool } from '../../mcp/tools/index-files.js';
+import { registerGetStatusTool } from '../../mcp/tools/get-status.js';
+import { registerGetGraphTools } from '../../mcp/tools/get-graph.js';
+import { registerExecuteTool } from '../../mcp/tools/execute.js';
+import { registerListTopicsTool } from '../../mcp/tools/list-topics.js';
+import { registerKnowledgeTools } from '../../mcp/tools/knowledge.js';
+import { registerFeedbackTools } from '../../mcp/tools/feedback.js';
 import { startWatcher } from '../watcher/index.js';
 import { SessionStore } from '../session/session-store.js';
 import { BackgroundIndexer } from './background-indexer.js';
 
-import { fileURLToPath } from "url";
-import type { FSWatcher } from "chokidar";
+import { fileURLToPath } from 'url';
+import type { FSWatcher } from 'chokidar';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let version = '0.3.0';
 try {
-  let pkgPath = path.join(__dirname, "../../../../package.json");
+  let pkgPath = path.join(__dirname, '../../../../package.json');
   if (!fs.existsSync(pkgPath)) {
-    pkgPath = path.join(__dirname, "../../../../../package.json");
+    pkgPath = path.join(__dirname, '../../../../../package.json');
   }
-  version = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version;
+  version = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
 } catch {
   // fallback
 }
@@ -63,7 +63,7 @@ export class ContextOSDaemon {
       const shortHash = crypto.createHash('md5').update(projectDir).digest('hex').substring(0, 12);
       this.socketPath = path.join(runDir, `d-${shortHash}.sock`);
     }
-    
+
     this.pidPath = path.join(ctxDir, 'daemon.pid');
 
     this.server = net.createServer((socket) => {
@@ -125,20 +125,20 @@ export class ContextOSDaemon {
       this.server.once('error', (err) => {
         reject(err);
       });
-      
+
       this.server.listen(this.socketPath, async () => {
         fs.writeFileSync(this.pidPath, String(process.pid));
-        
+
         // Override console.log and console.error to write to a log file instead
         // since the daemon is fully detached and stdio is ignored
         const logPath = path.join(path.dirname(this.pidPath), 'daemon.log');
         const logStream = fs.createWriteStream(logPath, { flags: 'a' });
-        
+
         const logWithTime = (level: string, ...args: any[]) => {
-          const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+          const msg = args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ');
           logStream.write(`[${new Date().toISOString()}] [${level}] ${msg}\n`);
         };
-        
+
         console.log = (...args) => logWithTime('INFO', ...args);
         console.error = (...args) => logWithTime('ERROR', ...args);
         console.warn = (...args) => logWithTime('WARN', ...args);
@@ -158,7 +158,7 @@ export class ContextOSDaemon {
 
         console.log(`ContextOS Daemon started on ${this.socketPath}`);
         this.resetGCTimer(); // Start GC timer
-        
+
         // Trigger background index if not complete
         try {
           const { loadConfig } = await import('../../config/index.js');
@@ -187,7 +187,8 @@ export class ContextOSDaemon {
   public stop() {
     try {
       if (fs.existsSync(this.pidPath)) fs.unlinkSync(this.pidPath);
-      if (process.platform !== 'win32' && fs.existsSync(this.socketPath)) fs.unlinkSync(this.socketPath);
+      if (process.platform !== 'win32' && fs.existsSync(this.socketPath))
+        fs.unlinkSync(this.socketPath);
       for (const db of this.dbs) {
         db.close();
       }
@@ -205,8 +206,8 @@ export class ContextOSDaemon {
     this.resetGCTimer(); // Cancel GC since we have an active connection
 
     const mcpServer = new McpServer({
-      name: "contextos-daemon",
-      version: version,
+      name: 'contextos-daemon',
+      version: version
     });
 
     // Register all tools for this specific MCP Server instance
@@ -241,10 +242,13 @@ export class ContextOSDaemon {
   private resetGCTimer() {
     if (this.gcTimer) clearTimeout(this.gcTimer);
     if (this.connections <= 0) {
-      this.gcTimer = setTimeout(() => {
-        console.log("No connections for 30 minutes, shutting down daemon.");
-        this.stop();
-      }, 30 * 60 * 1000);
+      this.gcTimer = setTimeout(
+        () => {
+          console.log('No connections for 30 minutes, shutting down daemon.');
+          this.stop();
+        },
+        30 * 60 * 1000
+      );
     }
   }
 }
