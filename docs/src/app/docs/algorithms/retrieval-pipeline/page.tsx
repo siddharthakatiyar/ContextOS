@@ -1,6 +1,13 @@
 import { DocPage } from "@/components/docs/doc-page";
 import { SourceLink } from "@/components/docs/source-link";
 import { ComplexityTable } from "@/components/docs/complexity-table";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Retrieval Pipeline",
+  description: "The multi-stage architecture ContextOS uses to fetch, expand, rank, and compress tokens.",
+  path: "/docs/algorithms/retrieval-pipeline",
+});
 
 export default function RetrievalPipelineDocs() {
   return (

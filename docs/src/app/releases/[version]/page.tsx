@@ -1,11 +1,36 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { CopyCommand } from "@/components/copy-command";
 import { getChangelog, getChangelogEntry, formatReleaseDate } from "@/lib/changelog";
+import { buildMetadata } from "@/lib/seo";
 
 export function generateStaticParams() {
   return getChangelog().map((entry) => ({ version: entry.slug }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ version: string }>;
+}): Promise<Metadata> {
+  const { version } = await params;
+  const entry = getChangelogEntry(version);
+
+  if (!entry) {
+    return buildMetadata({
+      title: "Release Not Found",
+      description: "This ContextOS release could not be found.",
+      path: `/releases/${version}`,
+    });
+  }
+
+  return buildMetadata({
+    title: `ContextOS ${entry.slug}`,
+    description: entry.summary ?? `Changelog and release notes for ContextOS ${entry.slug}, published ${formatReleaseDate(entry.date)}.`,
+    path: `/releases/${entry.slug}`,
+  });
 }
 
 export default async function ReleasePage({

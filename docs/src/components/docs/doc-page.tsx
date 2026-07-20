@@ -10,8 +10,19 @@ interface DocPageProps {
 }
 
 export function DocPage({ title, description, children, prev, next }: DocPageProps) {
+  const techArticleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: title,
+    description,
+  };
+
   return (
     <article className="flex flex-col w-full">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(techArticleJsonLd) }}
+      />
       <header className="mb-12 flex flex-col gap-4">
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">{title}</h1>
         <p className="text-xl text-neutral-400 font-mono leading-relaxed">{description}</p>

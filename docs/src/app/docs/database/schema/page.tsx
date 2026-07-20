@@ -1,5 +1,12 @@
 import { DocPage } from "@/components/docs/doc-page";
 import { SourceLink } from "@/components/docs/source-link";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "SQLite Schema",
+  description: "The underlying relational structure of the Schema v5 .contextos database.",
+  path: "/docs/database/schema",
+});
 
 export default function SchemaDocs() {
   return (

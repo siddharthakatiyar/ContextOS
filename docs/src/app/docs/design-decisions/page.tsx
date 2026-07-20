@@ -1,4 +1,11 @@
 import { DocPage } from "@/components/docs/doc-page";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Design Decisions",
+  description: "The rationale behind the core architectural choices in ContextOS.",
+  path: "/docs/design-decisions",
+});
 
 export default function DesignDecisionsDocs() {
   return (

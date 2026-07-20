@@ -7,6 +7,13 @@ import { InstallTerminal } from "@/components/install-terminal";
 import { CopyCommand } from "@/components/copy-command";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { buildMetadata, SITE_NAME, SITE_DESCRIPTION } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: `${SITE_NAME} - The Intelligent Retrieval Engine for AI Agents`,
+  description: SITE_DESCRIPTION,
+  path: "/",
+});
 
 export default function Home() {
   return (
