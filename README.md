@@ -260,14 +260,6 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 - **Low latency:** Local SQLite FTS5 retrieval typically completes in milliseconds.
 - **Cost savings:** Smaller prompts for API-backed agents mean significantly lower spend per query, and fewer API round-trips.
 
-## Upgrading to 0.7.0
-
-1. Install / update the package (`npm install -g @siddharthakatiyar/contextos@0.7.0`).
-2. Run `contextos reindex` so helper splits and comment-derived segment titles are indexed.
-3. Restart the ContextOS MCP server in your IDE so it loads the new binary.
-
-New in 0.7.0: **Schema Diet & Surface Optimizations**! Reduced the MCP protocol tool surface by merging tools (`ctx_remember`, `ctx_topics`, `ctx_symbol`) and trimming massive descriptions. Added **SentRegistry Deduplication** to prevent duplicate chunk spamming during long conversations (emits `(sent earlier, unchanged)` stubs). Added **Memory Gating** to intelligently filter memory injection by relevance and intent, stopping session log bleed. Added **Tokenizer Calibration** to align token tracking with real-world agent behavior.
-
 ## License
 
 ISC
