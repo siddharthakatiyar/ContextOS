@@ -9,53 +9,63 @@ import { ChunksRepo } from '../../src/core/storage/chunks-repo.js';
 vi.mock('../../src/core/embeddings/index.js', () => ({
   isEmbeddingsAvailable: () => false,
   ensureEmbeddingsLoaded: async () => {},
-  embedChunks: async () => {},
+  embedChunks: async () => {}
 }));
 
 describe('Incremental Indexing Integration', () => {
   let tmpdir: string;
   let dbPath: string;
   let db: DB;
-  
+
   beforeEach(() => {
     tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-integration-incr-'));
     dbPath = path.join(tmpdir, '.contextos', 'index.db');
     fs.mkdirSync(path.join(tmpdir, '.contextos'), { recursive: true });
     db = new DB(dbPath);
   });
-  
+
   afterEach(() => {
-    try { db.close(); } catch {}
-    try { fs.rmSync(tmpdir, { recursive: true, force: true }); } catch {}
+    try {
+      db.close();
+    } catch {}
+    try {
+      fs.rmSync(tmpdir, { recursive: true, force: true });
+    } catch {}
   });
-  
+
   it('updates chunks properly when a file changes', async () => {
     const file = path.join(tmpdir, 'app.ts');
-    
+
     // 1. Initial write
     fs.writeFileSync(file, 'export function oldFunc() { return "old"; }');
-    
+
     const indexer = new Indexer(db);
     await indexer.indexFile(file, 'repo');
-    
-    const initialChunks = db.getInstance().prepare('SELECT * FROM chunks WHERE source_file = ?').all(file) as any[];
-    
+
+    const initialChunks = db
+      .getInstance()
+      .prepare('SELECT * FROM chunks WHERE source_file = ?')
+      .all(file) as any[];
+
     expect(initialChunks.length).toBeGreaterThan(0);
-    const initialContent = initialChunks.map(c => c.content).join(' ');
+    const initialContent = initialChunks.map((c) => c.content).join(' ');
     expect(initialContent).toContain('oldFunc');
     expect(initialContent).not.toContain('newFunc');
-    
+
     // 2. Modify file
     fs.writeFileSync(file, 'export function newFunc() { return "new"; }');
-    
+
     await indexer.indexFile(file, 'repo');
-    
-    const updatedChunks = db.getInstance().prepare('SELECT * FROM chunks WHERE source_file = ?').all(file) as any[];
-    const updatedContent = updatedChunks.map(c => c.content).join(' ');
-    
+
+    const updatedChunks = db
+      .getInstance()
+      .prepare('SELECT * FROM chunks WHERE source_file = ?')
+      .all(file) as any[];
+    const updatedContent = updatedChunks.map((c) => c.content).join(' ');
+
     expect(updatedContent).toContain('newFunc');
     expect(updatedContent).not.toContain('oldFunc');
-    
+
     // Chunk count might differ depending on how TS parses it, but oldFunc should be gone.
   });
 });

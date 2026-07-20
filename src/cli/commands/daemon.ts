@@ -3,10 +3,12 @@ import { ContextOSDaemon } from '../../core/daemon/daemon.js';
 import fs from 'fs';
 import path from 'path';
 
-export const daemonCommand = new Command('daemon')
-  .description('Manage the ContextOS background daemon')
+export const daemonCommand = new Command('daemon').description(
+  'Manage the ContextOS background daemon'
+);
 
-daemonCommand.command('start')
+daemonCommand
+  .command('start')
   .description('Start the ContextOS daemon for the current project')
   .action(async () => {
     const envRoot = process.env.CONTEXTOS_REPO_ROOT?.trim();
@@ -15,7 +17,7 @@ daemonCommand.command('start')
       const os = await import('os');
       projectDir = os.default.homedir();
     }
-    
+
     try {
       const daemon = new ContextOSDaemon(projectDir);
       await daemon.start();
@@ -25,12 +27,13 @@ daemonCommand.command('start')
     }
   });
 
-daemonCommand.command('stop')
+daemonCommand
+  .command('stop')
   .description('Stop the ContextOS daemon for the current project')
   .action(async () => {
     const projectDir = process.cwd();
     const pidPath = path.join(projectDir, '.contextos', 'daemon.pid');
-    
+
     if (fs.existsSync(pidPath)) {
       try {
         const pid = parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);
@@ -45,12 +48,13 @@ daemonCommand.command('stop')
     }
   });
 
-daemonCommand.command('status')
+daemonCommand
+  .command('status')
   .description('Check the status of the ContextOS daemon')
   .action(async () => {
     const projectDir = process.cwd();
     const pidPath = path.join(projectDir, '.contextos', 'daemon.pid');
-    
+
     if (fs.existsSync(pidPath)) {
       try {
         const pid = parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);

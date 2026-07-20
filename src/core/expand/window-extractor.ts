@@ -23,7 +23,7 @@ export function extractTermWindows(
   const after = opts.linesAfter ?? 5;
 
   const matchLines: number[] = [];
-  const lowerTerms = terms.map(t => t.toLowerCase());
+  const lowerTerms = terms.map((t) => t.toLowerCase());
 
   for (let i = 0; i < lines.length; i++) {
     const lineLower = lines[i].toLowerCase();
@@ -44,7 +44,7 @@ export function extractTermWindows(
   for (const lineIdx of matchLines) {
     const start = Math.max(0, lineIdx - before);
     const end = Math.min(lines.length - 1, lineIdx + after);
-    
+
     if (windows.length > 0) {
       const last = windows[windows.length - 1];
       if (start <= last.end + 1) {

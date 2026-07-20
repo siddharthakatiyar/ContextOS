@@ -7,7 +7,7 @@ vi.mock('chokidar', () => ({
   default: {
     watch: vi.fn().mockReturnValue({
       on: vi.fn().mockReturnThis(),
-      close: vi.fn(),
+      close: vi.fn()
     })
   }
 }));
@@ -24,7 +24,7 @@ describe('Watcher', () => {
     expect(chokidar.watch).toHaveBeenCalled();
     const callArgs = vi.mocked(chokidar.watch).mock.calls[0];
     const options = callArgs[1] as any;
-    
+
     expect(options).toBeDefined();
     expect(options.followSymlinks).toBe(false);
   });

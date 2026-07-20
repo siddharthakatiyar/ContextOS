@@ -5,7 +5,7 @@ import {
   collectCompanions,
   orderForPacking,
   buildCompressCtx,
-  packToBudget,
+  packToBudget
 } from '../../src/core/compiler/compressor.js';
 import { ScoredChunk } from '../../src/core/retrieval/types.js';
 
@@ -28,7 +28,7 @@ function chunk(partial: Partial<ScoredChunk> & { id: string; content?: string })
     score: 10,
     fileType: 'code',
     language: 'typescript',
-    ...partial,
+    ...partial
   } as ScoredChunk;
 }
 
@@ -39,7 +39,7 @@ describe('compressChunks helpers', () => {
       id: '2',
       symbolName: 'compressChunks',
       sourceFile: 'src/core/compiler/compressor.ts',
-      score: 5,
+      score: 5
     });
     const ctx = buildCompressCtx(['compressChunks', 'toStub'], new Set(['compresschunks']));
     const primary = pickPrimaries([a, b], 2000, ctx);
@@ -52,13 +52,13 @@ describe('compressChunks helpers', () => {
       id: '2',
       symbolName: 'toStub',
       content: 'function toStub() { return null; }',
-      score: 5,
+      score: 5
     });
     const other = chunk({
       id: '3',
       symbolName: 'elsewhere',
       sourceFile: 'src/other.ts',
-      score: 4,
+      score: 4
     });
     const ctx = buildCompressCtx(['toStub', 'compressChunks'], new Set());
     const companions = collectCompanions([leader, sibling, other], [leader], ctx);
@@ -73,7 +73,7 @@ describe('compressChunks helpers', () => {
       parentSymbol: 'compressChunks',
       symbolName: null,
       tokenCount: 100,
-      score: 8,
+      score: 8
     });
     const ctx = buildCompressCtx(['compressChunks'], new Set(['compresschunks']));
     const ordered = orderForPacking([leader, seg], [], ctx);
@@ -84,8 +84,9 @@ describe('compressChunks helpers', () => {
     const leader = chunk({
       id: '1',
       symbolName: 'compressChunks',
-      content: 'function compressChunks() {\n  const framingReserve = 90;\n  return framingReserve;\n}\n',
-      score: 20,
+      content:
+        'function compressChunks() {\n  const framingReserve = 90;\n  return framingReserve;\n}\n',
+      score: 20
     });
     const ctx = buildCompressCtx(['compressChunks', 'framingReserve'], new Set(['compresschunks']));
     const out = packToBudget([leader], [], 500, leader.sourceFile, ctx);
@@ -98,17 +99,17 @@ describe('compressChunks helpers', () => {
       symbolName: 'compressChunks',
       content:
         'export function compressChunks() {\n  const framingReserve = 90;\n  function toStub() {}\n  truncatePreservingSignals();\n}\n',
-      score: 20,
+      score: 20
     });
     const stubFn = chunk({
       id: '2',
       symbolName: 'toStub',
       content: 'function toStub(c) { return c; }\n',
-      score: 8,
+      score: 8
     });
     const out = compressChunks([leader, stubFn], 1200, {
       signalTerms: ['compressChunks', 'toStub', 'framingReserve'],
-      identifiers: ['compressChunks'],
+      identifiers: ['compressChunks']
     });
     const joined = out.map((c) => c.content).join('\n');
     expect(joined).toContain('framingReserve');

@@ -110,7 +110,7 @@ export class SessionStore {
       LIMIT ?
     `);
     const rows = stmt.all(sessionId, limit) as any[];
-    return rows.reverse().map(row => ({
+    return rows.reverse().map((row) => ({
       id: row.id,
       sessionId: row.session_id,
       eventType: row.event_type,
@@ -120,7 +120,11 @@ export class SessionStore {
     }));
   }
 
-  public searchSessionEvents(query: string, sessionId?: string, limit: number = 10): SessionEvent[] {
+  public searchSessionEvents(
+    query: string,
+    sessionId?: string,
+    limit: number = 10
+  ): SessionEvent[] {
     let sql = `
       SELECT e.*, bm25(session_events_fts) AS score
       FROM session_events_fts fts
@@ -129,18 +133,18 @@ export class SessionStore {
     `;
     const sanitizedQuery = sanitizeFTSQuery(query);
     const params: any[] = [sanitizedQuery];
-    
+
     if (sessionId) {
       sql += ' AND e.session_id = ?';
       params.push(sessionId);
     }
-    
+
     sql += ' ORDER BY score LIMIT ?';
     params.push(limit);
 
     const stmt = this.db.prepare(sql);
     const rows = stmt.all(...params) as any[];
-    return rows.map(row => ({
+    return rows.map((row) => ({
       id: row.id,
       sessionId: row.session_id,
       eventType: row.event_type,
@@ -164,11 +168,15 @@ export class SessionStore {
       const countRow = this.db.prepare('SELECT COUNT(*) as c FROM prompts').get() as { c: number };
       if (countRow.c > opts.maxCount) {
         const excess = countRow.c - opts.maxCount;
-        deleted += this.db.prepare(`
+        deleted += this.db
+          .prepare(
+            `
           DELETE FROM prompts WHERE id IN (
             SELECT id FROM prompts ORDER BY created_at ASC LIMIT ?
           )
-        `).run(excess).changes;
+        `
+          )
+          .run(excess).changes;
       }
     }
     return deleted;
@@ -182,17 +190,25 @@ export class SessionStore {
     let deleted = 0;
     if (opts.maxAgeDays != null && opts.maxAgeDays > 0) {
       const cutoff = Date.now() - opts.maxAgeDays * 24 * 60 * 60 * 1000;
-      deleted += this.db.prepare('DELETE FROM session_events WHERE created_at < ?').run(cutoff).changes;
+      deleted += this.db
+        .prepare('DELETE FROM session_events WHERE created_at < ?')
+        .run(cutoff).changes;
     }
     if (opts.maxCount != null && opts.maxCount > 0) {
-      const countRow = this.db.prepare('SELECT COUNT(*) as c FROM session_events').get() as { c: number };
+      const countRow = this.db.prepare('SELECT COUNT(*) as c FROM session_events').get() as {
+        c: number;
+      };
       if (countRow.c > opts.maxCount) {
         const excess = countRow.c - opts.maxCount;
-        deleted += this.db.prepare(`
+        deleted += this.db
+          .prepare(
+            `
           DELETE FROM session_events WHERE id IN (
             SELECT id FROM session_events ORDER BY created_at ASC LIMIT ?
           )
-        `).run(excess).changes;
+        `
+          )
+          .run(excess).changes;
       }
     }
     return deleted;
@@ -205,7 +221,7 @@ export class SessionStore {
   } {
     return {
       promptsDeleted: this.prunePrompts(opts?.prompts),
-      eventsDeleted: this.pruneSessionEvents(opts?.events),
+      eventsDeleted: this.pruneSessionEvents(opts?.events)
     };
   }
 }

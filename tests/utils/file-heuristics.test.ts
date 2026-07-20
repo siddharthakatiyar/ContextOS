@@ -38,7 +38,7 @@ describe('file-heuristics', () => {
     it('returns true for minified javascript (very long lines)', () => {
       const longLine = 'a'.repeat(600);
       expect(isGeneratedFile('script.min.js', longLine)).toBe(true);
-      
+
       // Even without .min.js, it should detect based on average line length > 500
       expect(isGeneratedFile('script.js', longLine)).toBe(true);
     });

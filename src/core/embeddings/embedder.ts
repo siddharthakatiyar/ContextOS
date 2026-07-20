@@ -122,9 +122,8 @@ export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
     const results: Float32Array[] = [];
     for (const text of texts) {
       const output = await extractor(text, { pooling: 'mean', normalize: true });
-      const data = output?.data instanceof Float32Array
-        ? output.data
-        : new Float32Array(output?.data || []);
+      const data =
+        output?.data instanceof Float32Array ? output.data : new Float32Array(output?.data || []);
       const dims = output?.dims || [data.length];
 
       let vec: Float32Array;

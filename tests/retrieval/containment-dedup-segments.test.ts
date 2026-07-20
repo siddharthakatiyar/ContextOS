@@ -18,7 +18,7 @@ function chunk(partial: Partial<ScoredChunk> & { id: string }): ScoredChunk {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     score: 10,
-    ...partial,
+    ...partial
   } as ScoredChunk;
 }
 
@@ -29,7 +29,7 @@ describe('containmentDedup segments', () => {
       symbolName: 'scoreChunks',
       symbolKind: 'function',
       tokenCount: 3382,
-      score: 50,
+      score: 50
     });
     const seg1 = chunk({
       id: 's1',
@@ -38,7 +38,7 @@ describe('containmentDedup segments', () => {
       parentSymbol: 'scoreChunks',
       sectionTitle: 'scoreChunks › foreign workspace',
       tokenCount: 300,
-      score: 40,
+      score: 40
     });
     const seg2 = chunk({
       id: 's2',
@@ -47,7 +47,7 @@ describe('containmentDedup segments', () => {
       parentSymbol: 'scoreChunks',
       sectionTitle: 'scoreChunks › poison paths',
       tokenCount: 280,
-      score: 35,
+      score: 35
     });
     const out = containmentDedup([parent, seg1, seg2], ['scoreChunks']);
     expect(out.map((c) => c.id)).toEqual(['p']);
@@ -59,7 +59,7 @@ describe('containmentDedup segments', () => {
       symbolName: 'scoreChunks',
       symbolKind: 'function',
       tokenCount: 3382,
-      score: 50,
+      score: 50
     });
     const seg1 = chunk({
       id: 's1',
@@ -67,7 +67,7 @@ describe('containmentDedup segments', () => {
       symbolKind: 'segment',
       parentSymbol: 'scoreChunks',
       tokenCount: 300,
-      score: 40,
+      score: 40
     });
     const seg2 = chunk({
       id: 's2',
@@ -75,7 +75,7 @@ describe('containmentDedup segments', () => {
       symbolKind: 'segment',
       parentSymbol: 'scoreChunks',
       tokenCount: 280,
-      score: 35,
+      score: 35
     });
     const out = containmentDedup([parent, seg1, seg2], ['foreign', 'workspace']);
     expect(out.map((c) => c.id).sort()).toEqual(['s1', 's2']);
@@ -87,7 +87,7 @@ describe('containmentDedup segments', () => {
       symbolName: null,
       symbolKind: 'segment',
       parentSymbol: 'compressChunks',
-      tokenCount: 320,
+      tokenCount: 320
     });
     expect(seg.symbolName).toBeNull();
   });

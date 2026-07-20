@@ -4,7 +4,13 @@ import { DB } from '../storage/database.js';
 import { ChunksRepo } from '../storage/chunks-repo.js';
 import { FilesRepo } from '../storage/files-repo.js';
 import { RelationshipsRepo } from '../storage/relationships-repo.js';
-import { parseMarkdown, parseText, parseCode, detectLanguage, parseConfig } from '../parser/index.js';
+import {
+  parseMarkdown,
+  parseText,
+  parseCode,
+  detectLanguage,
+  parseConfig
+} from '../parser/index.js';
 import { chunkDocument } from '../chunker/index.js';
 import { chunkCode } from '../chunker/code-chunker.js';
 import { extractRelationships, extractImportRelationships } from '../graph/extractor.js';
@@ -35,7 +41,12 @@ export class Indexer {
     this.relsRepo = new RelationshipsRepo(db.getInstance());
   }
 
-  public async indexFile(filePath: string, layer: Layer, workspaceName?: string, signal?: AbortSignal): Promise<IndexStats> {
+  public async indexFile(
+    filePath: string,
+    layer: Layer,
+    workspaceName?: string,
+    signal?: AbortSignal
+  ): Promise<IndexStats> {
     const startTime = Date.now();
     let chunksCreated = 0;
     let relationshipsFound = 0;
@@ -126,11 +137,11 @@ export class Indexer {
       const parsed = parseText(filePath, content);
       chunks = chunkDocument(parsed, { layer, workspaceName });
     }
-    
+
     // Apply importance score (preserve existing if any, to keep feedback boosts)
     const existingFile = this.filesRepo.getByPath(filePath);
     const importance = existingFile ? existingFile.importance : scoreFileImportance(filePath);
-    
+
     // Pass importance down to chunks
     for (const chunk of chunks) {
       chunk.importance = importance;
@@ -172,13 +183,11 @@ export class Indexer {
 
     // File-level import edges attached to the File Structure (or first) chunk
     if (imports.length > 0 && chunks.length > 0) {
-      const anchor =
-        chunks.find(c => c.sectionTitle === 'File Structure') ||
-        chunks[0];
+      const anchor = chunks.find((c) => c.sectionTitle === 'File Structure') || chunks[0];
       const fileStem = path.basename(filePath).replace(/\.[^.]+$/, '');
       allRels.push(...extractImportRelationships(anchor, imports, fileStem));
     }
-    
+
     if (allRels.length > 0) {
       this.relsRepo.bulkUpsert(allRels);
       relationshipsFound = allRels.length;

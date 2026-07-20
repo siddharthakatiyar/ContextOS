@@ -20,7 +20,7 @@ app:
 port: 8080
 `;
     const doc = parseConfig('config.yml', yaml);
-    expect(doc.symbols.some(s => s.name === 'app')).toBe(true);
-    expect(doc.symbols.some(s => s.name === 'port')).toBe(true);
+    expect(doc.symbols.some((s) => s.name === 'app')).toBe(true);
+    expect(doc.symbols.some((s) => s.name === 'port')).toBe(true);
   });
 });

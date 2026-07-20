@@ -11,7 +11,7 @@ export const defaultConfig: ContextOSConfig = {
   get globalContextDir() {
     return path.join(os.homedir(), '.contextos', 'global');
   },
-  
+
   indexablePatterns: [
     '**/*.md',
     '**/*.txt',
@@ -48,7 +48,7 @@ export const defaultConfig: ContextOSConfig = {
     '__pycache__/**',
     'target/**',
     'vendor/**',
-    
+
     // OS-level exclusions to prevent system-wide indexing if homedir is accidentally used
     'Library/**',
     'Applications/**',
@@ -58,16 +58,16 @@ export const defaultConfig: ContextOSConfig = {
     'Movies/**',
     'go/pkg/**',
     'Desktop/**',
-    
+
     '*.min.js',
     '*.min.css',
     '*.map',
-    '*.lock',
+    '*.lock'
   ],
   maxChunkTokens: 1500,
   /** Function/method bodies above this emit additive segment chunks (parent kept). */
   maxSymbolChunkTokens: 900,
-  
+
   maxRetrievalResults: 25,
   maxTokenBudget: 1200,
   layerBoosts: {
@@ -81,18 +81,18 @@ export const defaultConfig: ContextOSConfig = {
   maxGraphBoost: 10,
   diversityDecay: 0.7,
   diversityPenaltyStart: 3,
-  
+
   ftsLimit: 15,
   busyTimeout: 5000,
 
   embeddingsEnabled: true,
   /** When true, fuse embedding kNN into retrieval. Default false — keyword path is the accuracy baseline. */
   embeddingsRetrieval: false,
-  
+
   cursor: {
     autoGenerateConfig: true
   },
-  
+
   memoryInjection: 'relevant',
   sentDedupEnabled: true,
   legacyTools: false,
@@ -103,6 +103,6 @@ export const defaultConfig: ContextOSConfig = {
     graphExpansion: true,
     embeddingFusion: true,
     containmentDedup: true,
-    diversityFilter: true,
-  },
+    diversityFilter: true
+  }
 };

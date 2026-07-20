@@ -9,7 +9,7 @@ import { loadConfig } from '../../src/config/index.js';
 vi.mock('../../src/core/embeddings/index.js', () => ({
   isEmbeddingsAvailable: () => false,
   ensureEmbeddingsLoaded: async () => {},
-  embedChunks: async () => {},
+  embedChunks: async () => {}
 }));
 
 describe('Indexer', () => {
@@ -22,16 +22,18 @@ describe('Indexer', () => {
     tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-test-indexer-'));
     dbPath = path.join(tmpdir, '.contextos', 'index.db');
     fs.mkdirSync(path.join(tmpdir, '.contextos'), { recursive: true });
-    
+
     // We create a DB manually so it doesn't fail trying to resolve workspace DBs
     db = new DB(dbPath);
-    
+
     // Create an Indexer
     indexer = new Indexer(db);
   });
 
   afterEach(() => {
-    try { db.close(); } catch {}
+    try {
+      db.close();
+    } catch {}
     fs.rmSync(tmpdir, { recursive: true, force: true });
   });
 
@@ -45,7 +47,7 @@ describe('Indexer', () => {
       } catch (e) {
         return;
       }
-      
+
       const result = await indexer.indexFile(symlink, 'repo');
       expect(result.filesProcessed).toBe(0);
     });
@@ -55,7 +57,7 @@ describe('Indexer', () => {
       const buf = Buffer.alloc(8192);
       buf.fill(0);
       fs.writeFileSync(binFile, buf);
-      
+
       const result = await indexer.indexFile(binFile, 'repo');
       expect(result.filesProcessed).toBe(0);
     });
@@ -63,7 +65,7 @@ describe('Indexer', () => {
     it('skips generated files', async () => {
       const genFile = path.join(tmpdir, 'package-lock.json');
       fs.writeFileSync(genFile, '{}');
-      
+
       const result = await indexer.indexFile(genFile, 'repo');
       expect(result.filesProcessed).toBe(0);
     });
@@ -71,10 +73,10 @@ describe('Indexer', () => {
     it('skips unchanged files (hash match)', async () => {
       const file = path.join(tmpdir, 'test.ts');
       fs.writeFileSync(file, 'const a = 1;');
-      
+
       const result1 = await indexer.indexFile(file, 'repo');
       expect(result1.filesProcessed).toBe(1);
-      
+
       const result2 = await indexer.indexFile(file, 'repo');
       expect(result2.filesProcessed).toBe(0);
     });
@@ -82,22 +84,27 @@ describe('Indexer', () => {
     it('processes and chunks valid source files', async () => {
       const file = path.join(tmpdir, 'code.ts');
       fs.writeFileSync(file, 'export function add(a: number, b: number) { return a + b; }');
-      
+
       const result = await indexer.indexFile(file, 'repo');
       expect(result.filesProcessed).toBe(1);
-      
-      const chunks = db.getInstance().prepare('SELECT * FROM chunks WHERE source_file = ?').all(file);
+
+      const chunks = db
+        .getInstance()
+        .prepare('SELECT * FROM chunks WHERE source_file = ?')
+        .all(file);
       expect(chunks.length).toBeGreaterThan(0);
     });
 
     it('throws AbortError if signal is aborted', async () => {
       const file = path.join(tmpdir, 'abort.ts');
       fs.writeFileSync(file, 'export function add(a: number, b: number) { return a + b; }');
-      
+
       const controller = new AbortController();
       controller.abort();
-      
-      await expect(indexer.indexFile(file, 'repo', undefined, controller.signal)).rejects.toThrow('This operation was aborted');
+
+      await expect(indexer.indexFile(file, 'repo', undefined, controller.signal)).rejects.toThrow(
+        'This operation was aborted'
+      );
     });
   });
 });

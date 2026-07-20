@@ -1,15 +1,15 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import { DB } from "../../core/storage/database.js";
-import { RetrievalEngine } from "../../core/retrieval/index.js";
-import { ChunksRepo } from "../../core/storage/chunks-repo.js";
-import { RelationshipsRepo } from "../../core/storage/relationships-repo.js";
-import { PromptsRepo } from "../../core/storage/prompts-repo.js";
-import { SessionStore } from "../../core/session/session-store.js";
-import { SessionManager } from "../../core/session/index.js";
-import { KnowledgeStore } from "../../core/memory/knowledge-store.js";
-import { loadConfig } from "../../config/index.js";
-import { executeGetContext } from "./get-context-core.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { DB } from '../../core/storage/database.js';
+import { RetrievalEngine } from '../../core/retrieval/index.js';
+import { ChunksRepo } from '../../core/storage/chunks-repo.js';
+import { RelationshipsRepo } from '../../core/storage/relationships-repo.js';
+import { PromptsRepo } from '../../core/storage/prompts-repo.js';
+import { SessionStore } from '../../core/session/session-store.js';
+import { SessionManager } from '../../core/session/index.js';
+import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
+import { loadConfig } from '../../config/index.js';
+import { executeGetContext } from './get-context-core.js';
 
 const PROMPT_CACHE_TTL_MS = 30_000;
 const PROMPT_CACHE_SIZE = 8;
@@ -41,8 +41,8 @@ function cacheSet(key: string, text: string): void {
 }
 
 export function registerGetContextTool(server: McpServer, dbs: DB[]) {
-  const chunksRepos = dbs.map(db => new ChunksRepo(db.getInstance()));
-  const relsRepos = dbs.map(db => new RelationshipsRepo(db.getInstance()));
+  const chunksRepos = dbs.map((db) => new ChunksRepo(db.getInstance()));
+  const relsRepos = dbs.map((db) => new RelationshipsRepo(db.getInstance()));
 
   // Session tracking strictly uses the primary DB
   const primaryDb = dbs[0];
@@ -58,16 +58,26 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
   const deps = { engine, sessionManager, knowledgeStore, promptsRepo, sessionStore };
 
   server.tool(
-    "get_context",
+    'get_context',
     "Retrieve relevant engineering context for a coding task, including conventions, service relationships, and implementation patterns. When output includes '### Also' stubs with path:line ranges, expand with ctx_expand, ctx_symbol, or read_file.",
     {
       prompt: z.string().describe("The user's coding question or task description"),
-      max_tokens: z.number().max(8000).optional().default(loadConfig().maxTokenBudget).describe("Maximum tokens for returned context. Capped at 8000 to prevent context overflow."),
-      layers: z.array(z.enum(["global", "workspace", "repo", "session"]))
+      max_tokens: z
+        .number()
+        .max(8000)
         .optional()
-        .default(["session", "workspace", "repo"])
-        .describe("Which context layers to search. By default searches local code only. Include 'global' if you explicitly need shared third-party or dependency context."),
-      output_format: z.enum(["markdown", "xml"]).optional().describe("Legacy parameter (ignored)."),
+        .default(loadConfig().maxTokenBudget)
+        .describe(
+          'Maximum tokens for returned context. Capped at 8000 to prevent context overflow.'
+        ),
+      layers: z
+        .array(z.enum(['global', 'workspace', 'repo', 'session']))
+        .optional()
+        .default(['session', 'workspace', 'repo'])
+        .describe(
+          "Which context layers to search. By default searches local code only. Include 'global' if you explicitly need shared third-party or dependency context."
+        ),
+      output_format: z.enum(['markdown', 'xml']).optional().describe('Legacy parameter (ignored).')
     },
     async ({ prompt, max_tokens, layers, output_format }) => {
       try {
@@ -75,26 +85,30 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         const cached = cacheGet(cacheKey);
         if (cached) {
           return {
-            content: [{ type: "text", text: cached }],
+            content: [{ type: 'text', text: cached }]
           };
         }
 
-        const { text } = await executeGetContext(prompt, {
-          maxTokens: max_tokens,
-          layers: layers as string[],
-          outputFormat: output_format as any,
-          repoRoot
-        }, deps);
+        const { text } = await executeGetContext(
+          prompt,
+          {
+            maxTokens: max_tokens,
+            layers: layers as string[],
+            outputFormat: output_format as any,
+            repoRoot
+          },
+          deps
+        );
 
         cacheSet(cacheKey, text);
 
         return {
           content: [
             {
-              type: "text",
-              text,
-            },
-          ],
+              type: 'text',
+              text
+            }
+          ]
         };
       } catch (error: any) {
         sessionStore.addEvent({
@@ -105,8 +119,8 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         });
 
         return {
-          content: [{ type: "text", text: `Error retrieving context: ${error.message}` }],
-          isError: true,
+          content: [{ type: 'text', text: `Error retrieving context: ${error.message}` }],
+          isError: true
         };
       }
     }

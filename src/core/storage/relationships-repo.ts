@@ -37,17 +37,17 @@ export class RelationshipsRepo {
 
   public findBySource(source: string): Relationship[] {
     const stmt = this.db.prepare('SELECT * FROM relationships WHERE source = ?');
-    return (stmt.all(source) as any[]).map(r => this.mapRow(r));
+    return (stmt.all(source) as any[]).map((r) => this.mapRow(r));
   }
 
   public findByTarget(target: string): Relationship[] {
     const stmt = this.db.prepare('SELECT * FROM relationships WHERE target = ?');
-    return (stmt.all(target) as any[]).map(r => this.mapRow(r));
+    return (stmt.all(target) as any[]).map((r) => this.mapRow(r));
   }
 
   public findRelated(entity: string): Relationship[] {
     const stmt = this.db.prepare('SELECT * FROM relationships WHERE source = ? OR target = ?');
-    return (stmt.all(entity, entity) as any[]).map(r => this.mapRow(r));
+    return (stmt.all(entity, entity) as any[]).map((r) => this.mapRow(r));
   }
 
   public deleteByChunk(chunkId: string): void {

@@ -5,7 +5,7 @@ export function parseConfig(filePath: string, content: string): ParsedCodeDocume
   const symbols: CodeSymbol[] = [];
 
   const lines = content.split('\n');
-  
+
   if (ext === 'json') {
     // Basic regex to find top-level JSON keys and values
     for (let i = 0; i < lines.length; i++) {

@@ -3,7 +3,7 @@ import {
   isEmbeddingsAvailable,
   embedTexts,
   embedChunkText,
-  _resetEmbedderForTests,
+  _resetEmbedderForTests
 } from '../../src/core/embeddings/index.js';
 import type { Chunk } from '../../src/core/storage/types.js';
 
@@ -64,7 +64,7 @@ describe('embedChunkText', () => {
       tokenCount: 10,
       symbolName: 'myFn',
       createdAt: 0,
-      updatedAt: 0,
+      updatedAt: 0
     };
     const text = embedChunkText(chunk);
     expect(text).toContain('does stuff');

@@ -59,8 +59,8 @@ describe('validateConfigJson', () => {
         graphExpansion: false,
         embeddingFusion: false,
         containmentDedup: false,
-        diversityFilter: false,
-      },
+        diversityFilter: false
+      }
     });
     expect(result).not.toBeNull();
     const p = result!.pipeline as Record<string, unknown>;

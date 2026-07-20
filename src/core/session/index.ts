@@ -63,7 +63,7 @@ export class SessionManager {
         layer: 'session',
         importance: 8,
         createdAt: Date.now(),
-        updatedAt: Date.now(),
+        updatedAt: Date.now()
       });
     }
 
@@ -71,7 +71,7 @@ export class SessionManager {
     const recentEvents = this.sessionStore.getRecentEvents(this.sessionId, 10);
     if (recentEvents && recentEvents.length > 0) {
       const filteredEvents = recentEvents.filter(
-        (e) => e.eventType === 'system_response' || e.eventType === 'error',
+        (e) => e.eventType === 'system_response' || e.eventType === 'error'
       );
       if (filteredEvents.length > 0) {
         const eventContent = filteredEvents.map((e) => `[${e.eventType}]: ${e.content}`).join('\n');
@@ -81,7 +81,7 @@ export class SessionManager {
           layer: 'session',
           importance: 9,
           createdAt: Date.now(),
-          updatedAt: Date.now(),
+          updatedAt: Date.now()
         });
       }
     }

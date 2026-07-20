@@ -11,22 +11,22 @@ export const importCommand = new Command('import')
   .action(async (infile: string) => {
     const db = new DB();
     const spinner = ora('Importing graph data...').start();
-    
+
     try {
       const inPath = path.resolve(process.cwd(), infile);
       if (!fs.existsSync(inPath)) {
         throw new Error(`File not found: ${infile}`);
       }
-      
+
       const fileData = fs.readFileSync(inPath, 'utf8');
       const importData = JSON.parse(fileData);
-      
+
       if (!importData.data || !importData.data.chunks) {
         throw new Error('Invalid export format');
       }
 
       const dbInstance = db.getInstance();
-      
+
       dbInstance.transaction(() => {
         // Insert Files
         const insertFile = dbInstance.prepare(`
@@ -95,8 +95,10 @@ export const importCommand = new Command('import')
           insertRel.run(rel);
         }
       })();
-      
-      spinner.succeed(`Imported ${importData.data.chunks.length} chunks, ${importData.data.relationships.length} relationships, and ${importData.data.files.length} files from ${chalk.green(infile)}`);
+
+      spinner.succeed(
+        `Imported ${importData.data.chunks.length} chunks, ${importData.data.relationships.length} relationships, and ${importData.data.files.length} files from ${chalk.green(infile)}`
+      );
     } catch (e: any) {
       spinner.fail(`Import failed: ${e.message}`);
     }

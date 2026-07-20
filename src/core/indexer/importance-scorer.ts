@@ -12,13 +12,18 @@ export function scoreFileImportance(filePath: string): number {
   if (filename === 'dockerfile' || filename === 'docker-compose.yml') score += 3;
 
   // Important code entry points
-  if (filename === 'index.ts' || filename === 'index.js' || filename === 'main.go' || filename === 'main.rs') {
+  if (
+    filename === 'index.ts' ||
+    filename === 'index.js' ||
+    filename === 'main.go' ||
+    filename === 'main.rs'
+  ) {
     score += 4;
   }
 
   // Common core directories
   if (dir.includes('core') || dir.includes('shared')) score += 2;
-  
+
   // Less important directories
   if (dir.split('/').includes('test') || dir.includes('__tests__') || dir.includes('spec')) {
     score -= 2;
