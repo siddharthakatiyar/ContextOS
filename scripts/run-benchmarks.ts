@@ -25,7 +25,8 @@ function runBenchmark() {
     
     // Init the project
     try {
-      execSync(`node ${CONTEXTOS_BIN} init`, { cwd: dirPath });
+      const initOut = execSync(`node ${CONTEXTOS_BIN} init`, { cwd: dirPath });
+      console.log(`Init output for ${dir}:`, initOut.toString().substring(0, 500));
     } catch (e: any) {
       console.error(`Failed to init ContextOS in ${dir}:`, e.message, e.stdout?.toString(), e.stderr?.toString());
       continue;
@@ -78,6 +79,14 @@ function runBenchmark() {
         console.log(`  Tokens: ${results.tokens || 'unknown'}`);
         if (!passed) {
           console.log(`  FAIL: Missing files: ${missingFiles.join(', ')}`);
+          if (results.chunks && results.chunks.length === 0) {
+            console.log(`  DEBUG: No chunks returned!`);
+          } else {
+            console.log(`  DEBUG: Chunks returned but mismatched paths?`);
+            for (const chunk of results.chunks) {
+              console.log(`    - ${chunk.sourceFile}`);
+            }
+          }
         } else {
           console.log(`  PASS`);
         }
