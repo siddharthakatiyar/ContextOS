@@ -261,27 +261,27 @@
 
 ## 12. Website
 
-- [~] Homepage — `docs/` Next.js app exists with homepage
-- [~] Docs — structure exists (`architecture`, `database`, `algorithms`, `initialization`)
+- [x] Homepage — `docs/` Next.js app exists with homepage
+- [x] Docs — structure exists (`architecture`, `database`, `algorithms`, `initialization`)
 - [x] Releases page — `docs/src/app/releases/` has content for recent releases
-- [ ] Benchmarks page — missing
-- [~] Architecture page — partial
-- [ ] Roadmap page — missing
-- [ ] Blog — missing
-- [ ] Deployed / live — not deployed anywhere
+- [x] Benchmarks page — `docs/src/app/docs/benchmarks/page.tsx`
+- [x] Architecture page — complete with daemon and concurrency details
+- [x] Roadmap page — `docs/src/app/docs/roadmap/page.tsx`
+- [x] Blog — moved to external personal site
+- [x] Deployed / live — deployed via Vercel at contextos.siddhartha.work
 
 ---
 
 ## 13. Production Readiness
 
 - [x] 5 repositories — workspace isolation supports this
-- [~] 50 repositories — untested at scale; no concurrency guards documented
-- [~] 50,000+ files — explicitly tested with background indexing daemon (non-blocking) handling AST parsing seamlessly
+- [x] 50 repositories — handled via daemon architecture
+- [x] 50,000+ files — explicitly tested with background indexing daemon (non-blocking) handling AST parsing seamlessly
 - [~] Monorepos — workspace concept exists; multi-root not validated
 - [x] Binary files — automatically skipped via optimized buffer check
 - [x] Generated code — automatically skipped via content heuristics
 - [x] Symlinks — explicitly ignored to prevent infinite loops
-- [ ] Concurrent indexing — no explicit concurrency protection
+- [x] Concurrent indexing — explicit concurrency protection via `pLimit`
 
 ---
 
@@ -320,8 +320,8 @@
 
 ## 17. v1 Launch Plan
 
-- [ ] Website ready
-- [ ] Release notes
+- [x] Website ready
+- [x] Release notes
 - [ ] Migration guide
 - [ ] Blog post
 - [ ] LinkedIn announcement
@@ -353,10 +353,10 @@
 | Release Engineering | 100% | Changelog, upgrade guides, and update-notifier in place |
 | Developer Experience | 95% | Unified error formatting, CLI polish, and centralized logging |
 | CI/CD | ~90% | GitHub Actions for Lint, Format, Test, Docs Deploy |
-| Security | ~30% | Prepared statements only; no traversal/resource guards |
-| Website | ~90% | Deployed to gh-pages via CI |
+| Security | 100% | Path traversal, DOS limits, and malicious repo guards implemented |
+| Website | 100% | Deployed to Vercel at contextos.siddhartha.work with full docs |
 | Community Infrastructure | ~80% | Open Source templates, code of conduct, contributing, and roadmap complete |
 
-**Overall estimate: ~75% of the way to v1.0**
+**Overall estimate: ~90% of the way to v1.0**
 
-The core engine is production-ready. The remaining gaps to v1.0 are primarily in open-source hygiene (CI, community templates, web deployment) and hardening against arbitrary edge cases (security).
+The core engine, website, and security are production-ready. The remaining gaps to v1.0 are primarily the actual Launch Marketing tasks (drafting blog posts, migration guides, and social media announcements).
