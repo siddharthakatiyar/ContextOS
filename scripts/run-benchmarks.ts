@@ -25,9 +25,9 @@ function runBenchmark() {
     
     // Init the project
     try {
-      execSync(`node ${CONTEXTOS_BIN} init`, { cwd: dirPath, stdio: 'ignore' });
-    } catch (e) {
-      console.error(`Failed to init ContextOS in ${dir}`);
+      execSync(`node ${CONTEXTOS_BIN} init`, { cwd: dirPath });
+    } catch (e: any) {
+      console.error(`Failed to init ContextOS in ${dir}:`, e.message, e.stdout?.toString(), e.stderr?.toString());
       continue;
     }
     
