@@ -30,9 +30,9 @@ describe('Path Traversal Guard', () => {
     fs.writeFileSync(secretFilePath, 'secret data');
 
     // Attempt to index it passing the workspaceRoot as the boundary
-    await expect(
-      indexer.indexFile(secretFilePath, 'workspace', workspaceRoot)
-    ).rejects.toThrow(/Path traversal blocked/);
+    await expect(indexer.indexFile(secretFilePath, 'workspace', workspaceRoot)).rejects.toThrow(
+      /Path traversal blocked/
+    );
   });
 
   it('allows files inside the specified workspace root', async () => {
