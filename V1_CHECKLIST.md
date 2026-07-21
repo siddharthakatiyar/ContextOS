@@ -298,12 +298,10 @@
 
 ## 15. Security
 
-- [ ] Path traversal checks — not explicitly addressed
-- [x] SQLite injection protection — prepared statements used throughout
-- [~] Safe file handling — glob-based; no explicit traversal guards
-- [ ] Resource limits — no CPU/memory limits on indexing
-- [ ] Malicious repository protection — not addressed
-- [ ] DOS protection — not addressed
+### Security Checks 🔐 (COMPLETED)
+- [x] **Path Traversal Guards**: Ensure core logic refuses to parse/index `../../` files beyond workspace roots.
+- [x] **Malicious Repo Protection**: Cap max indexed files per project (e.g., 100k) to prevent OOM / CPU pinning on massive/malicious monorepos.
+- [x] **DOS Protection**: Throttle concurrent file watcher tasks to prevent daemon crashes on `git checkout` in huge repositories.
 
 ---
 
