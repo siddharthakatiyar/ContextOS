@@ -27,6 +27,24 @@ function runBenchmark() {
     try {
       const initOut = execSync(`node ${CONTEXTOS_BIN} init`, { cwd: dirPath });
       console.log(`Init output for ${dir}:`, initOut.toString().substring(0, 500));
+      
+      // Wait for background indexing to complete before querying
+      let isIndexed = false;
+      for (let i = 0; i < 60; i++) {
+        const statusOut = execSync(`node ${CONTEXTOS_BIN} status --json`, { cwd: dirPath }).toString();
+        const status = JSON.parse(statusOut);
+        if (status.daemon?.indexing?.fullIndexCompleted) {
+          isIndexed = true;
+          break;
+        }
+        // sleep 1 second
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+      }
+      
+      if (!isIndexed) {
+        console.error(`Timeout waiting for indexing to complete for ${dir}`);
+        continue;
+      }
     } catch (e: any) {
       console.error(`Failed to init ContextOS in ${dir}:`, e.message, e.stdout?.toString(), e.stderr?.toString());
       continue;
