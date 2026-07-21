@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-22
+
+Security hardening and robust large repository support for the upcoming v1.0 release.
+
+### Added
+- **Path Traversal Guards**: Added explicit sandbox boundaries so the indexer refuses to parse `../../` files beyond workspace roots.
+- **Malicious Repo Protection**: Implemented a hard cap (1,000,000 files) on glob limits to prevent Out-Of-Memory (OOM) crashes on massive directories (like `~/`).
+- **DOS Protection**: Throttled concurrent file watcher events with an asynchronous queue (`pLimit`), preventing daemon crashes from CPU starvation during huge `git checkout` branch swaps.
+
+### Changed
+- Clarified `contextos serve` behavior in documentation, explaining it is managed by MCP clients and should not be run manually.
+
 ## [0.8.0] - 2026-07-20
 
 Zero-dependency local SQLite architecture and non-blocking background daemon indexing.

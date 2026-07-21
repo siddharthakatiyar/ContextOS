@@ -31,6 +31,7 @@ export default function Home() {
           <Link href="/" className="hover:text-white transition-colors">Home</Link>
           <Link href="/docs" className="hover:text-white transition-colors">Documentation</Link>
           <Link href="/releases" className="hover:text-white transition-colors">Releases</Link>
+          <a href="https://siddhartha.work/blog" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Blog ↗</a>
           <a href="https://github.com/siddharthakatiyar/ContextOS" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">GitHub ↗</a>
         </nav>
       </header>
@@ -128,6 +129,7 @@ export default function Home() {
         <div className="flex gap-4">
           <Link href="/docs" className="hover:text-white transition-colors">Documentation</Link>
           <Link href="/releases" className="hover:text-white transition-colors">Releases</Link>
+          <a href="https://siddhartha.work/blog" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Blog ↗</a>
           <Link href="https://github.com/siddharthakatiyar/ContextOS" className="hover:text-white transition-colors">GitHub</Link>
         </div>
       </footer>
