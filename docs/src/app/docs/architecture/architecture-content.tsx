@@ -108,8 +108,23 @@ export function ArchitectureContent() {
 
       <h3>SQLite Storage & Foreign Keys</h3>
       <p>
-        ContextOS guarantees transactional integrity through SQLite's WAL mode and cascading foreign keys. If a file is deleted, <code>this.filesRepo.deleteByPath(filePath)</code> instantly purges all associated chunks, relationships, and embeddings via <code>ON DELETE CASCADE</code>.
+        ContextOS guarantees transactional integrity through SQLite's WAL mode and cascading foreign keys. If a file is deleted, <code>this.filesRepo.deleteByPath(filePath)</code> instantly purges all associated chunks, relationships, and embeddings via <code>ON DELETE CASCADE</code>. The entire schema is defined locally in <code>.contextos/storage.db</code>, which means zero network latency.
       </p>
+
+      <h3>Background Daemon & Concurrency</h3>
+      <p>
+        The <code>contextos serve</code> daemon manages all long-running indexing tasks without blocking the active developer workflow.
+      </p>
+      <ul className="flex flex-col gap-4 mt-4">
+        <li className="flex gap-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-xs font-mono h-fit">pLimit</div>
+          <div className="text-neutral-300">File watcher events are queued through a concurrency limiter (<code>pLimit(5)</code>). This provides crucial DOS protection during massive workspace changes (like a <code>git checkout</code> that touches thousands of files), preventing CPU starvation.</div>
+        </li>
+        <li className="flex gap-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-xs font-mono h-fit">Sandbox Guards</div>
+          <div className="text-neutral-300">Strict path traversal guards ensure the Daemon never indexes files outside the approved workspace root, protecting sensitive system directories.</div>
+        </li>
+      </ul>
 
       <h2>Runtime Subsystems</h2>
 
