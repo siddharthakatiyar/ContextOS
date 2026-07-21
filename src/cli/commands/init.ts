@@ -225,7 +225,10 @@ export const initCommand = new Command('init')
       // Auto-start daemon in background for zero-config DX
       try {
         const { spawn } = await import('child_process');
-        const daemonProcess = spawn('npx', ['contextos', 'daemon', 'start'], {
+        // Use the current process's executable and script to start the daemon,
+        // rather than 'npx contextos' which would fetch from npm in CI environments.
+        const cliPath = process.argv[1];
+        const daemonProcess = spawn(process.execPath, [cliPath, 'daemon', 'start'], {
           detached: true,
           stdio: 'ignore'
         });
