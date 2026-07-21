@@ -10,6 +10,7 @@ function runBenchmark() {
   
   let totalQueries = 0;
   let passedQueries = 0;
+  let totalRecall = 0;
   
   for (const dir of dirs) {
     // if (dir === 'large-generated') continue; // Skip large repo for this quick test
@@ -70,6 +71,7 @@ function runBenchmark() {
         const passed = recall >= minRecall;
         
         if (passed) passedQueries++;
+        totalRecall += recall;
         
         console.log(`Query: "${query}"`);
         console.log(`  Recall: ${(recall * 100).toFixed(0)}% (${foundCount}/${expectedFiles.length})`);
@@ -88,6 +90,7 @@ function runBenchmark() {
   
   console.log(`\n=== Benchmark Summary ===`);
   console.log(`Passed ${passedQueries} / ${totalQueries} queries (${((passedQueries / totalQueries) * 100).toFixed(1)}%)`);
+  console.log(`Average Recall: ${((totalRecall / totalQueries) * 100).toFixed(1)}%`);
 }
 
 runBenchmark();

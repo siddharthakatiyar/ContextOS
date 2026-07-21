@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * 4-way E2E + holdout benchmark:
- *   Built-in Grep+Read  |  ContextOS get_context  |  Headroom CCR  |  context-mode FTS
+ *   Built-in Grep+Read  |  ContextOS get_context  |  Headroom CCR  |  context-mode FTS  |  Vector Only
  *
  * Same topics/markers as scripts/ab-e2e-benchmark.mjs and ab-holdout-benchmark.mjs.
  * Token estimator: ContextOS estimateTokens on every agent-visible tool output.
@@ -54,8 +53,7 @@ const { estimateTokens } = await import(path.join(ROOT, "dist/src/utils/tokens.j
 
 const MAX_TOKENS = 1200;
 const MEMORY_CHUNK_CAP = 3;
-const SIDES = ["builtin", "contextos", "headroom", "contextmode"];
-
+const SIDES = ["builtin", "contextos", "headroom", "contextmode", "vectoronly"];
 function tok(text) {
   return estimateTokens(text || "");
 }
@@ -400,6 +398,139 @@ async function runContextOSFlow(topic) {
   });
 }
 
+async function runVectorOnlyFlow(topic) {
+  const calls = [];
+  const dbs = DB.resolveDatabases(ROOT);
+  const chunksRepos = dbs.map((db) => new ChunksRepo(db.getInstance()));
+  const relsRepos = dbs.map((db) => new RelationshipsRepo(db.getInstance()));
+  const primaryDb = dbs[0];
+  const promptsRepo = new PromptsRepo(primaryDb.getInstance());
+  const sessionStore = new SessionStore(primaryDb);
+  const sessionManager = new SessionManager(promptsRepo, sessionStore);
+  const engine = new RetrievalEngine(chunksRepos, relsRepos);
+
+  // MOCK: Disable FTS keyword matching to isolate Vector Embeddings
+  engine.matcher.matchChunks = () => [];
+  // MOCK: Disable Graph Expansion to isolate Vector Embeddings
+  engine.expander.expand = () => [];
+
+  // Enable Embeddings
+  process.env.CONTEXTOS_EMBEDDINGS_RETRIEVAL = '1';
+
+  const result = await engine.retrieve(topic.prompt, {
+    maxChunks: 12,
+    layers: ["session", "workspace", "repo"],
+  });
+
+  const sessionChunks = await sessionManager.getSessionContext();
+  const knowledgeStore = new KnowledgeStore(primaryDb);
+  const knowledgeFacts = knowledgeStore.searchFacts(topic.prompt, 2);
+
+  const memory = [];
+  for (const sc of sessionChunks) {
+    memory.push({
+      ...sc,
+      sourceFile: "session",
+      sectionTitle: null,
+      sectionDepth: 0,
+      summary: null,
+      keywords: null,
+      hash: contentHash(sc.content),
+      tokenCount: tok(sc.content),
+      score: sc.importance,
+      fileType: "text",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      workspaceName: null,
+      layer: "session",
+    });
+  }
+  for (const fact of knowledgeFacts) {
+    const content = `**[${fact.category.toUpperCase()}]**: ${fact.fact}`;
+    memory.push({
+      id: fact.id,
+      content,
+      sourceFile: "memory.fact",
+      layer: "global",
+      workspaceName: null,
+      sectionTitle: "Cross-Session Knowledge Fact",
+      sectionDepth: 1,
+      summary: null,
+      keywords: null,
+      hash: contentHash(content),
+      tokenCount: tok(content),
+      score: fact.confidence * 10,
+      fileType: "text",
+      importance: Math.round(fact.confidence * 10),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  }
+  const capped = memory
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, MEMORY_CHUNK_CAP);
+  result.chunks = [...result.chunks, ...capped].sort(
+    (a, b) => (b.score || 0) - (a.score || 0),
+  );
+
+  const compiled = compile(result, {
+    maxTokens: MAX_TOKENS,
+    signalTerms: [
+      ...(result.intent?.identifiers || []),
+      ...(result.intent?.concepts || []),
+    ],
+  });
+  const header = `VectorSearch | tokens: ${compiled.tokenCount}/${MAX_TOKENS}\n\n`;
+  const output = header + compiled.output;
+  const searchTokens = compiled.tokenCount;
+
+  calls.push({
+    tool: "vector_search",
+    tokens: searchTokens,
+    note: `compiled ${compiled.tokenCount} / ${MAX_TOKENS}`,
+  });
+
+  let accumulated = output;
+  let { ok, missing } = isComplete(accumulated, topic.requiredMarkers);
+  const fullBodyFromSearch = ok;
+  const filesRead = [];
+  if (!ok) {
+    for (const rel of topic.requiredFiles) {
+      ({ ok, missing } = isComplete(accumulated, topic.requiredMarkers));
+      if (ok) break;
+      const range = stubRangeForFile(output, rel);
+      let read = readFileRel(rel, range?.start, range?.end);
+      if (!read.exists) continue;
+      let fileHasMissing = missing.some((m) => read.text.includes(m));
+      if (!fileHasMissing && range) {
+        read = readFileRel(rel);
+        fileHasMissing = missing.some((m) => read.text.includes(m));
+      }
+      if (!fileHasMissing && filesRead.length > 0) continue;
+      const label = read.ranged ? `${rel}:${read.range}` : rel;
+      accumulated += `\n\n----- READ ${label} -----\n` + read.text;
+      calls.push({
+        tool: read.ranged ? "ctx_read_file" : "Read",
+        path: label,
+        tokens: read.tokens,
+      });
+      filesRead.push(label);
+    }
+  }
+
+  for (const db of dbs) {
+    try {
+      db.close();
+    } catch {}
+  }
+
+  return finalizeSide("vectoronly", calls, searchTokens, output, topic, {
+    accumulated,
+    fullBodyFromSearch,
+    filesRead,
+  });
+}
+
 function runBuiltInFlow(topic) {
   const calls = [];
   const grepOut = runGrep(topic.grepPattern, topic.grepGlob);
@@ -569,12 +700,14 @@ async function runSuite(name, topics, bridge) {
     const contextos = await runContextOSFlow(topic);
     const headroom = await runHeadroomFlow(topic, bridge);
     const contextmode = runContextModeFlow(topic);
+    const vectoronly = await runVectorOnlyFlow(topic);
 
     const totals = {
       builtin: builtin.totalTokens,
       contextos: contextos.totalTokens,
       headroom: headroom.totalTokens,
       contextmode: contextmode.totalTokens,
+      vectoronly: vectoronly.totalTokens,
     };
     const sorted = Object.entries(totals).sort((a, b) => a[1] - b[1]);
     const tokenWinner =
@@ -585,6 +718,7 @@ async function runSuite(name, topics, bridge) {
       contextos: contextos.fullBodyFromSearch,
       headroom: headroom.fullBodyFromSearch,
       contextmode: contextmode.fullBodyFromSearch,
+      vectoronly: vectoronly.fullBodyFromSearch,
     };
 
     results.push({
@@ -595,14 +729,15 @@ async function runSuite(name, topics, bridge) {
       contextos,
       headroom,
       contextmode,
+      vectoronly,
       totals,
       tokenWinner,
       bodies,
     });
 
     process.stderr.write(
-      `B${builtin.totalTokens} C${contextos.totalTokens} H${headroom.totalTokens} M${contextmode.totalTokens} ` +
-        `body=${["B", "C", "H", "M"]
+      `B${builtin.totalTokens} C${contextos.totalTokens} H${headroom.totalTokens} M${contextmode.totalTokens} V${vectoronly.totalTokens} ` +
+        `body=${["B", "C", "H", "M", "V"]
           .map((k, i) => (Object.values(bodies)[i] ? k : "-"))
           .join("")} win=${tokenWinner}\n`,
     );
@@ -629,6 +764,8 @@ async function main() {
         "Grep → headroom_compress → headroom_read each required file (HEADROOM_MCP_READ=on); code often 0% compress (router:protected:recent_code)",
       contextmode:
         "context-mode search (FTS5) → conditional Read until markers complete",
+      vectoronly:
+        "ContextOS embeddings (FTS and Graph Expansion disabled) → conditional Read",
     },
     suites: {},
   };

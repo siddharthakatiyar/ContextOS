@@ -162,19 +162,19 @@
 
 ## 5. Benchmarks
 
-- [x] Benchmark scripts exist — `scripts/` has 4-way and e2e benchmarks
-- [~] Benchmark results — `scripts/results/` exists; results cited in README
-- [~] Reproducible benchmark suite — scripts exist but setup is manual; not CI-gated
-- [~] Compare against naive file loading — partially done
-- [ ] Compare against embedding-only retrieval — missing
-- [x] Compare against grep/ripgrep — README cites proxy comparison
-- [ ] Compare against vector search — missing
+- [x] Benchmark scripts exist — `scripts/` has 5-way and e2e benchmarks
+- [x] Benchmark results — `scripts/results/` exists; results cited in README
+- [x] Reproducible benchmark suite — scripts exist and are CI-gated
+- [x] Compare against naive file loading — builtin side
+- [x] Compare against embedding-only retrieval — vectoronly side
+- [x] Compare against grep/ripgrep — builtin side
+- [x] Compare against vector search — vectoronly side
 - [x] Measure: latency — latency tracked
 - [x] Measure: tokens — token counts tracked
 - [x] Measure: accuracy — accuracy measured in README
-- [ ] Measure: recall — recall not separately measured
-- [ ] Measure: indexing speed — missing
-- [ ] Measure: memory usage — missing
+- [x] Measure: recall — measured and averaged across topics
+- [x] Measure: indexing speed — measured in `scripts/measure-indexing-perf.ts`
+- [x] Measure: memory usage — measured in `scripts/measure-indexing-perf.ts`
 
 ---
 
@@ -243,7 +243,7 @@
 - [x] Lint — `eslint` script exists and is wired into CI workflow
 - [x] Format check — `prettier` configured and wired into CI workflow
 - [x] Tests — `npm test` runs in CI on publish and push/PR
-- [ ] Benchmarks in CI — benchmarks are manual scripts only
+- [x] Benchmarks in CI — 5-way regression test and E2E recall gating
 - [x] Release automation — npm publish on tag push
 - [x] Docs deployment — Next.js docs deployed to gh-pages via Actions
 
@@ -348,7 +348,7 @@
 | Public API Stability | 100% | SemVer, JSON schema, and Deprecation policy implemented in STABILITY.md |
 | Documentation | 90% | Comprehensive Next.js site exists; missing live interactive demos |
 | Testing | 75% | Integration suite covers E2E retrieval, background indexing, and daemon lifecycle |
-| Benchmarks | 90% | Automated 11/11 queries passing 100% recall across 6 frameworks + 50k large repo |
+| Benchmarks | 100% | 5-way comparison suite (AST, FTS, Vector, Grep), CI integration |
 | Examples | 100% | 6 dedicated retrieval benchmark repositories created and tested |
 | Release Engineering | 100% | Changelog, upgrade guides, and update-notifier in place |
 | Developer Experience | 95% | Unified error formatting, CLI polish, and centralized logging |
