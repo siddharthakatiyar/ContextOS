@@ -1,7 +1,5 @@
 import { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
-import { CodeBlock } from "@/components/code-block";
-
 export const metadata: Metadata = buildMetadata({
   title: "API Stability & SemVer",
   description: "ContextOS versioning, stability guarantees, and deprecation policy for v1.0 and beyond.",
@@ -52,14 +50,15 @@ export default function StabilityPage() {
           <p>
             Keys defined in the official configuration schema will not be removed or have their types changed. We publish a JSON schema for validating your <code>.contextosrc</code>.
           </p>
-          <CodeBlock 
-            language="json" 
-            code={`// In your .contextosrc
+          <pre className="bg-neutral-900 border border-neutral-800 p-4 rounded-lg overflow-x-auto text-sm mt-4">
+            <code className="text-neutral-300">
+{`// In your .contextosrc
 {
   "$schema": "https://raw.githubusercontent.com/siddharthakatiyar/ContextOS/main/config.schema.json",
   "maxTokenBudget": 2000
-}`} 
-          />
+}`}
+            </code>
+          </pre>
         </div>
       </section>
 
