@@ -29,6 +29,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "prepublishOnly": "npm run build",
+    "bench": "tsx scripts/run-benchmarks.ts",
     "generate:large-repo": "tsx tools/generate-large-repo.ts"
   },
   "engines": {
