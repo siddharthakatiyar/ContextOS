@@ -14,6 +14,7 @@ const navGroups = [
     links: [
       { title: "CLI Commands", href: "/docs/reference/cli" },
       { title: "Configuration", href: "/docs/reference/configuration" },
+      { title: "API Stability & SemVer", href: "/docs/stability" },
     ]
   },
   {

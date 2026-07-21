@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ContextOS Configuration",
+  "description": "Configuration schema for ContextOS (.contextosrc, contextos.config.json)",
+  "type": "object",
+  "properties": {
+    "dbPath": {
+      "type": "string",
+      "description": "Path to the local SQLite database. Default: .contextos/index.db"
+    },
+    "globalContextDir": {
+      "type": "string",
+      "description": "Path to the global context directory. Default: ~/.contextos/global"
+    },
+    "indexablePatterns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns for files to index."
+    },
+    "ignorePatterns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns for files to ignore."
+    },
+    "maxChunkTokens": {
+      "type": "number",
+      "description": "Maximum number of tokens per chunk."
+    },
+    "maxSymbolChunkTokens": {
+      "type": "number",
+      "description": "Maximum number of tokens per symbol chunk before splitting."
+    },
+    "maxRetrievalResults": {
+      "type": "number",
+      "description": "Maximum number of raw results to retrieve before filtering."
+    },
+    "maxTokenBudget": {
+      "type": "number",
+      "description": "Target token budget for retrieval responses."
+    },
+    "layerBoosts": {
+      "type": "object",
+      "properties": {
+        "session": { "type": "number" },
+        "repo": { "type": "number" },
+        "workspace": { "type": "number" },
+        "global": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "graphExpansionDepth": {
+      "type": "number",
+      "description": "Max depth for graph expansion."
+    },
+    "graphExpansionMaxNodes": {
+      "type": "number",
+      "description": "Max nodes to retrieve via graph expansion."
+    },
+    "maxGraphBoost": {
+      "type": "number",
+      "description": "Maximum boost score from graph edges."
+    },
+    "diversityDecay": {
+      "type": "number"
+    },
+    "diversityPenaltyStart": {
+      "type": "number"
+    },
+    "ftsLimit": {
+      "type": "number"
+    },
+    "busyTimeout": {
+      "type": "number",
+      "description": "SQLite busy timeout in milliseconds."
+    },
+    "embeddingsEnabled": {
+      "type": "boolean",
+      "description": "Whether to generate and store embeddings."
+    },
+    "embeddingsRetrieval": {
+      "type": "boolean",
+      "description": "Whether to fuse embedding kNN into retrieval."
+    },
+    "cursor": {
+      "type": "object",
+      "properties": {
+        "autoGenerateConfig": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "memoryInjection": {
+      "type": "string",
+      "enum": ["relevant", "all", "none"],
+      "description": "How global memory facts are injected."
+    },
+    "sentDedupEnabled": {
+      "type": "boolean"
+    },
+    "legacyTools": {
+      "type": "boolean",
+      "description": "Enable deprecated legacy MCP tools."
+    },
+    "tokenCalibration": {
+      "type": "number"
+    },
+    "framingReserve": {
+      "type": "number"
+    },
+    "adaptiveResponse": {
+      "type": "boolean"
+    },
+    "pipeline": {
+      "type": "object",
+      "properties": {
+        "graphExpansion": { "type": "boolean" },
+        "embeddingFusion": { "type": "boolean" },
+        "containmentDedup": { "type": "boolean" },
+        "diversityFilter": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
