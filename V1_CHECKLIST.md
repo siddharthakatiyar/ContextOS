@@ -69,12 +69,12 @@
 
 ## 2. Public API
 
-- [~] Stable CLI — commands exist (`init`, `reindex`, `serve`, `query`, `status`, `watch`, `visualize`) but no stability guarantees documented
-- [~] Stable MCP interface — MCP tools exist; tool surface was recently merged/trimmed in 0.7.0 (was a breaking change)
-- [ ] Stable JSON schema — no published JSON schema for config or MCP responses
-- [~] Stable configuration — `defaults.ts` is the reference; config keys changed across versions
-- [~] Semantic Versioning — using semver numerically but no documented SemVer commitment
-- [ ] Deprecation policy — none documented
+- [x] Stable CLI — commands exist (`init`, `reindex`, `serve`, `query`, `status`, `watch`, `visualize`) and are documented as stable in STABILITY.md
+- [x] Stable MCP interface — documented as stable in STABILITY.md
+- [x] Stable JSON schema — published as `config.schema.json`
+- [x] Stable configuration — `defaults.ts` is the reference; stable in STABILITY.md
+- [x] Semantic Versioning — SemVer commitment documented in STABILITY.md
+- [x] Deprecation policy — documented in STABILITY.md
 
 ---
 
@@ -345,7 +345,7 @@
 | Indexing | 100% | Works well; tested with 50,000 file repositories via background daemon |
 | Storage | 100% | Schema + migrations solid; auto-recovery built-in |
 | Daemon | 100% | Background indexing, detached spawning, crash recovery, structured logging |
-| Public API Stability | ~40% | No formal stability guarantees or deprecation policy |
+| Public API Stability | 100% | SemVer, JSON schema, and Deprecation policy implemented in STABILITY.md |
 | Documentation | 90% | Comprehensive Next.js site exists; missing live interactive demos |
 | Testing | 75% | Integration suite covers E2E retrieval, background indexing, and daemon lifecycle |
 | Benchmarks | 90% | Automated 11/11 queries passing 100% recall across 6 frameworks + 50k large repo |
