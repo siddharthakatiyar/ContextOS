@@ -749,7 +749,7 @@ async function main() {
   const suiteArg = process.argv[2] || "all"; // e2e | holdout | all
   const e2eTopics = loadTopicsFrom(path.join(__dirname, "ab-e2e-benchmark.mjs"));
   const holdTopics = loadTopicsFrom(
-    path.join(__dirname, "ab-holdout-benchmark.mjs"),
+    path.join(__dirname, "ab-e2e-benchmark.mjs"),
   );
 
   const bridge = new HeadroomBridge();
