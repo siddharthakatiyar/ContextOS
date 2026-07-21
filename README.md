@@ -30,13 +30,14 @@ npm install -g @siddharthakatiyar/contextos
 
 cd my-project
 
+# Initializes the repository and adds the MCP server to your AI client's config
 contextos init
-
-contextos serve
 ```
 
-Open Cursor or Claude Code and start asking questions.
-That's it.
+> **Note:** You do **not** need to run `contextos serve` manually. 
+> The `serve` command is designed to be called by MCP clients (like Cursor, Claude Code, or RooCode) in the background over `stdio`. If you run it manually in your terminal, it will appear to hang as it waits for JSON-RPC messages.
+
+Open Cursor, Claude Desktop, or your preferred MCP client and start asking questions! That's it.
 
 After upgrading, reindex so schema and chunking changes take effect:
 
@@ -232,7 +233,7 @@ The optional `pipeline` object in config enables toggling specific query-time pi
 contextos init                 # Index + MCP config (preserves existing contextos MCP entry)
 contextos reindex              # Wipe local DB and re-init (needed after upgrades)
 contextos reindex --embeddings # Backfill vectors without wiping the DB
-contextos serve                # MCP stdio server
+contextos serve                # MCP stdio server (Run automatically by your AI client. Do not run manually.)
 contextos query "..."          # Test retrieval locally
 contextos status               # Index stats
 contextos watch                # Live re-index on file changes

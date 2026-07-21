@@ -5,6 +5,7 @@ import { minimatch } from 'minimatch';
 import { DB } from '../storage/database.js';
 import { Indexer } from '../indexer/index.js';
 import { loadConfig } from '../../config/index.js';
+import { pLimit } from '../../utils/async.js';
 
 /** Dotfile/dir paths that should still be watched (B8). */
 const ALLOWED_DOT_SEGMENTS = new Set(['.cursor', '.contextos']);
@@ -45,6 +46,7 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
   const config = loadConfig();
   const indexer = new Indexer(db);
   const cwd = process.cwd();
+  const limit = pLimit(5); // Throttle concurrent parses during massive file changes
 
   // Note: Initial sync is skipped here to let the server start instantly.
   // The MCP server handles its own initial indexing via ctx_index_files or assumes it's up to date.
@@ -96,19 +98,21 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
     .on('add', async (filePath) => {
       const ext = path.extname(filePath);
       if (!ext && !filePath.includes('.cursor/rules')) return;
-      await maybeIndex(filePath);
+      await limit(() => maybeIndex(filePath));
     })
     .on('change', async (filePath) => {
       const ext = path.extname(filePath);
       if (!ext && !filePath.includes('.cursor/rules')) return;
-      await maybeIndex(filePath);
+      await limit(() => maybeIndex(filePath));
     })
     .on('unlink', async (filePath) => {
-      try {
-        await indexer.removeFile(filePath);
-      } catch {
-        // silently ignore
-      }
+      await limit(async () => {
+        try {
+          await indexer.removeFile(filePath);
+        } catch {
+          // silently ignore
+        }
+      });
     })
     .on('error', () => {
       // Silently ignore all watcher errors (like UNKNOWN or EPERM for sockets/protected files) to prevent the server from crashing

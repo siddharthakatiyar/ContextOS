@@ -64,6 +64,17 @@ export class BackgroundIndexer {
       const files = Array.from(allRepoFiles);
       this.totalFiles = files.length;
 
+      const MAX_FILES = 1_000_000;
+      if (this.totalFiles > MAX_FILES) {
+        console.error(`[BackgroundIndexer] Repository too large: ${this.totalFiles} files found. Maximum allowed is ${MAX_FILES}.`);
+        const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
+        fs.writeFileSync(statusFile, JSON.stringify({ 
+          error: `Repository too large: ${this.totalFiles} files found. Maximum allowed is ${MAX_FILES}. Please narrow your indexablePatterns in .contextosconfig.`,
+          fullIndexCompleted: false
+        }));
+        return;
+      }
+
       console.log(`[BackgroundIndexer] Found ${this.totalFiles} files to index.`);
 
       // Process in batches yielding to the event loop

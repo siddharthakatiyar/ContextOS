@@ -70,7 +70,7 @@ export async function buildFixtureDb(): Promise<string> {
     try {
       const fileStat = fs.statSync(file);
       if (fileStat.size <= 100 * 1024) {
-        await indexer.indexFile(file, 'repo');
+        await indexer.indexFile(file, 'repo', fixturePath);
       }
     } catch (e) {}
   }

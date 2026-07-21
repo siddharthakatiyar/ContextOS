@@ -30,6 +30,11 @@ export interface IndexStats {
   durationMs: number;
 }
 
+function isInsideWorkspace(resolvedPath: string, root: string): boolean {
+  const rootResolved = path.resolve(root);
+  return resolvedPath === rootResolved || resolvedPath.startsWith(rootResolved + path.sep);
+}
+
 export class Indexer {
   private chunksRepo: ChunksRepo;
   private filesRepo: FilesRepo;
@@ -53,6 +58,13 @@ export class Indexer {
 
     if (!fs.existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);
+    }
+
+    // Path traversal guard
+    const root = workspaceName ? path.resolve(workspaceName) : process.cwd();
+    const resolvedPath = path.resolve(filePath);
+    if (!isInsideWorkspace(resolvedPath, root)) {
+      throw new Error(`Path traversal blocked: ${filePath} is outside workspace root (${root})`);
     }
 
     signal?.throwIfAborted();

@@ -55,9 +55,9 @@ describe('Full Index and Retrieve Integration', () => {
     // 2. Index Files
     const indexer = new Indexer(db);
 
-    await indexer.indexFile(file1, 'repo');
-    await indexer.indexFile(file2, 'repo');
-    await indexer.indexFile(file3, 'repo');
+    await indexer.indexFile(file1, 'repo', tmpdir);
+    await indexer.indexFile(file2, 'repo', tmpdir);
+    await indexer.indexFile(file3, 'repo', tmpdir);
 
     // Wait for the async parser queues to drain (if any background indexing happens)
     // In our synchronous test setup with mock embeddings, indexFile handles DB insertion directly.
