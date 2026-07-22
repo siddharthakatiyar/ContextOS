@@ -48,11 +48,11 @@ export default function StabilityPage() {
 
           <h3>3. Configuration File</h3>
           <p>
-            Keys defined in the official configuration schema will not be removed or have their types changed. We publish a JSON schema for validating your <code>.contextosrc</code>.
+            Keys defined in the official configuration schema will not be removed or have their types changed. We publish a JSON schema for validating your <code>.contextos/config.json</code>.
           </p>
           <pre className="bg-neutral-900 border border-neutral-800 p-4 rounded-lg overflow-x-auto text-sm mt-4">
             <code className="text-neutral-300">
-{`// In your .contextosrc
+{`// In your .contextos/config.json
 {
   "$schema": "https://raw.githubusercontent.com/siddharthakatiyar/ContextOS/main/config.schema.json",
   "maxTokenBudget": 2000

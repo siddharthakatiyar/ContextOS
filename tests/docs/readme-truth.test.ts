@@ -11,16 +11,21 @@ describe('README.md Truth Pass', () => {
   const readme = fs.readFileSync(readmePath, 'utf8');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
-  it('documents all configuration keys', () => {
-    const configKeys = Object.keys(defaultConfig);
-    const configSectionMatch = readme.match(/## Configuration\n\n```json\n([\s\S]*?)\n```/);
-    expect(configSectionMatch).toBeDefined();
-
-    if (configSectionMatch) {
-      const documentedConfig = configSectionMatch[1];
-      for (const key of configKeys) {
-        expect(documentedConfig).toContain(`"${key}"`);
-      }
+  it('documents current config defaults accurately', () => {
+    // Guard against README Configuration-table drift from src/config/defaults.ts.
+    // Each entry must appear in the table as: | `key` | `value` | ...
+    const checks: Array<[string, number]> = [
+      ['maxTokenBudget', defaultConfig.maxTokenBudget],
+      ['maxRetrievalResults', defaultConfig.maxRetrievalResults],
+      ['ftsLimit', defaultConfig.ftsLimit],
+      ['maxChunkTokens', defaultConfig.maxChunkTokens],
+      ['maxSymbolChunkTokens', defaultConfig.maxSymbolChunkTokens],
+      ['graphExpansionDepth', defaultConfig.graphExpansionDepth],
+      ['graphExpansionMaxNodes', defaultConfig.graphExpansionMaxNodes]
+    ];
+    for (const [key, value] of checks) {
+      const rowRe = new RegExp(`\\|\\s*\`${key}\`\\s*\\|\\s*\`${value}\``);
+      expect(readme, `README config table default for ${key} should be ${value}`).toMatch(rowRe);
     }
   });
 
@@ -30,25 +35,19 @@ describe('README.md Truth Pass', () => {
     expect(readme).not.toContain('C2');
   });
 
-  it('documents MCP tools correctly', () => {
+  it('documents core MCP tools', () => {
+    // Each core tool must be named (in backticks) somewhere in the README.
     const tools = [
       'get_context',
       'ctx_execute',
       'reindex_context',
-      'ctx_list_topics',
-      'ctx_read_topic',
+      'ctx_read_file',
+      'get_symbol',
       'learn_fact',
       'forget_fact'
     ];
-
-    const toolsSectionMatch = readme.match(/## Available Tools\n\n([\s\S]*?)(?=\n## |$)/);
-    expect(toolsSectionMatch).toBeDefined();
-
-    if (toolsSectionMatch) {
-      const section = toolsSectionMatch[1];
-      for (const tool of tools) {
-        expect(section).toContain(`\`${tool}\``);
-      }
+    for (const tool of tools) {
+      expect(readme, `README should document the \`${tool}\` MCP tool`).toContain(`\`${tool}\``);
     }
   });
 });

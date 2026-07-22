@@ -59,7 +59,7 @@ contextos reindex
 
 A rigorous 100-query benchmark (50 targeted function queries, 50 broad conceptual queries) was run on the Redis 7.x C codebase (799 files) to compare ContextOS against a proxy of Cursor's built-in `@codebase` search.
 
-*Note: The Cursor proxy uses ripgrep + file extraction since `@codebase` lacks a programmatic API. Real `@codebase` token counts may vary, but the accuracy and efficiency gap remains stark.*
+*Note: The Cursor proxy uses ripgrep + file extraction since `@codebase` lacks a programmatic API. Real `@codebase` token counts may vary, but the accuracy and efficiency gap remains stark. These are one-time historical figures (measured on v0.7.0); "accuracy" here is file-level recall among the retrieved candidates. The ongoing CI benchmark measures ContextOS retrieval recall only (no competitor comparison).*
 
 | Metric | ContextOS (0.7.0) | Cursor `@codebase` (Proxy) |
 |--------|-------------------|----------------------------|
@@ -178,7 +178,7 @@ ContextOS's SQLite database is fundamentally an ephemeral index. If corruption o
 Repository indexing now runs with bounded concurrency to overlap CPU-intensive parsing and disk I/O, dramatically speeding up `init` and `reindex` on large codebases.
 
 **MCP tools**  
-`get_context`, `save_context`, `reindex_context`, `get_neighbors`, `get_symbol`, `ctx_execute`, `learn_fact`, `forget_fact`, `rate_chunk`, and related helpers.
+`get_context`, `save_context`, `reindex_context`, `get_neighbors`, `get_symbol`, `ctx_symbol`, `ctx_read_file`, `ctx_expand`, `ctx_execute`, `learn_fact`, `forget_fact`, `ctx_remember`, `rate_chunk`, `ctx_list_topics`, `ctx_read_topic`, and `contextos_status`.
 
 **Zero-config setup**  
 `contextos init` indexes the repo, writes MCP config if missing (does not overwrite an existing `contextos` MCP entry), and can start the background daemon.
@@ -191,12 +191,12 @@ Defaults live in `src/config/defaults.ts` and can be overridden via:
 - `.contextos/config.json` (repo)
 - Env: `CONTEXTOS_EMBEDDINGS=0` disables embedding; `CONTEXTOS_EMBEDDINGS_RETRIEVAL=1` enables emb fusion at query time
 
-Array keys in config use `!` prefix overrides where documented (replace rather than merge).
+Array keys in config use a `!` **suffix** to override (replace rather than merge) where documented — e.g. `"ignorePatterns!": ["only/**"]`.
 
-| Key | Default (0.7.0) | Notes |
-|-----|-----------------|--------|
+| Key | Default | Notes |
+|-----|---------|--------|
 | `maxTokenBudget` | `1200` | Default compile budget; `get_context` `max_tokens` still accepts up to `8000` |
-| `maxRetrievalResults` | `12` | Cap on scored chunks before compile |
+| `maxRetrievalResults` | `25` | Cap on scored chunks before compile |
 | `ftsLimit` | `15` | Per-query FTS hit limit |
 | `maxChunkTokens` | `1500` | Soft cap when creating chunks |
 | `maxSymbolChunkTokens` | `900` | Function/method bodies above this also emit additive segment chunks |
@@ -214,7 +214,7 @@ The optional `pipeline` object in config enables toggling specific query-time pi
 | Key | Default | Notes |
 |-----|---------|--------|
 | `pipeline.graphExpansion` | `true` | Enable/disable relationship walking. |
-| `pipeline.embeddingFusion` | `false` | Enable/disable embeddings retrieval fallback. Overrides `embeddingsRetrieval`. |
+| `pipeline.embeddingFusion` | *(unset)* | Fuse embedding kNN into retrieval. When unset it follows `embeddingsRetrieval` (off by default; confidence-gated fallback). Set `true`/`false` to force. |
 | `pipeline.containmentDedup` | `true` | Enable/disable deduplication between classes and their member methods. |
 | `pipeline.diversityFilter` | `true` | Enable/disable score decay for many chunks originating from the same file. |
 
@@ -261,4 +261,4 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 
 ## License
 
-ISC
+MIT — see [LICENSE](LICENSE).
