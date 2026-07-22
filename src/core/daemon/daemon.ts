@@ -143,12 +143,19 @@ export class ContextOSDaemon {
         console.error = (...args) => logWithTime('ERROR', ...args);
         console.warn = (...args) => logWithTime('WARN', ...args);
 
-        // Prevent unhandled errors from crashing the daemon
+        // Keep the daemon alive on unexpected errors, but log them with full
+        // context so failures are diagnosable instead of silent. NOTE: continuing
+        // after an uncaughtException is deliberate (availability over strictness);
+        // a clean self-restart on uncaught is tracked as future hardening.
         process.on('uncaughtException', (err) => {
-          console.error(`Daemon uncaught exception: ${err.message}\n${err.stack}`);
+          console.error(
+            `Daemon uncaughtException [${err?.name || 'Error'}]: ${err?.message}\n${err?.stack || ''}`
+          );
         });
-        process.on('unhandledRejection', (reason) => {
-          console.error(`Daemon unhandled rejection: ${reason}`);
+        process.on('unhandledRejection', (reason: any) => {
+          const detail =
+            reason instanceof Error ? `${reason.message}\n${reason.stack || ''}` : String(reason);
+          console.error(`Daemon unhandledRejection: ${detail}`);
         });
 
         const cleanup = () => this.stop();

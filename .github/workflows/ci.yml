@@ -29,3 +29,6 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
+      - name: Coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
+        run: npm run coverage

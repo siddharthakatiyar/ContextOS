@@ -14,7 +14,7 @@ const execFileAsync = promisify(execFile);
  * hostile repo. Default ON (preserves prior behavior); disable via config
  * `execAllowRepoScripts: false` or env `CONTEXTOS_EXEC_ALLOW_SCRIPTS=0`.
  */
-function repoScriptsAllowed(): boolean {
+export function repoScriptsAllowed(): boolean {
   const env = process.env.CONTEXTOS_EXEC_ALLOW_SCRIPTS;
   if (env !== undefined && env !== '') {
     return env !== '0' && env.toLowerCase() !== 'false';

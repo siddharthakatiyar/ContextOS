@@ -13,9 +13,22 @@ Security hardening and robust large repository support for the upcoming v1.0 rel
 - **Path Traversal Guards**: Added explicit sandbox boundaries so the indexer refuses to parse `../../` files beyond workspace roots.
 - **Malicious Repo Protection**: Implemented a hard cap (1,000,000 files) on glob limits to prevent Out-Of-Memory (OOM) crashes on massive directories (like `~/`).
 - **DOS Protection**: Throttled concurrent file watcher events with an asynchronous queue (`pLimit`), preventing daemon crashes from CPU starvation during huge `git checkout` branch swaps.
+- **`execAllowRepoScripts` opt-out**: New config flag (and `CONTEXTOS_EXEC_ALLOW_SCRIPTS` env) to disable `ctx_execute` running a repository's own npm/npx scripts on untrusted repos. Default remains enabled.
+- **`STABILITY.md`**: Documented the SemVer / deprecation / public-surface stability policy.
+- **CI**: macOS runners added to the test matrix; the publish workflow now verifies the pushed tag matches `package.json`.
 
 ### Changed
 - Clarified `contextos serve` behavior in documentation, explaining it is managed by MCP clients and should not be run manually.
+- **Retrieval default**: `pipeline.embeddingFusion` now follows `embeddingsRetrieval` (off by default; confidence-gated) instead of being forced on — queries no longer run embedding-kNN fusion unless you opt in. See UPGRADING.
+- **Benchmark**: the suite now measures ContextOS only (competitor comparison arms removed).
+- **Storage**: prepared statements are cached per connection and extra SQLite PRAGMAs (`synchronous=NORMAL`, cache/mmap/temp_store) are applied for faster indexing.
+
+### Fixed
+- **`ctx_expand`** now validates file paths against the workspace root (previously an unguarded arbitrary file read).
+- **Workspace boundary** checks in `ctx_read_file` / `reindex_context` / `ctx_execute` resolve symlinks (realpath) and reject a bare `..` argument.
+- **Dependencies**: bumped `brace-expansion` (ReDoS) and `esbuild` via `npm audit fix`.
+- **Parser**: tree-sitter is no longer a shared mutable singleton (fixes a wrong-grammar race under concurrent indexing).
+- **Docs**: corrected the license (MIT), config defaults, MCP tool list, and the JSON config schema.
 
 ## [0.8.0] - 2026-07-20
 

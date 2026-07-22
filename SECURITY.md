@@ -31,6 +31,7 @@ ContextOS serves context from whatever repository it points at. Two things to kn
 
 - **`ctx_execute` runs the repository's own scripts.** By default the `ctx_execute` MCP tool allows `npm test`, `npm run build|lint`, and `npx vitest|jest`, which execute the target repo's `package.json` scripts and test files — i.e. repo-controlled code. When indexing an untrusted repository, disable this with `execAllowRepoScripts: false` in your config or `CONTEXTOS_EXEC_ALLOW_SCRIPTS=0`. Read-only commands (`ls`, `cat`, `grep`, `find`, `tree`, `git status|log|diff`) remain available.
 - **File access is confined to the workspace root.** The file-reading and indexing MCP tools resolve every path against `CONTEXTOS_REPO_ROOT` and reject anything that escapes it — including via `..` segments and symlinks.
+- **`git` on a repo shipped with its own `.git`.** `ctx_execute` allows read-only `git status|log|diff|branch`. A repository *delivered as a directory containing an attacker-controlled `.git/config`* (e.g. an extracted archive rather than a normal `git clone`) could set `diff.external` to run a command when the agent runs `git diff`. A normal `git clone` writes a fresh, safe `.git/config`; only fully-untrusted, pre-packaged repositories carry this risk.
 
 ## Known dependency advisories (accepted risk)
 
