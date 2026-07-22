@@ -16,3 +16,10 @@ scripts/bench/fixtures/
 V1_CHECKLIST.md
 runs.json
 retrieval-examples/large-generated/
+AUDIT-v1.md
+
+# Local, machine-specific MCP config (ship .mcp.json.example instead)
+.mcp.json
+
+# Coverage output
+coverage/
