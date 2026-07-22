@@ -1,13 +1,9 @@
 import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
 import { DB, getContextOSHome } from '../../core/storage/database.js';
-import { Indexer } from '../../core/indexer/index.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
-import cliProgress from 'cli-progress';
 import chalk from 'chalk';
-import { pLimit } from '../../utils/concurrency.js';
 
 export const initCommand = new Command('init')
   .description('Initialize ContextOS in the current repository')
@@ -33,50 +29,13 @@ export const initCommand = new Command('init')
     console.log(`Global context dir: ${globalContextDir}`);
 
     const db = new DB();
-    const indexer = new Indexer(db);
-    const { loadConfig } = await import('../../config/index.js');
-    const config = loadConfig();
 
     try {
-      // SAFETY: These patterns are always excluded, regardless of user config
-      const SAFETY_IGNORE = [
-        '**/node_modules/**',
-        '**/.git/**',
-        '**/dist/**',
-        '**/build/**',
-        '**/.next/**',
-        '**/coverage/**',
-        '**/__pycache__/**',
-        '**/target/**',
-        '**/*.min.js',
-        '**/*.min.css',
-        '**/*.map',
-        '**/*.lock',
-        '**/vendor/**'
-      ];
-      const userIgnore = config.ignorePatterns || [];
-      const ignore = [...new Set([...SAFETY_IGNORE, ...userIgnore])];
-
       const startTime = Date.now();
-      const totalProcessed = 0;
-      const totalChunks = 0;
-      const totalRels = 0;
-      const totalFilesCount = 0;
 
-      const abortController = new AbortController();
-      const onSigInt = () => {
-        console.log(chalk.red('\n\nAborting initialization...'));
-        abortController.abort();
-      };
-      process.on('SIGINT', onSigInt);
-
-      try {
-        // Mark repo as needing a full index so the daemon will pick it up
-        const statusPath = path.join(repoContextDir, 'status.json');
-        fs.writeFileSync(statusPath, JSON.stringify({ fullIndexCompleted: false }));
-      } finally {
-        process.off('SIGINT', onSigInt);
-      }
+      // Mark repo as needing a full index so the daemon will pick it up
+      const statusPath = path.join(repoContextDir, 'status.json');
+      fs.writeFileSync(statusPath, JSON.stringify({ fullIndexCompleted: false }));
 
       const elapsedMs = Date.now() - startTime;
       console.log(

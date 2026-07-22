@@ -23,7 +23,6 @@ const LANGUAGE_EXT_MAP: Record<string, string> = {
 };
 
 let TreeSitter: any = null;
-let parserInstance: any = null;
 let parserInitPromise: Promise<void> | null = null;
 const languageCache = new Map<string, any>();
 
@@ -39,10 +38,6 @@ async function getParser(langName: string): Promise<any> {
   }
   await parserInitPromise;
 
-  if (!parserInstance) {
-    parserInstance = new TreeSitter();
-  }
-
   if (!languageCache.has(langName)) {
     try {
       const wasmPath = localRequire.resolve(`tree-sitter-wasms/out/tree-sitter-${langName}.wasm`);
@@ -54,8 +49,14 @@ async function getParser(langName: string): Promise<any> {
     }
   }
 
-  parserInstance.setLanguage(languageCache.get(langName)!);
-  return parserInstance;
+  // Construct a FRESH parser per call. The WASM runtime (TreeSitter.init) and the
+  // compiled Language objects stay cached/shared, but the Parser wrapper must not
+  // be shared: concurrent indexFile() calls (the daemon batches parses via
+  // Promise.all) would otherwise race on setLanguage()/parse() of one mutable
+  // instance and parse files with the wrong grammar. The wrapper is cheap.
+  const parser = new TreeSitter();
+  parser.setLanguage(languageCache.get(langName)!);
+  return parser;
 }
 
 export function detectLanguage(filePath: string): string {

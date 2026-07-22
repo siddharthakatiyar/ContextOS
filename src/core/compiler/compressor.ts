@@ -799,7 +799,9 @@ export function pickPrimaries(
     return { chunk: c, leadScore };
   });
 
-  scoredCandidates.sort((a, b) => b.leadScore - a.leadScore);
+  scoredCandidates.sort(
+    (a, b) => b.leadScore - a.leadScore || a.chunk.id.localeCompare(b.chunk.id)
+  );
 
   const byFile = new Map<string, number>();
   let primary: ScoredChunk[] = [];
@@ -829,7 +831,7 @@ export function pickPrimaries(
           c.sourceFile === giant.sourceFile &&
           c.parentSymbol === giant.symbolName
       )
-      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .sort((a, b) => (b.score || 0) - (a.score || 0) || a.id.localeCompare(b.id))
       .slice(0, 3);
     if (!exactSymbol && wontFit && rankedSegs.length >= 1) {
       primary = [

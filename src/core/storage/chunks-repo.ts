@@ -1,6 +1,7 @@
 import { Database } from 'better-sqlite3';
 import { Chunk, Layer, ChunkStats } from './types.js';
 import { sanitizeFTSQuery, sanitizeFTSTerm } from './fts-sanitizer.js';
+import { prepareCached } from './stmt-cache.js';
 
 export interface ScoredChunk extends Chunk {
   score: number;
@@ -26,7 +27,9 @@ export class ChunksRepo {
   }
 
   public upsert(chunk: Chunk): void {
-    const stmt = this.db.prepare(`
+    const stmt = prepareCached(
+      this.db,
+      `
       INSERT INTO chunks (
         id, source_file, layer, workspace_name, section_title, section_depth,
         content, summary, keywords, hash, importance, token_count,
@@ -60,7 +63,8 @@ export class ChunksRepo {
         end_line = excluded.end_line,
         file_stem = excluded.file_stem,
         updated_at = excluded.updated_at
-    `);
+    `
+    );
     stmt.run({
       ...chunk,
       fileType: chunk.fileType || null,
@@ -75,7 +79,9 @@ export class ChunksRepo {
   }
 
   public bulkUpsert(chunks: Chunk[]): void {
-    const stmt = this.db.prepare(`
+    const stmt = prepareCached(
+      this.db,
+      `
       INSERT INTO chunks (
         id, source_file, layer, workspace_name, section_title, section_depth,
         content, summary, keywords, hash, importance, token_count,
@@ -109,7 +115,8 @@ export class ChunksRepo {
         end_line = excluded.end_line,
         file_stem = excluded.file_stem,
         updated_at = excluded.updated_at
-    `);
+    `
+    );
     const transaction = this.db.transaction((items: Chunk[]) => {
       for (const item of items) {
         stmt.run({
@@ -129,12 +136,12 @@ export class ChunksRepo {
   }
 
   public deleteBySource(sourceFile: string): void {
-    const stmt = this.db.prepare('DELETE FROM chunks WHERE source_file = ?');
+    const stmt = prepareCached(this.db, 'DELETE FROM chunks WHERE source_file = ?');
     stmt.run(sourceFile);
   }
 
   public findByLayer(layer: Layer, limit: number = 100): Chunk[] {
-    const stmt = this.db.prepare('SELECT * FROM chunks WHERE layer = ? LIMIT ?');
+    const stmt = prepareCached(this.db, 'SELECT * FROM chunks WHERE layer = ? LIMIT ?');
     return (stmt.all(layer, limit) as any[]).map((r) => this.mapRow(r)) as Chunk[];
   }
 
@@ -160,7 +167,7 @@ export class ChunksRepo {
     sql += ` ORDER BY score LIMIT ?`;
     params.push(opts?.limit ?? 30);
 
-    const stmt = this.db.prepare(sql);
+    const stmt = prepareCached(this.db, sql);
     const rows = stmt.all(...params) as any[];
     return rows.map((r) => this.mapRow(r)) as ScoredChunk[];
   }
@@ -183,7 +190,7 @@ export class ChunksRepo {
     sql += ` ORDER BY score LIMIT ?`;
     params.push(opts?.limit ?? 20);
 
-    const stmt = this.db.prepare(sql);
+    const stmt = prepareCached(this.db, sql);
     const rows = stmt.all(...params) as any[];
     return rows.map((r) => this.mapRow(r)) as Chunk[];
   }
@@ -197,7 +204,9 @@ export class ChunksRepo {
     }
     sql += ` LIMIT ?`;
     params.push(opts?.limit ?? 20);
-    return (this.db.prepare(sql).all(...params) as any[]).map((r) => this.mapRow(r)) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
+      this.mapRow(r)
+    ) as Chunk[];
   }
 
   public findBySymbolName(name: string, opts?: QueryFilterOpts): Chunk[] {
@@ -215,7 +224,9 @@ export class ChunksRepo {
     }
     sql += ` LIMIT ?`;
     params.push(opts?.limit ?? 20);
-    return (this.db.prepare(sql).all(...params) as any[]).map((r) => this.mapRow(r)) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
+      this.mapRow(r)
+    ) as Chunk[];
   }
 
   /** Looser symbol search for concept tokens (e.g. schema → SCHEMA_SQL). */
@@ -232,7 +243,9 @@ export class ChunksRepo {
     }
     sql += ` LIMIT ?`;
     params.push(opts?.limit ?? 15);
-    return (this.db.prepare(sql).all(...params) as any[]).map((r) => this.mapRow(r)) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
+      this.mapRow(r)
+    ) as Chunk[];
   }
 
   public findByParentSymbol(name: string, opts?: QueryFilterOpts): Chunk[] {
@@ -247,7 +260,9 @@ export class ChunksRepo {
     }
     sql += ` LIMIT ?`;
     params.push(opts?.limit ?? 30);
-    return (this.db.prepare(sql).all(...params) as any[]).map((r) => this.mapRow(r)) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
+      this.mapRow(r)
+    ) as Chunk[];
   }
 
   /**
@@ -309,13 +324,15 @@ export class ChunksRepo {
     sql += ` ORDER BY stem_rank DESC, kind_rank DESC LIMIT ?`;
     params.push(opts?.limit ?? limit);
 
-    return (this.db.prepare(sql).all(...params) as any[]).map((r) => this.mapRow(r)) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
+      this.mapRow(r)
+    ) as Chunk[];
   }
 
   public getByIds(ids: string[]): Chunk[] {
     if (ids.length === 0) return [];
     const placeholders = ids.map(() => '?').join(',');
-    const stmt = this.db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`);
+    const stmt = prepareCached(this.db, `SELECT * FROM chunks WHERE id IN (${placeholders})`);
     return (stmt.all(...ids) as any[]).map((r) => this.mapRow(r)) as Chunk[];
   }
 

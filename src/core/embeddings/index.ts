@@ -123,7 +123,7 @@ export async function backfillAllEmbeddings(
 ): Promise<number> {
   if (!isEmbeddingsAvailable()) return 0;
   try {
-    const rows = db.prepare(`SELECT * FROM chunks`).all() as any[];
+    const rows = db.prepare(`SELECT id FROM chunks`).all() as any[];
     if (!rows.length) return 0;
 
     const repo = new ChunksRepo(db);

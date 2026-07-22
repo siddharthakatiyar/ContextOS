@@ -47,7 +47,7 @@ function rankByBm25(chunks: any[]): ScoredChunk[] {
     ...c,
     score: typeof c.score === 'number' ? c.score : chunks.length - i
   })) as ScoredChunk[];
-  scored.sort((a, b) => (b.score || 0) - (a.score || 0));
+  scored.sort((a, b) => (b.score || 0) - (a.score || 0) || a.id.localeCompare(b.id));
   return scored;
 }
 

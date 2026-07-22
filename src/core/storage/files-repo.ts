@@ -1,11 +1,14 @@
 import { Database } from 'better-sqlite3';
 import { FileRecord, Layer } from './types.js';
+import { prepareCached } from './stmt-cache.js';
 
 export class FilesRepo {
   constructor(private db: Database) {}
 
   public upsert(file: FileRecord): void {
-    const stmt = this.db.prepare(`
+    const stmt = prepareCached(
+      this.db,
+      `
       INSERT INTO files (
         path, layer, workspace_name, hash, last_indexed, importance, chunk_count
       ) VALUES (
@@ -17,12 +20,13 @@ export class FilesRepo {
         last_indexed = excluded.last_indexed,
         importance = excluded.importance,
         chunk_count = excluded.chunk_count
-    `);
+    `
+    );
     stmt.run(file);
   }
 
   public getByPath(path: string): FileRecord | null {
-    const stmt = this.db.prepare('SELECT * FROM files WHERE path = ?');
+    const stmt = prepareCached(this.db, 'SELECT * FROM files WHERE path = ?');
     const row = stmt.get(path) as any;
     return row ? this.mapRow(row) : null;
   }
@@ -34,12 +38,12 @@ export class FilesRepo {
   }
 
   public deleteByPath(path: string): void {
-    const stmt = this.db.prepare('DELETE FROM files WHERE path = ?');
+    const stmt = prepareCached(this.db, 'DELETE FROM files WHERE path = ?');
     stmt.run(path);
   }
 
   public listByLayer(layer: Layer): FileRecord[] {
-    const stmt = this.db.prepare('SELECT * FROM files WHERE layer = ?');
+    const stmt = prepareCached(this.db, 'SELECT * FROM files WHERE layer = ?');
     return (stmt.all(layer) as any[]).map((r) => this.mapRow(r));
   }
 
