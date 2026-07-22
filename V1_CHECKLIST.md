@@ -156,7 +156,7 @@
 
 ### Performance Benchmarks
 
-- [x] Automated benchmarks — scripts/ab-4way-benchmark.mjs and ab-e2e-benchmark.mjs are wired into CI (benchmarks.yml)
+- [x] Automated benchmarks — `scripts/run-benchmarks.ts` is wired into CI (benchmarks.yml)
 
 ---
 
