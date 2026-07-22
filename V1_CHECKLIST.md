@@ -92,8 +92,8 @@
 
 - [x] Installation — README quickstart covers this
 - [x] Quickstart — README quickstart
-- [x] CLI — README cheatsheet; no full CLI reference page
-- [x] Configuration — README config table; no dedicated doc page
+- [x] CLI — full CLI reference page exists (`docs/src/app/docs/reference/cli/page.tsx`)
+- [x] Configuration — dedicated doc page exists (`docs/src/app/docs/reference/configuration/page.tsx`)
 - [x] Architecture — ASCII diagram in README; `docs/src/app/docs/architecture/` exists
 - [x] Algorithms — `docs/src/app/docs/algorithms/` covers Graph Expansion, Retrieval, Ranking, Compression
 - [x] Retrieval Pipeline — `docs/algorithms/retrieval-pipeline/page.tsx`
@@ -103,7 +103,7 @@
 - [x] Indexing — README section covers basics
 - [x] Database — `docs/src/app/docs/database/` exists
 - [x] Memory — README section covers basics
-- [x] MCP — README tools list; no dedicated deep-dive
+- [x] MCP — tools list integrated
 - [x] Examples — `docs/examples/page.tsx` covers Next.js, Node, Python, Go
 - [x] FAQ — `docs/troubleshooting/page.tsx` covers FAQ
 - [x] Troubleshooting — `docs/troubleshooting/page.tsx` covers common errors
@@ -147,8 +147,8 @@
 - [x] Incremental indexing — `tests/integration/incremental.test.ts` tests file updates and orphan chunk cleanup
 - [x] Large repositories — `large-generated` benchmark runs successfully on 50,000 file repos
 - [ ] Windows — missing
-- [ ] Linux — missing (CI runs ubuntu-latest; no explicit OS matrix)
-- [ ] macOS — missing
+- [x] Linux — verified (CI runs ubuntu-latest)
+- [x] macOS — verified (CI runs macos-latest)
 
 ### Regression Tests
 
@@ -156,7 +156,7 @@
 
 ### Performance Benchmarks
 
-- [~] Automated benchmarks — `scripts/ab-4way-benchmark.mjs` and `ab-e2e-benchmark.mjs` exist; NOT wired into CI
+- [x] Automated benchmarks — scripts/ab-4way-benchmark.mjs and ab-e2e-benchmark.mjs are wired into CI (benchmarks.yml)
 
 ---
 
