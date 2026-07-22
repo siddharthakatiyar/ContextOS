@@ -3,8 +3,28 @@ import { z } from 'zod';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
+import { loadConfig } from '../../config/index.js';
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Whether ctx_execute may run the target repository's own scripts (npm/npx),
+ * which execute attacker-controlled package.json scripts / test files on a
+ * hostile repo. Default ON (preserves prior behavior); disable via config
+ * `execAllowRepoScripts: false` or env `CONTEXTOS_EXEC_ALLOW_SCRIPTS=0`.
+ */
+function repoScriptsAllowed(): boolean {
+  const env = process.env.CONTEXTOS_EXEC_ALLOW_SCRIPTS;
+  if (env !== undefined && env !== '') {
+    return env !== '0' && env.toLowerCase() !== 'false';
+  }
+  try {
+    return loadConfig().execAllowRepoScripts !== false;
+  } catch {
+    return true;
+  }
+}
 
 /** Dangerous find(1) predicates that can execute commands or delete files. */
 const FIND_DANGEROUS_FLAGS = new Set(['-exec', '-execdir', '-delete', '-ok', '-okdir']);
@@ -97,6 +117,18 @@ export function registerExecuteTool(server: McpServer) {
           };
         }
 
+        if ((exe === 'npm' || exe === 'npx') && !repoScriptsAllowed()) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: "Running repository scripts (npm/npx) is disabled. These execute the indexed repository's own package.json scripts / test files, which is unsafe on untrusted repos. Enable for trusted repositories via config `execAllowRepoScripts: true` or env `CONTEXTOS_EXEC_ALLOW_SCRIPTS=1`."
+              }
+            ],
+            isError: true
+          };
+        }
+
         if (exe === 'npm') {
           if (args[0] !== 'test' && args[0] !== 'run') {
             return {
@@ -160,6 +192,22 @@ export function registerExecuteTool(server: McpServer) {
           }
         }
 
+        const root = getWorkspaceRoot();
+        const targetCwd = cwd || root;
+        const resolvedCwd = resolveWithinWorkspace(root, targetCwd);
+        if (resolvedCwd === null) {
+          return {
+            content: [
+              { type: 'text', text: `Execution outside workspace root (${root}) is not allowed.` }
+            ],
+            isError: true
+          };
+        }
+
+        // Reject any argument that escapes the workspace root. Resolving each arg
+        // against the (validated) cwd catches absolute paths, '../' sequences, and a
+        // bare '..' segment (which the old substring-only check missed), and follows
+        // symlinks via realpath.
         for (const arg of args) {
           if (path.isAbsolute(arg) || arg.startsWith('/')) {
             return {
@@ -167,25 +215,12 @@ export function registerExecuteTool(server: McpServer) {
               isError: true
             };
           }
-          if (arg.includes('../') || arg.includes('..\\')) {
+          if (resolveWithinWorkspace(root, path.resolve(resolvedCwd, arg)) === null) {
             return {
               content: [{ type: 'text', text: 'Directory traversal is not allowed in arguments.' }],
               isError: true
             };
           }
-        }
-
-        const targetCwd = cwd || process.cwd();
-        const root = process.env.CONTEXTOS_REPO_ROOT || process.cwd();
-        const resolvedCwd = path.resolve(targetCwd);
-        const rootResolved = path.resolve(root);
-        if (resolvedCwd !== rootResolved && !resolvedCwd.startsWith(rootResolved + path.sep)) {
-          return {
-            content: [
-              { type: 'text', text: `Execution outside workspace root (${root}) is not allowed.` }
-            ],
-            isError: true
-          };
         }
 
         const { stdout, stderr } = await execFileAsync(exe, args, {

@@ -52,6 +52,13 @@ export interface ContextOSConfig {
   tokenCalibration: number;
   framingReserve: number;
   adaptiveResponse: boolean;
+  /**
+   * Allow ctx_execute to run the target repository's own scripts (npm test /
+   * npm run build|lint / npx vitest|jest). These execute repo-controlled code,
+   * so disable on untrusted repositories. Default: true. Env
+   * CONTEXTOS_EXEC_ALLOW_SCRIPTS overrides this.
+   */
+  execAllowRepoScripts?: boolean;
   /** Per-stage feature flags for the retrieval pipeline. */
   pipeline?: PipelineConfig;
 }
@@ -97,6 +104,7 @@ export const configJsonSchema = z
     tokenCalibration: z.number().positive().optional(),
     framingReserve: z.number().nonnegative().optional(),
     adaptiveResponse: z.boolean().optional(),
+    execAllowRepoScripts: z.boolean().optional(),
     pipeline: z
       .object({
         graphExpansion: z.boolean().optional(),

@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { DB } from '../../core/storage/database.js';
 import { Indexer } from '../../core/indexer/index.js';
-import path from 'path';
+import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
 import { globalSentRegistry } from '../../core/session/sent-registry.js';
 
 export function registerIndexFilesTool(server: McpServer, db: DB) {
@@ -20,16 +20,9 @@ export function registerIndexFilesTool(server: McpServer, db: DB) {
     },
     async ({ path: filePath, layer, workspaceName }) => {
       try {
-        if (filePath.includes('../') || filePath.includes('..\\')) {
-          return {
-            content: [{ type: 'text', text: 'Directory traversal is not allowed in path.' }],
-            isError: true
-          };
-        }
-
-        const root = process.env.CONTEXTOS_REPO_ROOT || process.cwd();
-        const resolvedPath = path.resolve(root, filePath);
-        if (!resolvedPath.startsWith(path.resolve(root))) {
+        const root = getWorkspaceRoot();
+        const resolvedPath = resolveWithinWorkspace(root, filePath);
+        if (resolvedPath === null) {
           return {
             content: [{ type: 'text', text: `Path must be within workspace root (${root}).` }],
             isError: true

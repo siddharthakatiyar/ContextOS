@@ -99,9 +99,15 @@ export const defaultConfig: ContextOSConfig = {
   tokenCalibration: 1.0,
   framingReserve: 48,
   adaptiveResponse: true,
+  // ctx_execute may run the indexed repo's own scripts (npm/npx) by default;
+  // disable on untrusted repos via this flag or env CONTEXTOS_EXEC_ALLOW_SCRIPTS=0.
+  execAllowRepoScripts: true,
   pipeline: {
     graphExpansion: true,
-    embeddingFusion: true,
+    // embeddingFusion intentionally omitted: undefined lets retrieval follow
+    // embeddingsRetrieval (off by default; confidence-gated fallback). Setting it
+    // here to `true` would force embedding-kNN fusion on for every query, which
+    // contradicts the documented "retrieval fusion is off by default".
     containmentDedup: true,
     diversityFilter: true
   }
