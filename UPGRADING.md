@@ -2,6 +2,20 @@
 
 This guide covers breaking changes and migration steps for upgrading ContextOS across major and minor versions.
 
+## 0.8.x to 0.9.x
+
+### 1. Reindex after upgrading
+Run `contextos reindex` once after upgrading so schema/chunking refinements take effect.
+
+### 2. Embedding fusion is off by default
+`pipeline.embeddingFusion` now follows `embeddingsRetrieval` (off by default) instead of being unintentionally forced on. Retrieval uses the keyword/RRF path as the baseline, with embeddings as a confidence-gated fallback. To keep fusion always on, set it explicitly:
+```json
+{ "pipeline": { "embeddingFusion": true } }
+```
+
+### 3. ctx_execute on untrusted repositories
+`ctx_execute` can run a repository's own `npm`/`npx` scripts. When indexing untrusted repos, disable this with `execAllowRepoScripts: false` (or `CONTEXTOS_EXEC_ALLOW_SCRIPTS=0`).
+
 ## 0.7.x to 0.8.x
 
 The `0.8.0` release introduces a massive architectural shift to a zero-dependency local SQLite architecture. 

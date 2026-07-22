@@ -39,7 +39,7 @@ export class GraphExpander {
       relType?: string;
     }) => {
       queue.push(item);
-      queue.sort((a, b) => b.weight - a.weight);
+      queue.sort((a, b) => b.weight - a.weight || a.entity.localeCompare(b.entity));
     };
 
     const results: ExpandedEntity[] = [];

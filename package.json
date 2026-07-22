@@ -1,6 +1,6 @@
 {
   "name": "@siddharthakatiyar/contextos",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "ContextOS - Universal knowledge graph for coding agents",
   "repository": {
     "type": "git",
@@ -15,8 +15,8 @@
     "docs"
   ],
   "files": [
-    "dist/",
-    "bin/",
+    "dist/src/",
+    "dist/bin/",
     "README.md",
     ".contextosignore.default"
   ],
@@ -35,8 +35,19 @@
   "engines": {
     "node": ">=22.12.0"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "code-search",
+    "semantic-search",
+    "rag",
+    "retrieval",
+    "tree-sitter",
+    "ai-agents",
+    "coding-assistant",
+    "cli"
+  ],
+  "author": "Siddhartha Katiyar",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

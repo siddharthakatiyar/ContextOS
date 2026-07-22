@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { extractTermWindows } from '../../core/expand/window-extractor.js';
 import { DB } from '../../core/storage/database.js';
+import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
 
 export function registerExpandTool(server: McpServer, dbs: DB[]) {
   server.tool(
@@ -23,10 +24,16 @@ export function registerExpandTool(server: McpServer, dbs: DB[]) {
     },
     async ({ paths, terms, linesBefore, linesAfter }) => {
       try {
+        const root = getWorkspaceRoot();
         let output = '';
-        for (const path of paths) {
-          const content = extractTermWindows(path, terms, { linesBefore, linesAfter });
-          output += `### ${path}\n\`\`\`\n${content}\n\`\`\`\n\n`;
+        for (const p of paths) {
+          const resolved = resolveWithinWorkspace(root, p);
+          if (resolved === null) {
+            output += `### ${p}\nAccess denied: path is outside the workspace root.\n\n`;
+            continue;
+          }
+          const content = extractTermWindows(resolved, terms, { linesBefore, linesAfter });
+          output += `### ${p}\n\`\`\`\n${content}\n\`\`\`\n\n`;
         }
 
         return {

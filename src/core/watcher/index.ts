@@ -114,8 +114,11 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
         }
       });
     })
-    .on('error', () => {
-      // Silently ignore all watcher errors (like UNKNOWN or EPERM for sockets/protected files) to prevent the server from crashing
+    .on('error', (err) => {
+      // Log (but don't crash) — previously these were fully discarded, which hid
+      // cases where the watch tree silently stopped (EMFILE/ENOSPC/EPERM). Kept
+      // non-fatal to avoid taking down the daemon on transient/socket errors.
+      console.error(`[contextos] watcher error: ${(err as Error)?.message ?? err}`);
     });
 
   return watcher;

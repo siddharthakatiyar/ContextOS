@@ -4,7 +4,7 @@ import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "Configuration",
-  description: "Configuring the ContextOS retrieval engine via contextos.json.",
+  description: "Configuring the ContextOS retrieval engine via .contextos/config.json.",
   path: "/docs/reference/configuration",
 });
 
@@ -12,75 +12,100 @@ export default function ConfigurationDocs() {
   return (
     <DocPage
       title="Configuration"
-      description="Configuring the ContextOS retrieval engine via contextos.json."
+      description="Configuring the ContextOS retrieval engine via .contextos/config.json."
       prev={{ title: "CLI Commands", href: "/docs/reference/cli" }}
       next={{ title: "Architecture", href: "/docs/architecture" }}
     >
-      <SourceLink path="src/core/parser/config-parser.ts" />
+      <SourceLink path="src/config/defaults.ts" />
 
-      <h2>The <code>contextos.json</code> File</h2>
+      <h2>The config file</h2>
       <p>
-        ContextOS is designed to work out of the box with zero configuration. However, if you need to fine-tune the engine's behavior, you can create a <code>contextos.json</code> file in the root of your repository (next to your <code>package.json</code> or <code>.git</code> folder).
+        ContextOS works out of the box with zero configuration. To fine-tune the
+        engine, add a <code>.contextos/config.json</code> file in your repository, or a
+        global <code>~/.contextos/config.json</code>. Repo config overrides global,
+        which overrides the built-in defaults in <code>src/config/defaults.ts</code>.
       </p>
 
       <pre>
         <code className="language-json">
 {`{
-  "ignorePatterns": [
-    "**/tests/fixtures/**",
-    "**/*.generated.ts"
-  ],
-  "retrieval": {
-    "maxDepth": 3,
-    "maxNodes": 40
-  },
-  "embeddings": {
-    "enabled": true,
-    "provider": "openai",
-    "model": "text-embedding-3-small"
+  "ignorePatterns": ["**/tests/fixtures/**", "**/*.generated.ts"],
+  "maxTokenBudget": 1200,
+  "maxRetrievalResults": 25,
+  "graphExpansionDepth": 2,
+  "graphExpansionMaxNodes": 20,
+  "embeddingsEnabled": true,
+  "embeddingsRetrieval": false,
+  "pipeline": {
+    "graphExpansion": true,
+    "containmentDedup": true,
+    "diversityFilter": true
   }
 }`}
         </code>
       </pre>
 
-      <h2>Configuration Options</h2>
+      <h2>Configuration options</h2>
 
       <h3><code>ignorePatterns</code></h3>
       <p>
-        An array of glob patterns specifying files and directories that should be skipped during the <code>init</code> and <code>watch</code> indexing phases. 
-      </p>
-      <p className="text-sm text-neutral-400">
-        <strong>Note:</strong> ContextOS inherently ignores standard noisy directories via a hardcoded <code>SAFETY_IGNORE</code> list (e.g., <code>node_modules</code>, <code>.git</code>, <code>dist</code>, <code>__pycache__</code>). You do not need to specify these. <code>ignorePatterns</code> is strictly for repository-specific noise (like generated API clients or large mock data files).
+        Glob patterns for files/directories to skip during indexing. Noisy
+        directories (<code>node_modules</code>, <code>.git</code>, <code>dist</code>,{" "}
+        <code>__pycache__</code>, …) are always excluded, so use this only for
+        repo-specific noise. Use an <code>ignorePatterns!</code> key (trailing{" "}
+        <code>!</code>) to replace the defaults instead of merging.
       </p>
 
-      <h3><code>retrieval</code></h3>
-      <p>
-        Overrides the default parameters for the Graph Expansion and Context Compilation engines.
-      </p>
+      <h3>Token &amp; retrieval budgets</h3>
       <ul>
-        <li><code>maxDepth</code> (number): How deep the Breadth-First Search will traverse dependency edges. Default is <code>2</code>.</li>
-        <li><code>maxNodes</code> (number): The absolute upper limit on the number of entities pulled into the LLM context window. Default is <code>20</code>.</li>
+        <li><code>maxTokenBudget</code> (number): default compile budget. Default <code>1200</code>; a per-call <code>get_context</code> <code>max_tokens</code> accepts up to <code>8000</code>.</li>
+        <li><code>maxRetrievalResults</code> (number): cap on scored chunks before compile. Default <code>25</code>.</li>
+        <li><code>ftsLimit</code> (number): per-query FTS5 hit limit. Default <code>15</code>.</li>
+        <li><code>maxChunkTokens</code> / <code>maxSymbolChunkTokens</code> (number): soft caps when creating chunks. Defaults <code>1500</code> / <code>900</code>.</li>
       </ul>
 
-      <h3><code>embeddings</code></h3>
-      <p>
-        Configures the semantic vector generation layer. 
-      </p>
+      <h3>Graph expansion</h3>
       <ul>
-        <li><code>enabled</code> (boolean): Set to <code>false</code> to completely disable embeddings and rely 100% on the BM25 (FTS5) engine. This drastically speeds up initial indexing.</li>
-        <li><code>provider</code> (string): The inference provider. Supported values: <code>openai</code>, <code>local</code> (ONNX), <code>ollama</code>.</li>
-        <li><code>model</code> (string): The specific model string to use for the specified provider.</li>
+        <li><code>graphExpansionDepth</code> (number): relationship walk depth. Default <code>2</code>.</li>
+        <li><code>graphExpansionMaxNodes</code> (number): cap on expanded entities. Default <code>20</code>.</li>
       </ul>
 
-      <h2>Environment Variables</h2>
+      <h3>Embeddings</h3>
       <p>
-        For secure values like API keys, ContextOS reads from your environment variables or a local <code>.env</code> file.
+        ContextOS uses a local MiniLM model (<code>@xenova/transformers</code>) — there
+        is no external/OpenAI provider and no API key.
       </p>
       <ul>
-        <li><code>OPENAI_API_KEY</code>: Required if using the OpenAI embeddings provider.</li>
-        <li><code>CONTEXTOS_HOME</code>: Overrides the global storage directory (defaults to <code>~/.contextos</code>).</li>
+        <li><code>embeddingsEnabled</code> (boolean): generate index-time embeddings. Default <code>true</code>.</li>
+        <li><code>embeddingsRetrieval</code> (boolean): fuse embedding kNN into query-time retrieval. Default <code>false</code> — the keyword/RRF path is the accuracy baseline; embeddings act as a confidence-gated fallback.</li>
       </ul>
 
+      <h3><code>pipeline</code></h3>
+      <p>Toggle individual query-time stages.</p>
+      <ul>
+        <li><code>graphExpansion</code> (boolean, default <code>true</code>)</li>
+        <li><code>embeddingFusion</code> (boolean): when unset, follows <code>embeddingsRetrieval</code>; set <code>true</code>/<code>false</code> to force.</li>
+        <li><code>containmentDedup</code> (boolean, default <code>true</code>)</li>
+        <li><code>diversityFilter</code> (boolean, default <code>true</code>)</li>
+      </ul>
+
+      <h3><code>execAllowRepoScripts</code></h3>
+      <p>
+        Whether the <code>ctx_execute</code> tool may run the indexed repository&apos;s own
+        scripts (<code>npm test</code>, <code>npm run build|lint</code>,{" "}
+        <code>npx vitest|jest</code>). Default <code>true</code>. Set to <code>false</code>{" "}
+        (or export <code>CONTEXTOS_EXEC_ALLOW_SCRIPTS=0</code>) when indexing untrusted
+        repositories, since those scripts execute repo-controlled code.
+      </p>
+
+      <h2>Environment variables</h2>
+      <ul>
+        <li><code>CONTEXTOS_EMBEDDINGS=0</code>: disable index-time embeddings.</li>
+        <li><code>CONTEXTOS_EMBEDDINGS_RETRIEVAL=1</code>: enable embedding fusion at query time.</li>
+        <li><code>CONTEXTOS_EXEC_ALLOW_SCRIPTS=0</code>: disable <code>ctx_execute</code> script execution.</li>
+        <li><code>CONTEXTOS_REPO_ROOT</code>: the repository root the MCP server operates on.</li>
+        <li><code>CONTEXTOS_WORKSPACE</code>: workspace name for multi-project isolation.</li>
+      </ul>
     </DocPage>
   );
 }

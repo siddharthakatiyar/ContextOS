@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ContextOS Configuration",
-  "description": "Configuration schema for ContextOS (.contextosrc, contextos.config.json)",
+  "description": "Configuration schema for ContextOS (.contextos/config.json in a repo, or ~/.contextos/config.json global).",
   "type": "object",
   "properties": {
     "dbPath": {
@@ -90,7 +90,7 @@
     },
     "memoryInjection": {
       "type": "string",
-      "enum": ["relevant", "all", "none"],
+      "enum": ["relevant", "always", "off"],
       "description": "How global memory facts are injected."
     },
     "sentDedupEnabled": {
@@ -109,6 +109,10 @@
     "adaptiveResponse": {
       "type": "boolean"
     },
+    "execAllowRepoScripts": {
+      "type": "boolean",
+      "description": "Allow ctx_execute to run the repo's own scripts (npm/npx). Default true; disable for untrusted repositories."
+    },
     "pipeline": {
       "type": "object",
       "properties": {
@@ -119,6 +123,9 @@
       },
       "additionalProperties": false
     }
+  },
+  "patternProperties": {
+    "!$": {}
   },
   "additionalProperties": false
 }

@@ -11,6 +11,7 @@ const VEC_TABLE = 'vec_chunk_embeddings';
 const require = createRequire(import.meta.url);
 
 const loadedDbs = new WeakSet<object>();
+const vecTableEnsuredDbs = new WeakSet<object>();
 let vecExtensionOk: boolean | null = null;
 let loggedVecOnce = false;
 
@@ -52,6 +53,10 @@ function ensureVecTable(db: Database.Database): boolean {
       vecExtensionOk = true;
     }
 
+    // Once the vec table is confirmed for this connection, skip the sqlite_master
+    // lookup on every subsequent upsert/search.
+    if (vecTableEnsuredDbs.has(db)) return true;
+
     const dims = getEmbeddingDims();
     const exists = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
@@ -65,6 +70,7 @@ function ensureVecTable(db: Database.Database): boolean {
         );
       `);
     }
+    vecTableEnsuredDbs.add(db);
     return true;
   } catch (e: any) {
     vecExtensionOk = false;

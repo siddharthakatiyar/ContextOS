@@ -5,8 +5,8 @@ First off, thank you for considering contributing to ContextOS! It's people like
 ## Getting Started
 
 1. **Fork & Clone**: Fork the repository and clone your fork locally.
-2. **Install Dependencies**: We use npm. Run `npm install` in the project root. (Requires Node.js 18+).
-3. **Build**: Run `npm run build` to compile the TypeScript source into `dist/`.
+2. **Install Dependencies**: We use npm. Run `npm install` in the project root. (Requires Node.js >=22.12.0, matching `engines` in `package.json`.)
+3. **Build**: Run `npm run build` to compile the TypeScript into `dist/` (required for the `contextos` bin). Use `npm run dev` for watch mode during development.
 
 ## Development Workflow
 

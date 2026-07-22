@@ -1,17 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import fs from 'fs';
-import path from 'path';
 import { onFileRead } from './feedback.js';
-
-function getWorkspaceRoot(): string {
-  return process.env.CONTEXTOS_REPO_ROOT || process.cwd();
-}
-
-function isInsideWorkspace(resolvedPath: string, root: string): boolean {
-  const rootResolved = path.resolve(root);
-  return resolvedPath === rootResolved || resolvedPath.startsWith(rootResolved + path.sep);
-}
+import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
 
 export function registerReadFileTool(server: McpServer) {
   server.tool(
@@ -37,9 +28,9 @@ export function registerReadFileTool(server: McpServer) {
     async ({ filePath, start_line, end_line }) => {
       try {
         const root = getWorkspaceRoot();
-        const resolvedPath = path.resolve(root, filePath);
+        const resolvedPath = resolveWithinWorkspace(root, filePath);
 
-        if (!isInsideWorkspace(resolvedPath, root)) {
+        if (resolvedPath === null) {
           return {
             content: [
               { type: 'text', text: `Access denied: path is outside workspace root (${root}).` }

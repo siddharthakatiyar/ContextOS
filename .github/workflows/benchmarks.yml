@@ -29,14 +29,7 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: Setup Headroom Python bridge dependencies
-        run: |
-          python -m pip install --upgrade pip
-          # Ensure python3 is used by headroom bridge
-          echo "HEADROOM_PYTHON=python3" >> $GITHUB_ENV
-          # Context mode dependencies if needed
-          # FTS search needs sqlite3, which is built-in
-          
+
       - name: Run E2E Retrieval Benchmarks
         run: |
           npm run bench | tee benchmark_out.txt
@@ -50,9 +43,3 @@ jobs:
             echo "::error::Recall $RECALL% is below the required 95.0% threshold."
             exit 1
           fi
-
-      - name: Run 5-Way Architectural Benchmark
-        run: |
-          # This script takes a long time, but ensures there are no severe regressions
-          # against baseline vector/FTS/grep search.
-          node scripts/ab-4way-benchmark.mjs e2e

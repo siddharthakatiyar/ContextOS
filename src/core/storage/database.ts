@@ -9,6 +9,28 @@ export function getContextOSHome(): string {
   return path.join(os.homedir(), '.contextos');
 }
 
+/**
+ * Apply connection PRAGMAs for durability/perf. Shared by the primary-open and
+ * corruption-recovery paths. `busy_timeout` follows config.busyTimeout (default
+ * 5000); the perf PRAGMAs (synchronous=NORMAL, larger page cache, mmap, in-memory
+ * temp store) are safe for an ephemeral, self-healing index DB.
+ */
+function applyConnectionPragmas(db: Database.Database): void {
+  let busyTimeout = 5000;
+  try {
+    busyTimeout = Math.max(0, Math.floor(Number(loadConfig().busyTimeout ?? 5000)));
+  } catch {
+    // config not loadable this early — keep the default
+  }
+  db.pragma('journal_mode = WAL');
+  db.pragma(`busy_timeout = ${busyTimeout}`);
+  db.pragma('foreign_keys = ON');
+  db.pragma('synchronous = NORMAL');
+  db.pragma('cache_size = -64000'); // ~64MB page cache
+  db.pragma('mmap_size = 268435456'); // 256MB memory-mapped I/O
+  db.pragma('temp_store = MEMORY');
+}
+
 export class DB {
   private db: Database.Database;
 
@@ -27,9 +49,7 @@ export class DB {
 
     try {
       dbInstance = new Database(resolvedPath);
-      dbInstance.pragma('journal_mode = WAL');
-      dbInstance.pragma('busy_timeout = 5000');
-      dbInstance.pragma('foreign_keys = ON');
+      applyConnectionPragmas(dbInstance);
 
       // 1. Validate B-Tree structure (faster than integrity_check)
       const check = dbInstance.pragma('quick_check') as { quick_check: string }[];
@@ -63,9 +83,7 @@ export class DB {
 
         // Re-init
         this.db = new Database(resolvedPath);
-        this.db.pragma('journal_mode = WAL');
-        this.db.pragma('busy_timeout = 5000');
-        this.db.pragma('foreign_keys = ON');
+        applyConnectionPragmas(this.db);
 
         // Re-run migrations
         this.runMigrations();
