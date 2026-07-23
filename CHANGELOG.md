@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 > **AI agents now retrieve semantic context before wandering through your repository.**
 
+![Claude Code using ContextOS semantic search](https://raw.githubusercontent.com/siddharthakatiyar/ContextOS/main/docs/public/claude-code-demo.gif)
+
 This release significantly improves the experience of using ContextOS with Claude Code and other MCP-compatible coding agents. It also makes large repository indexing substantially more resilient during massive filesystem changes.
 
 ### 🚀 Highlights
