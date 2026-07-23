@@ -1,6 +1,6 @@
 # Changelog
 
-![Claude Code using ContextOS semantic search](https://raw.githubusercontent.com/siddharthakatiyar/ContextOS/main/docs/public/claude-code-demo.gif)
+![Claude Code using ContextOS semantic search](https://raw.githubusercontent.com/siddharthakatiyar/ContextOS/main/docs/public/changelog.gif)
 
 All notable changes to ContextOS are documented here.
 
