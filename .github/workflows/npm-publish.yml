@@ -1,13 +1,10 @@
 name: Publish to NPM
 
 on:
-  push:
-    tags:
-      - 'v*' # Trigger when a version tag like v0.7.0 is pushed
   release:
-    types: [published] # Also trigger when a GitHub release is created
+    types: [published] # Only trigger when a GitHub release is created
 
-# Prevent a tag push AND a GitHub Release for the same version from double-publishing.
+# Prevent double-publishing.
 concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: false
@@ -25,12 +22,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify tag is on main branch
-        if: github.ref_type == 'tag'
+      - name: Verify release is on main branch
         run: |
           git fetch origin main
           if ! git merge-base --is-ancestor HEAD origin/main; then
-            echo "::error::Release tags can only be published from the main branch. This commit is not on main."
+            echo "::error::Releases can only be published from the main branch. This commit is not on main."
             exit 1
           fi
 
@@ -39,14 +35,14 @@ jobs:
         with:
           node-version: '22.x' # ContextOS requires modern Node
 
-      - name: Verify tag matches package.json version
-        if: github.ref_type == 'tag'
+      - name: Verify release tag matches package.json version
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${{ github.event.release.tag_name }}"
+          TAG="${TAG#v}"
           PKG=$(node -p "require('./package.json').version")
           echo "tag=$TAG pkg=$PKG"
           if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME ($TAG) does not match package.json version $PKG"
+            echo "::error::Release tag ${{ github.event.release.tag_name }} ($TAG) does not match package.json version $PKG"
             exit 1
           fi
 
