@@ -59,10 +59,10 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
 
   server.tool(
     'get_context',
-    'Retrieve relevant engineering context for a coding task from this workspace\'s indexed codebase, ' +
+    "Retrieve relevant engineering context for a coding task from this workspace's indexed codebase, " +
       'including conventions, service relationships, and implementation patterns. Call this FIRST — before ' +
       'grep, broad file search, or spawning a search/explore subagent — for any question about where or how ' +
-      "something is implemented in this repo; it is faster and more precise than ad-hoc search. Only fall back " +
+      'something is implemented in this repo; it is faster and more precise than ad-hoc search. Only fall back ' +
       'to file search or an explore agent if this returns no relevant results or the task needs broad, ' +
       "unindexed discovery (e.g. renaming across files, running commands). When output includes '### Also' " +
       'stubs with path:line ranges, expand with ctx_expand, ctx_symbol, or read_file.',

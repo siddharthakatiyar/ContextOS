@@ -92,7 +92,7 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
   const handleEvent = (filePath: string, type: 'add' | 'change' | 'unlink') => {
     const ext = path.extname(filePath);
     if (type !== 'unlink' && !ext && !filePath.includes('.cursor/rules')) return;
-    
+
     if (type !== 'unlink' && !matchesIndexablePatterns(filePath, config.indexablePatterns, cwd)) {
       return;
     }
@@ -103,9 +103,11 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
 
     if (eventCount >= BURST_THRESHOLD) {
       limit.clearQueue();
-      console.log(`\n[Watcher] Massive burst detected (${eventCount} changes). Triggering bulk background reindex...`);
+      console.log(
+        `\n[Watcher] Massive burst detected (${eventCount} changes). Triggering bulk background reindex...`
+      );
       eventCount = 0;
-      
+
       const bgIndexer = new BackgroundIndexer(db, cwd);
       bgIndexer.startFullIndex(config).catch(console.error);
       return;
