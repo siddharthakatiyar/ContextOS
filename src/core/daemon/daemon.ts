@@ -14,6 +14,7 @@ import { registerExecuteTool } from '../../mcp/tools/execute.js';
 import { registerListTopicsTool } from '../../mcp/tools/list-topics.js';
 import { registerKnowledgeTools } from '../../mcp/tools/knowledge.js';
 import { registerFeedbackTools } from '../../mcp/tools/feedback.js';
+import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 import { startWatcher } from '../watcher/index.js';
 import { SessionStore } from '../session/session-store.js';
 import { BackgroundIndexer } from './background-indexer.js';
@@ -212,10 +213,13 @@ export class ContextOSDaemon {
     this.connections++;
     this.resetGCTimer(); // Cancel GC since we have an active connection
 
-    const mcpServer = new McpServer({
-      name: 'contextos-daemon',
-      version: version
-    });
+    const mcpServer = new McpServer(
+      {
+        name: 'contextos-daemon',
+        version: version
+      },
+      { instructions: MCP_SERVER_INSTRUCTIONS }
+    );
 
     // Register all tools for this specific MCP Server instance
     registerGetContextTool(mcpServer, this.dbs);

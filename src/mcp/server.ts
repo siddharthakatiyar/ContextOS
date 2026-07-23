@@ -12,6 +12,7 @@ import { registerKnowledgeTools } from './tools/knowledge.js';
 import { registerFeedbackTools } from './tools/feedback.js';
 import { registerReadFileTool } from './tools/read-file.js';
 import { registerExpandTool } from './tools/expand.js';
+import { MCP_SERVER_INSTRUCTIONS } from './instructions.js';
 import { DB } from '../core/storage/database.js';
 import { checkForUpdates } from '../core/updater/index.js';
 import fs from 'fs';
@@ -57,10 +58,13 @@ function shouldCheckForUpdates(): boolean {
 }
 
 export async function startMcpServer(dbs: DB[]) {
-  const server = new McpServer({
-    name: 'contextos',
-    version: version
-  });
+  const server = new McpServer(
+    {
+      name: 'contextos',
+      version: version
+    },
+    { instructions: MCP_SERVER_INSTRUCTIONS }
+  );
 
   const config = loadConfig();
 

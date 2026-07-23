@@ -6,6 +6,7 @@ import { DB } from '../storage/database.js';
 import { Indexer } from '../indexer/index.js';
 import { loadConfig } from '../../config/index.js';
 import { pLimit } from '../../utils/async.js';
+import { BackgroundIndexer } from '../daemon/background-indexer.js';
 
 /** Dotfile/dir paths that should still be watched (B8). */
 const ALLOWED_DOT_SEGMENTS = new Set(['.cursor', '.contextos']);
@@ -83,37 +84,56 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
     }
   });
 
-  const maybeIndex = async (filePath: string) => {
-    if (!matchesIndexablePatterns(filePath, config.indexablePatterns, cwd)) {
+  let eventCount = 0;
+  let debounceTimer: NodeJS.Timeout | null = null;
+  const BURST_THRESHOLD = 100;
+  const DEBOUNCE_MS = 5000;
+
+  const handleEvent = (filePath: string, type: 'add' | 'change' | 'unlink') => {
+    const ext = path.extname(filePath);
+    if (type !== 'unlink' && !ext && !filePath.includes('.cursor/rules')) return;
+
+    if (type !== 'unlink' && !matchesIndexablePatterns(filePath, config.indexablePatterns, cwd)) {
       return;
     }
-    try {
-      await indexer.indexFile(filePath, 'workspace', workspace);
-    } catch {
-      // silently ignore
+
+    eventCount++;
+
+    if (debounceTimer) clearTimeout(debounceTimer);
+
+    if (eventCount >= BURST_THRESHOLD) {
+      limit.clearQueue();
+      console.log(
+        `\n[Watcher] Massive burst detected (${eventCount} changes). Triggering bulk background reindex...`
+      );
+      eventCount = 0;
+
+      const bgIndexer = new BackgroundIndexer(db, cwd);
+      bgIndexer.startFullIndex(config).catch(console.error);
+      return;
     }
+
+    debounceTimer = setTimeout(() => {
+      eventCount = 0;
+    }, DEBOUNCE_MS);
+
+    limit(async () => {
+      try {
+        if (type === 'add' || type === 'change') {
+          await indexer.indexFile(filePath, 'workspace', workspace);
+        } else if (type === 'unlink') {
+          await indexer.removeFile(filePath);
+        }
+      } catch {
+        // silently ignore
+      }
+    });
   };
 
   watcher
-    .on('add', async (filePath) => {
-      const ext = path.extname(filePath);
-      if (!ext && !filePath.includes('.cursor/rules')) return;
-      await limit(() => maybeIndex(filePath));
-    })
-    .on('change', async (filePath) => {
-      const ext = path.extname(filePath);
-      if (!ext && !filePath.includes('.cursor/rules')) return;
-      await limit(() => maybeIndex(filePath));
-    })
-    .on('unlink', async (filePath) => {
-      await limit(async () => {
-        try {
-          await indexer.removeFile(filePath);
-        } catch {
-          // silently ignore
-        }
-      });
-    })
+    .on('add', (filePath) => handleEvent(filePath, 'add'))
+    .on('change', (filePath) => handleEvent(filePath, 'change'))
+    .on('unlink', (filePath) => handleEvent(filePath, 'unlink'))
     .on('error', (err) => {
       // Log (but don't crash) — previously these were fully discarded, which hid
       // cases where the watch tree silently stopped (EMFILE/ENOSPC/EPERM). Kept
