@@ -1,6 +1,6 @@
 # Changelog
 
-![Claude Code using ContextOS semantic search](docs/public/changelog.gif)
+![Claude Code using ContextOS semantic search](docs/public/query-where.gif)
 
 All notable changes to ContextOS are documented here.
 
