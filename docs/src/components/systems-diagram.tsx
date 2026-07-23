@@ -101,14 +101,17 @@ export function SystemsDiagram() {
             </div>
           </motion.div>
 
-          {stage >= 6 && (
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center w-full gap-3 mt-3">
-              <div className="h-6 w-px bg-red-900"></div>
-              <div className="border border-red-900/50 bg-red-950/20 py-3 px-6 w-full max-w-[240px] text-center text-red-400">Context Window Warning</div>
-              <div className="h-6 w-px bg-red-900"></div>
-              <div className="border border-red-500 bg-red-900/30 py-3 px-6 w-full max-w-[240px] text-center text-red-500 font-bold">Hallucination</div>
-            </motion.div>
-          )}
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }} 
+            animate={{ opacity: stage >= 6 ? 1 : 0, y: stage >= 6 ? 0 : -10 }} 
+            className="flex flex-col items-center w-full gap-3 mt-3"
+            style={{ pointerEvents: stage >= 6 ? 'auto' : 'none' }}
+          >
+            <div className="h-6 w-px bg-red-900"></div>
+            <div className="border border-red-900/50 bg-red-950/20 py-3 px-6 w-full max-w-[240px] text-center text-red-400">Context Window Warning</div>
+            <div className="h-6 w-px bg-red-900"></div>
+            <div className="border border-red-500 bg-red-900/30 py-3 px-6 w-full max-w-[240px] text-center text-red-500 font-bold">Hallucination</div>
+          </motion.div>
 
         </div>
       </div>
@@ -138,23 +141,29 @@ export function SystemsDiagram() {
             Extract
           </motion.div>
           
-          {stage >= 10 && (
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 flex flex-col items-center w-full gap-3">
-              <div className="border border-neutral-700 bg-black py-4 px-6 w-full max-w-[240px] text-center">
-                <div className="text-neutral-500 text-xs mb-1">Total Tokens</div>
-                <div className="text-white text-xl font-bold">1,328</div>
-              </div>
-            </motion.div>
-          )}
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }} 
+            animate={{ opacity: stage >= 10 ? 1 : 0, y: stage >= 10 ? 0 : -10 }} 
+            className="mt-6 flex flex-col items-center w-full gap-3"
+            style={{ pointerEvents: stage >= 10 ? 'auto' : 'none' }}
+          >
+            <div className="border border-neutral-700 bg-black py-4 px-6 w-full max-w-[240px] text-center">
+              <div className="text-neutral-500 text-xs mb-1">Total Tokens</div>
+              <div className="text-white text-xl font-bold">1,328</div>
+            </div>
+          </motion.div>
 
-          {stage >= 11 && (
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="mt-3 flex flex-col items-center w-full gap-3">
-              <div className="h-6 w-px bg-neutral-600"></div>
-              <div className="border border-white bg-white text-black py-3 px-6 w-full max-w-[240px] text-center font-bold shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                Correct Answer
-              </div>
-            </motion.div>
-          )}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }} 
+            animate={{ opacity: stage >= 11 ? 1 : 0, scale: stage >= 11 ? 1 : 0.9 }} 
+            className="mt-3 flex flex-col items-center w-full gap-3"
+            style={{ pointerEvents: stage >= 11 ? 'auto' : 'none' }}
+          >
+            <div className="h-6 w-px bg-neutral-600"></div>
+            <div className="border border-white bg-white text-black py-3 px-6 w-full max-w-[240px] text-center font-bold shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+              Correct Answer
+            </div>
+          </motion.div>
           
         </div>
       </div>

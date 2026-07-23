@@ -1,22 +1,84 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+![Claude Code using ContextOS semantic search](docs/public/query-where.gif)
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to ContextOS are documented here.
+
+This project follows Semantic Versioning and Keep a Changelog.
+
+---
 
 ## [0.9.2] - 2026-07-23
 
-### Fixed
-- **Claude Code DX**: ContextOS now automatically creates or injects semantic tool instructions into the workspace `CLAUDE.md` during `npx contextos init`, circumventing Claude Code's lack of support for the native MCP SDK `instructions` field.
+> **AI agents now retrieve semantic context before wandering through your repository.**
 
-## [0.9.1] - 2026-07-23
+This release significantly improves the experience of using ContextOS with Claude Code and other MCP-compatible coding agents. It also makes large repository indexing substantially more resilient during massive filesystem changes.
 
-Agent developer experience (DX) and file watcher scaling improvements.
+### 🚀 Highlights
+
+- Claude Code now automatically receives semantic retrieval instructions during `contextos init`, ensuring it prioritizes `get_context` before falling back to expensive file exploration.
+- Massive filesystem events (such as `git checkout`, `git switch`, or `npm install`) are now intelligently coalesced into a single background re-index instead of triggering thousands of individual updates.
+- Better defaults for AI coding workflows with no additional configuration.
+
+---
 
 ### Added
-- **Watcher Burst Detection**: The background file watcher now detects massive file system bursts (e.g. from `git checkout` or `npm install`) and automatically suspends individual updates to trigger a highly-optimized bulk re-sweep using the `BackgroundIndexer`.
-- **MCP Server Instructions**: The MCP server now utilizes the MCP v1.0 SDK `instructions` field to enforce semantic tool usage natively. Clients like Claude Code and Cursor are explicitly instructed to use `get_context` prior to ad-hoc file exploration.
+
+#### Native Agent Guidance
+
+ContextOS now configures supported AI coding agents to prefer semantic retrieval before broad repository searches.
+
+Supported today:
+
+- Claude Code (via automatic `CLAUDE.md` generation)
+- MCP clients supporting the official `instructions` field
+
+This dramatically reduces unnecessary exploration while improving retrieval accuracy.
+
+---
+
+#### Watcher Burst Detection
+
+Large filesystem bursts are now detected automatically.
+
+Instead of processing thousands of individual file events, ContextOS now:
+
+- detects filesystem floods
+- pauses incremental indexing
+- performs a single optimized repository sweep
+
+Common examples include:
+
+- `git checkout`
+- `git switch`
+- `git rebase`
+- `npm install`
+- dependency updates
+
+This keeps indexing responsive even on very large repositories.
+
+---
+
+### Changed
+
+- Improved initialization experience for Claude Code users.
+- Better indexing behaviour during large repository updates.
+
+---
+
+### Fixed
+
+- Claude Code now automatically receives retrieval guidance even though it currently ignores the MCP SDK `instructions` field.
+
+---
+
+## Upgrade
+
+Simply run
+
+```bash
+npm update -g @siddharthakatiyar/contextos 
+```
 
 ## [0.9.0] - 2026-07-22
 

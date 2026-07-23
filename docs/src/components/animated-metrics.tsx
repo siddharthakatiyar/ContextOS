@@ -8,13 +8,13 @@ export function AnimatedMetrics() {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
       <div className="flex flex-col gap-2">
         <div className="text-4xl font-bold font-mono text-white flex">
-          <Counter from={28000} to={1328} duration={2000} delay={0.2} />
+          <Counter from={0} to={95} duration={2000} delay={0.2} suffix="%" />
         </div>
-        <div className="text-neutral-500 font-mono text-sm">Fewer tokens sent to LLMs</div>
+        <div className="text-neutral-500 font-mono text-sm">Average context token reduction</div>
       </div>
       <div className="flex flex-col gap-2">
         <div className="text-4xl font-bold font-mono text-white flex">
-          <Counter from={312} to={42} duration={2000} delay={0.4} suffix="ms" />
+          <Counter from={312} to={50} duration={2000} delay={0.4} suffix="ms" />
         </div>
         <div className="text-neutral-500 font-mono text-sm">Average retrieval latency</div>
       </div>

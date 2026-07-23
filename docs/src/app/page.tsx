@@ -41,7 +41,14 @@ export default function Home() {
         
         {/* HERO SECTION */}
         <section className="flex flex-col items-center text-center gap-12 mt-12">
-          <div className="flex flex-col gap-6 max-w-3xl">
+          <div className="flex flex-col items-center gap-6 max-w-3xl">
+            <div className="bg-neutral-900/50 border border-neutral-800 text-sm font-mono px-4 py-1.5 rounded-full inline-flex items-center gap-2 text-neutral-300 mb-2">
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+              v1.0.0 is coming soon
+            </div>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
               ContextOS
             </h1>
