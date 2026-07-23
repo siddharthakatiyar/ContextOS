@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
-import queryWhereGif from "../../../../public/query-where.gif";
+import queryWhereGif from "../../../public/query-where.gif";
 import { CopyCommand } from "@/components/copy-command";
 import { getChangelog, formatReleaseDate } from "@/lib/changelog";
 import { getReleaseBadge } from "@/lib/release-badge";
