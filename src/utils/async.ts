@@ -3,7 +3,12 @@
  * @param concurrency Maximum number of concurrent promises
  * @returns A function that wraps an async function to limit its concurrency
  */
-export function pLimit(concurrency: number) {
+export interface LimitFunction {
+  <T>(fn: () => Promise<T>): Promise<T>;
+  clearQueue: () => void;
+}
+
+export function pLimit(concurrency: number): LimitFunction {
   if (concurrency < 1) {
     throw new TypeError('Expected `concurrency` to be a number from 1 and up');
   }
@@ -18,7 +23,7 @@ export function pLimit(concurrency: number) {
     }
   };
 
-  return async <T>(fn: () => Promise<T>): Promise<T> => {
+  const runner = async <T>(fn: () => Promise<T>): Promise<T> => {
     if (activeCount >= concurrency) {
       await new Promise<void>((resolve) => {
         queue.push(resolve);
@@ -33,4 +38,10 @@ export function pLimit(concurrency: number) {
       next();
     }
   };
+
+  runner.clearQueue = () => {
+    queue.length = 0;
+  };
+
+  return runner;
 }

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-23
+
+Agent developer experience (DX) and file watcher scaling improvements.
+
+### Added
+- **Watcher Burst Detection**: The background file watcher now detects massive file system bursts (e.g. from `git checkout` or `npm install`) and automatically suspends individual updates to trigger a highly-optimized bulk re-sweep using the `BackgroundIndexer`.
+- **MCP Server Instructions**: The MCP server now utilizes the MCP v1.0 SDK `instructions` field to enforce semantic tool usage natively. Clients like Claude Code and Cursor are explicitly instructed to use `get_context` prior to ad-hoc file exploration.
+
 ## [0.9.0] - 2026-07-22
 
 Security hardening and robust large repository support for the upcoming v1.0 release.
