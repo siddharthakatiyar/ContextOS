@@ -1,5 +1,7 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight } from "lucide-react";
+import queryWhereGif from "../../../../public/query-where.gif";
 import { CopyCommand } from "@/components/copy-command";
 import { getChangelog, formatReleaseDate } from "@/lib/changelog";
 import { getReleaseBadge } from "@/lib/release-badge";
@@ -70,7 +72,7 @@ export default function ReleasesPage() {
 
         <div className="flex flex-col gap-8 relative">
           <div className="w-full rounded-xl overflow-hidden border border-neutral-800 shadow-2xl mb-8">
-            <img src="/query-where.gif" alt="Claude Code using ContextOS" className="w-full object-cover" />
+            <Image src={queryWhereGif} alt="Claude Code using ContextOS" className="w-full object-cover" unoptimized />
           </div>
 
           {/* Timeline Line */}
