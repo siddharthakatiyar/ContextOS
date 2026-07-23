@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { DB, getContextOSHome } from '../../core/storage/database.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
+import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 import chalk from 'chalk';
 
 export const initCommand = new Command('init')
@@ -135,6 +136,20 @@ export const initCommand = new Command('init')
       };
       fs.writeFileSync(claudeConfigPath, JSON.stringify(claudeConfig, null, 2));
       console.log(`Updated Claude Code MCP configuration at ${claudeConfigPath}`);
+
+      // Ensure CLAUDE.md has instructions since Claude Code currently ignores MCP SDK instructions
+      const claudeMdPath = path.join(cwd, 'CLAUDE.md');
+      const claudeMdInstructions = `\n## ContextOS\n${MCP_SERVER_INSTRUCTIONS}\n`;
+      if (!fs.existsSync(claudeMdPath)) {
+        fs.writeFileSync(claudeMdPath, claudeMdInstructions.trim() + '\n');
+        console.log(`Created CLAUDE.md with ContextOS instructions`);
+      } else {
+        const currentClaudeMd = fs.readFileSync(claudeMdPath, 'utf8');
+        if (!currentClaudeMd.includes('get_context')) {
+          fs.appendFileSync(claudeMdPath, claudeMdInstructions);
+          console.log(`Appended ContextOS instructions to CLAUDE.md`);
+        }
+      }
 
       // Generate VS Code MCP configs (Cline and Roo Code)
       const vscodeDir = path.join(cwd, '.vscode');
