@@ -8,6 +8,14 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ---
 
+## [0.9.3] - 2026-07-25
+
+### Fixed
+
+- **Parser Engine**: Fixed a critical bug where `.js` and `.jsx` files containing Flow type annotations (such as the React repository) would cause Tree-sitter AST syntax errors, resulting in the symbol extractor silently missing functions and variables. ContextOS now correctly utilizes the robust `tsx` parser for these extensions, fully supporting modern Flow and JSX syntax.
+
+---
+
 ## [0.9.2] - 2026-07-23
 
 > **AI agents now retrieve semantic context before wandering through your repository.**
