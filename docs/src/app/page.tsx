@@ -102,7 +102,7 @@ export default function Home() {
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold">Without ContextOS</h3>
-                <span className="bg-red-900/50 text-red-400 text-xs font-mono px-3 py-1 rounded-full border border-red-800">45,000+ Tokens</span>
+                <span className="bg-red-900/50 text-red-400 text-xs font-mono px-3 py-1 rounded-full border border-red-800">42K+ Tokens</span>
               </div>
               <p className="text-sm text-neutral-500 min-h-[40px]">Spawns expensive Explore subagents, blindly greps files, and suffers from massive context bloat.</p>
               <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900 aspect-[16/10] relative">
