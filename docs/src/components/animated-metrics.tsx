@@ -7,10 +7,11 @@ export function AnimatedMetrics() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
       <div className="flex flex-col gap-2">
-        <div className="text-4xl font-bold font-mono text-white flex">
-          <Counter from={0} to={95} duration={2000} delay={0.2} suffix="%" />
+        <div className="text-4xl font-bold font-mono text-white flex items-baseline gap-2">
+          <span className="text-2xl text-neutral-400 font-normal">Up to</span>
+          <Counter from={0} to={99} duration={2000} delay={0.2} suffix="%" />
         </div>
-        <div className="text-neutral-500 font-mono text-sm">Average context token reduction</div>
+        <div className="text-neutral-500 font-mono text-sm">Context token reduction</div>
       </div>
       <div className="flex flex-col gap-2">
         <div className="text-4xl font-bold font-mono text-white flex">
