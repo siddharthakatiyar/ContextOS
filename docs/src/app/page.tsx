@@ -89,6 +89,40 @@ export default function Home() {
           <SystemsDiagram />
         </section>
 
+        {/* SEE IT IN ACTION */}
+        <section className="flex flex-col gap-8 pt-12">
+          <div className="flex flex-col gap-4">
+            <h2 className="text-3xl font-bold tracking-tight">See it in action</h2>
+            <p className="text-lg text-neutral-400 max-w-2xl">
+              A side-by-side comparison of Claude Code answering a question about the repository.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold">Without ContextOS</h3>
+                <span className="bg-red-900/50 text-red-400 text-xs font-mono px-3 py-1 rounded-full border border-red-800">45,000+ Tokens</span>
+              </div>
+              <p className="text-sm text-neutral-500 min-h-[40px]">Spawns expensive Explore subagents, blindly greps files, and suffers from massive context bloat.</p>
+              <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900">
+                <img src="/without-contextos.gif" alt="Claude Code without ContextOS" className="w-full h-auto" />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold">With ContextOS</h3>
+                <span className="bg-green-900/50 text-green-400 text-xs font-mono px-3 py-1 rounded-full border border-green-800">~220 Tokens</span>
+              </div>
+              <p className="text-sm text-neutral-500 min-h-[40px]">Instant semantic retrieval, pinpoint accuracy, and minimal context usage in a single tool call.</p>
+              <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900">
+                <img src="/query-where.gif" alt="Claude Code with ContextOS" className="w-full h-auto" />
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* THE PIPELINE */}
         <section id="pipeline" className="flex flex-col gap-12 pt-12">
           <div className="flex flex-col gap-4">
