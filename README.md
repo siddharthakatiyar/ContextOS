@@ -47,6 +47,13 @@ contextos reindex
 
 ## The Problem: Traditional vs. ContextOS
 
+### ⚡️ The ContextOS Difference
+
+| Without ContextOS (42K+ Tokens) | With ContextOS (293 Tokens) |
+|:---:|:---:|
+| <img src="./docs/public/without-contextos.gif" width="100%"> | <img src="./docs/public/query-where.gif" width="100%"> |
+| *Spawns expensive Explore subagents, blindly greps files, massive context bloat.* | *Instant semantic retrieval, pinpoint accuracy, minimal context usage.* |
+
 | Traditional (Grep + Read) | ContextOS |
 |---|---|
 | Line hits, then whole-file Reads | Semantic symbols in one call |
@@ -67,10 +74,10 @@ A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries
 | **Avg tokens / query** | **669** |
 | **Total tokens** (100 queries) | **66,852** |
 
-*A one-time historical comparison against a Cursor `@codebase` proxy (ripgrep + file extraction) showed ContextOS using ~10× fewer tokens for comparable recall. ContextOS is no longer benchmarked against competitors — the ongoing CI benchmark measures ContextOS retrieval recall only.*
+*A one-time historical comparison against a Cursor `@codebase` proxy (ripgrep + file extraction) showed ContextOS using up to 99% fewer tokens for comparable recall. ContextOS is no longer benchmarked against competitors — the ongoing CI benchmark measures ContextOS retrieval recall only.*
 
 **Key Takeaways:**
-- **Surgical Precision:** ContextOS achieves 96% file-level accuracy while using **10x fewer tokens** than traditional multi-file keyword chunking.
+- **Surgical Precision:** ContextOS achieves 96% file-level accuracy while using **up to 99% fewer tokens** than traditional multi-file keyword chunking.
 - **Near-Flawless Targeted Retrieval:** ContextOS's AST-aware matcher reliably zeroes in on exact function implementations (98% hit rate).
 - **Strong Conceptual Retrieval:** ContextOS successfully resolves broad queries (e.g. "How does Redis start up?") to core implementation files 94% of the time, avoiding noise from dependencies or test scripts.
 
@@ -253,7 +260,7 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 
 ## Quantifiable Benefits
 
-- **Token Efficiency:** ~669 tokens/query (66.8k across 100 queries); a one-time comparison measured roughly 10× fewer tokens than a multi-file extraction proxy.
+- **Token Efficiency:** ~669 tokens/query (66.8k across 100 queries); a one-time comparison measured up to 99% fewer tokens than a multi-file extraction proxy.
 - **98% Precision on Exact Functions:** The AST-aware matcher reliably finds implementation bodies instead of grepping test files.
 - **Robust Conceptual Retrieval:** Resolves broad queries accurately 94% of the time.
 - **Low latency:** Local SQLite FTS5 retrieval typically completes in milliseconds.

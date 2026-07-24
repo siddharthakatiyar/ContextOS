@@ -125,17 +125,17 @@ export function SystemsDiagram() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: stage >= 7 ? 1 : 0 }} className="border border-neutral-800 bg-black py-3 px-6 w-full max-w-[240px] text-center text-white">
             Search
           </motion.div>
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: stage >= 8 ? 1 : 0, height: stage >= 8 ? 24 : 0 }} className="w-px bg-neutral-800"></motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: stage >= 8 ? 1 : 0 }} className="h-6 w-px bg-neutral-800"></motion.div>
           
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: stage >= 8 ? 1 : 0 }} className="border border-neutral-800 bg-black py-3 px-6 w-full max-w-[240px] text-center text-white">
             Expand Graph
           </motion.div>
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: stage >= 9 ? 1 : 0, height: stage >= 9 ? 24 : 0 }} className="w-px bg-neutral-800"></motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: stage >= 9 ? 1 : 0 }} className="h-6 w-px bg-neutral-800"></motion.div>
           
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: stage >= 9 ? 1 : 0 }} className="border border-neutral-800 bg-black py-3 px-6 w-full max-w-[240px] text-center text-white">
             Rank Symbols
           </motion.div>
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: stage >= 10 ? 1 : 0, height: stage >= 10 ? 24 : 0 }} className="w-px bg-neutral-800"></motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: stage >= 10 ? 1 : 0 }} className="h-6 w-px bg-neutral-800"></motion.div>
           
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: stage >= 10 ? 1 : 0 }} className="border border-neutral-800 bg-black py-3 px-6 w-full max-w-[240px] text-center text-white">
             Extract
