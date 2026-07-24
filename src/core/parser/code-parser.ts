@@ -6,8 +6,8 @@ const localRequire = createRequire(import.meta.url);
 const LANGUAGE_EXT_MAP: Record<string, string> = {
   '.ts': 'typescript',
   '.tsx': 'tsx',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
+  '.js': 'tsx',
+  '.jsx': 'tsx',
   '.py': 'python',
   '.go': 'go',
   '.rs': 'rust',
