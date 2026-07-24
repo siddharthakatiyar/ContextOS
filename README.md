@@ -49,7 +49,7 @@ contextos reindex
 
 ### ⚡️ The ContextOS Difference
 
-| Without ContextOS (45,000+ Tokens) | With ContextOS (~220 Tokens) |
+| Without ContextOS (45,000+ Tokens) | With ContextOS (293 Tokens) |
 |:---:|:---:|
 | <img src="./docs/public/without-contextos.gif" width="100%"> | <img src="./docs/public/query-where.gif" width="100%"> |
 | *Spawns expensive Explore subagents, blindly greps files, massive context bloat.* | *Instant semantic retrieval, pinpoint accuracy, minimal context usage.* |

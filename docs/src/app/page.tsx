@@ -113,7 +113,7 @@ export default function Home() {
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold">With ContextOS</h3>
-                <span className="bg-green-900/50 text-green-400 text-xs font-mono px-3 py-1 rounded-full border border-green-800">~220 Tokens</span>
+                <span className="bg-green-900/50 text-green-400 text-xs font-mono px-3 py-1 rounded-full border border-green-800">293 Tokens</span>
               </div>
               <p className="text-sm text-neutral-500 min-h-[40px]">Instant semantic retrieval, pinpoint accuracy, and minimal context usage in a single tool call.</p>
               <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900 aspect-[16/10] relative">
