@@ -105,8 +105,8 @@ export default function Home() {
                 <span className="bg-red-900/50 text-red-400 text-xs font-mono px-3 py-1 rounded-full border border-red-800">45,000+ Tokens</span>
               </div>
               <p className="text-sm text-neutral-500 min-h-[40px]">Spawns expensive Explore subagents, blindly greps files, and suffers from massive context bloat.</p>
-              <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900">
-                <img src="/without-contextos.gif" alt="Claude Code without ContextOS" className="w-full h-auto" />
+              <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900 aspect-[16/10] relative">
+                <img src="/without-contextos.gif" alt="Claude Code without ContextOS" className="absolute inset-0 w-full h-full object-cover object-left-top" />
               </div>
             </div>
 
@@ -116,8 +116,8 @@ export default function Home() {
                 <span className="bg-green-900/50 text-green-400 text-xs font-mono px-3 py-1 rounded-full border border-green-800">~220 Tokens</span>
               </div>
               <p className="text-sm text-neutral-500 min-h-[40px]">Instant semantic retrieval, pinpoint accuracy, and minimal context usage in a single tool call.</p>
-              <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900">
-                <img src="/query-where.gif" alt="Claude Code with ContextOS" className="w-full h-auto" />
+              <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900 aspect-[16/10] relative">
+                <img src="/query-where.gif" alt="Claude Code with ContextOS" className="absolute inset-0 w-full h-full object-cover object-left-top" />
               </div>
             </div>
           </div>
