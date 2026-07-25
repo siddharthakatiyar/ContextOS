@@ -8,6 +8,16 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ---
 
+## [0.9.4] - 2026-07-26
+
+### Added
+
+- **Token Clamping & Optimizations**: Implemented stub tier optimizations and strict token clamping to ensure bounded context windows.
+- **Auto-Reindexing**: The daemon now automatically detects structural schema/indexer changes (via `INDEXER_VERSION`) and gracefully triggers a background repo re-index on update without requiring manual user intervention.
+- **Trigram FTS**: Migrated to database schema v6 with FTS5 trigram indices for extremely fast and accurate substring searches.
+
+---
+
 ## [0.9.3] - 2026-07-25
 
 ### Fixed
