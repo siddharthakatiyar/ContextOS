@@ -174,8 +174,11 @@ export class ContextOSDaemon {
           let needsFullIndex = true;
           if (fs.existsSync(statusPath)) {
             const status = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
-            if (status.fullIndexCompleted) {
+            const { INDEXER_VERSION } = await import('./background-indexer.js');
+            if (status.fullIndexCompleted && status.indexerVersion === INDEXER_VERSION) {
               needsFullIndex = false;
+            } else if (status.fullIndexCompleted && status.indexerVersion !== INDEXER_VERSION) {
+              console.log(`[ContextOS] Indexer version changed (was ${status.indexerVersion || 'unknown'}, now ${INDEXER_VERSION}). Triggering auto-reindex...`);
             }
           }
 
