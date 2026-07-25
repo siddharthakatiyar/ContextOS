@@ -1,5 +1,6 @@
 import { ScoredChunk } from '../retrieval/types.js';
-import { estimateTokens } from '../../utils/tokens.js';
+import { estimateTokens as estimateTokensExact } from '../../utils/tokens.js';
+const estimateTokens = (text: string) => estimateTokensExact(text, true);
 import { loadConfig } from '../../config/index.js';
 import { globalSentRegistry } from '../session/sent-registry.js';
 

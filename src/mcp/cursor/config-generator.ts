@@ -15,8 +15,8 @@ export function generateCursorConfig(options: {
   return {
     mcpServers: {
       contextos: {
-        command: 'npx',
-        args: ['-y', '@siddharthakatiyar/contextos@latest', 'serve'],
+        command: 'node',
+        args: ['/Volumes/ExtremeSSD/code/contextOS/dist/bin/contextos.js', 'serve'],
         env: {
           CONTEXTOS_REPO_ROOT: options.projectRoot,
           CONTEXTOS_WORKSPACE: options.workspaceName ?? ''

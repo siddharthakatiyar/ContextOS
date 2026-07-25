@@ -70,6 +70,7 @@ export const defaultConfig: ContextOSConfig = {
 
   maxRetrievalResults: 25,
   maxTokenBudget: 1200,
+  maxExactTokenBudget: 4000,
   layerBoosts: {
     session: 1.5,
     repo: 1.3,

@@ -5,6 +5,7 @@ export interface CompiledContext {
 
 export interface CompilerOptions {
   maxTokens: number;
+  maxExactTokens?: number;
   outputFormat?: 'markdown' | 'xml';
   /** Query intent terms used for signal-preserving truncation. */
   signalTerms?: string[];

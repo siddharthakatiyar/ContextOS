@@ -53,6 +53,14 @@ export const reindexCommand = new Command('reindex')
 
       console.log(chalk.yellow.bold(`Clearing local database at ${dbPath}...`));
 
+      try {
+        const { daemonCommand } = await import('./daemon.js');
+        await daemonCommand.parseAsync(['node', 'contextos', 'stop']);
+        console.log(chalk.dim('Stopped existing daemon to prepare for fresh index.'));
+      } catch (e) {
+        // ignore if no daemon is running
+      }
+
       if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
       if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
       if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);

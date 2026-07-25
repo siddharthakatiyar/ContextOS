@@ -4,6 +4,8 @@ import { glob } from 'glob';
 import { DB } from '../storage/database.js';
 import { Indexer } from '../indexer/index.js';
 
+export const INDEXER_VERSION = 1;
+
 export class BackgroundIndexer {
   private db: DB;
   private indexer: Indexer;
@@ -124,7 +126,11 @@ export class BackgroundIndexer {
       const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
       fs.writeFileSync(
         statusFile,
-        JSON.stringify({ fullIndexCompleted: true, lastIndexTime: Date.now() })
+        JSON.stringify({
+          fullIndexCompleted: true,
+          lastIndexTime: Date.now(),
+          indexerVersion: INDEXER_VERSION
+        })
       );
       console.log(
         `[BackgroundIndexer] Full index completed in ${(Date.now() - this.startTime) / 1000}s`

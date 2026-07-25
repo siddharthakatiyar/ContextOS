@@ -186,13 +186,62 @@ END;
 CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks(source_file);
 CREATE INDEX IF NOT EXISTS idx_chunks_layer ON chunks(layer);
 CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(hash);
-CREATE INDEX IF NOT EXISTS idx_chunks_file_stem ON chunks(file_stem);
+CREATE INDEX IF NOT EXISTS idx_chunks_file_stem ON chunks(file_stem COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_chunks_symbol_name ON chunks(symbol_name COLLATE NOCASE);
-CREATE INDEX IF NOT EXISTS idx_chunks_parent_symbol ON chunks(parent_symbol);
+CREATE INDEX IF NOT EXISTS idx_chunks_parent_symbol ON chunks(parent_symbol COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_relationships_source ON relationships(source);
 CREATE INDEX IF NOT EXISTS idx_relationships_target ON relationships(target);
 CREATE INDEX IF NOT EXISTS idx_knowledge_facts_category ON knowledge_facts(category);
 CREATE INDEX IF NOT EXISTS idx_feedback_chunk ON feedback_signals(chunk_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_symbol_fts USING fts5(
+  symbol_name,
+  content=chunks,
+  content_rowid=rowid,
+  tokenize='trigram'
+);
+
+CREATE TRIGGER IF NOT EXISTS chunks_symbol_fts_ai AFTER INSERT ON chunks BEGIN
+  INSERT INTO chunks_symbol_fts(rowid, symbol_name)
+  VALUES (new.rowid, new.symbol_name);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_symbol_fts_ad AFTER DELETE ON chunks BEGIN
+  INSERT INTO chunks_symbol_fts(chunks_symbol_fts, rowid, symbol_name)
+  VALUES ('delete', old.rowid, old.symbol_name);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_symbol_fts_au AFTER UPDATE ON chunks BEGIN
+  INSERT INTO chunks_symbol_fts(chunks_symbol_fts, rowid, symbol_name)
+  VALUES ('delete', old.rowid, old.symbol_name);
+  INSERT INTO chunks_symbol_fts(rowid, symbol_name)
+  VALUES (new.rowid, new.symbol_name);
+END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_file_fts USING fts5(
+  file_stem,
+  source_file,
+  content=chunks,
+  content_rowid=rowid,
+  tokenize='trigram'
+);
+
+CREATE TRIGGER IF NOT EXISTS chunks_file_fts_ai AFTER INSERT ON chunks BEGIN
+  INSERT INTO chunks_file_fts(rowid, file_stem, source_file)
+  VALUES (new.rowid, new.file_stem, new.source_file);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_file_fts_ad AFTER DELETE ON chunks BEGIN
+  INSERT INTO chunks_file_fts(chunks_file_fts, rowid, file_stem, source_file)
+  VALUES ('delete', old.rowid, old.file_stem, old.source_file);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_file_fts_au AFTER UPDATE ON chunks BEGIN
+  INSERT INTO chunks_file_fts(chunks_file_fts, rowid, file_stem, source_file)
+  VALUES ('delete', old.rowid, old.file_stem, old.source_file);
+  INSERT INTO chunks_file_fts(rowid, file_stem, source_file)
+  VALUES (new.rowid, new.file_stem, new.source_file);
+END;
 `;
 
 function getSchemaVersion(db: Database.Database): number {
@@ -384,6 +433,53 @@ function migrateToV5(db: Database.Database): void {
   setSchemaVersion(db, 5);
 }
 
+function migrateToV6(db: Database.Database): void {
+  console.error('Migrating ContextOS database to v0.7.0 (schema v6)...');
+
+  db.exec(`
+    DROP INDEX IF EXISTS idx_chunks_parent_symbol;
+    DROP INDEX IF EXISTS idx_chunks_file_stem;
+    CREATE INDEX idx_chunks_parent_symbol ON chunks(parent_symbol COLLATE NOCASE);
+    CREATE INDEX idx_chunks_file_stem ON chunks(file_stem COLLATE NOCASE);
+  `);
+
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS chunks_symbol_fts USING fts5(
+      symbol_name, content=chunks, content_rowid=rowid, tokenize='trigram'
+    );
+    CREATE TRIGGER IF NOT EXISTS chunks_symbol_fts_ai AFTER INSERT ON chunks BEGIN
+      INSERT INTO chunks_symbol_fts(rowid, symbol_name) VALUES (new.rowid, new.symbol_name);
+    END;
+    CREATE TRIGGER IF NOT EXISTS chunks_symbol_fts_ad AFTER DELETE ON chunks BEGIN
+      INSERT INTO chunks_symbol_fts(chunks_symbol_fts, rowid, symbol_name) VALUES ('delete', old.rowid, old.symbol_name);
+    END;
+    CREATE TRIGGER IF NOT EXISTS chunks_symbol_fts_au AFTER UPDATE ON chunks BEGIN
+      INSERT INTO chunks_symbol_fts(chunks_symbol_fts, rowid, symbol_name) VALUES ('delete', old.rowid, old.symbol_name);
+      INSERT INTO chunks_symbol_fts(rowid, symbol_name) VALUES (new.rowid, new.symbol_name);
+    END;
+    INSERT INTO chunks_symbol_fts(chunks_symbol_fts) VALUES ('rebuild');
+  `);
+
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS chunks_file_fts USING fts5(
+      file_stem, source_file, content=chunks, content_rowid=rowid, tokenize='trigram'
+    );
+    CREATE TRIGGER IF NOT EXISTS chunks_file_fts_ai AFTER INSERT ON chunks BEGIN
+      INSERT INTO chunks_file_fts(rowid, file_stem, source_file) VALUES (new.rowid, new.file_stem, new.source_file);
+    END;
+    CREATE TRIGGER IF NOT EXISTS chunks_file_fts_ad AFTER DELETE ON chunks BEGIN
+      INSERT INTO chunks_file_fts(chunks_file_fts, rowid, file_stem, source_file) VALUES ('delete', old.rowid, old.file_stem, old.source_file);
+    END;
+    CREATE TRIGGER IF NOT EXISTS chunks_file_fts_au AFTER UPDATE ON chunks BEGIN
+      INSERT INTO chunks_file_fts(chunks_file_fts, rowid, file_stem, source_file) VALUES ('delete', old.rowid, old.file_stem, old.source_file);
+      INSERT INTO chunks_file_fts(rowid, file_stem, source_file) VALUES (new.rowid, new.file_stem, new.source_file);
+    END;
+    INSERT INTO chunks_file_fts(chunks_file_fts) VALUES ('rebuild');
+  `);
+
+  setSchemaVersion(db, 6);
+}
+
 export function applyMigrations(db: Database.Database) {
   // First ensure schema_version table exists
   db.exec(`
@@ -495,6 +591,15 @@ export function applyMigrations(db: Database.Database) {
         } catch (e: any) {
           console.error(`Migration to v5 failed: ${e.message}`);
         }
+      }
+    }
+
+    afterVersion = getSchemaVersion(db);
+    if (afterVersion === 5) {
+      try {
+        migrateToV6(db);
+      } catch (e: any) {
+        console.error(`Migration to v6 failed: ${e.message}`);
       }
     }
   });

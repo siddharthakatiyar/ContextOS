@@ -406,7 +406,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
 
   let activeMaxTokens = opts.maxTokens;
   if (tier === 'exact' || tier === 'exact-implementation') {
-    activeMaxTokens = Math.max(activeMaxTokens, 8000);
+    activeMaxTokens = Math.max(activeMaxTokens, opts.maxExactTokens || 4000);
   }
 
   const framingFloor = (opts as any).framingReserve ?? 48;
