@@ -120,7 +120,6 @@ export class ContextOSDaemon {
       }
     }
 
-
     return new Promise((resolve, reject) => {
       this.server.once('error', (err) => {
         reject(err);
@@ -178,19 +177,24 @@ export class ContextOSDaemon {
             if (status.fullIndexCompleted && status.indexerVersion === INDEXER_VERSION) {
               needsFullIndex = false;
             } else if (status.fullIndexCompleted && status.indexerVersion !== INDEXER_VERSION) {
-              console.log(`[ContextOS] Indexer version changed (was ${status.indexerVersion || 'unknown'}, now ${INDEXER_VERSION}). Triggering auto-reindex...`);
+              console.log(
+                `[ContextOS] Indexer version changed (was ${status.indexerVersion || 'unknown'}, now ${INDEXER_VERSION}). Triggering auto-reindex...`
+              );
             }
           }
 
           if (needsFullIndex) {
             this.backgroundIndexer = new BackgroundIndexer(this.dbs[0], this.projectDir);
-            this.backgroundIndexer.startFullIndex(config).then(() => {
-              this.watcher = startWatcher(this.dbs[0], this.projectDir);
-            }).catch((err) => {
-              console.error(`[ERROR] Background indexer failed: ${err.message}`);
-              // Start watcher even if indexer fails so we don't leave the daemon completely dead
-              this.watcher = startWatcher(this.dbs[0], this.projectDir);
-            });
+            this.backgroundIndexer
+              .startFullIndex(config)
+              .then(() => {
+                this.watcher = startWatcher(this.dbs[0], this.projectDir);
+              })
+              .catch((err) => {
+                console.error(`[ERROR] Background indexer failed: ${err.message}`);
+                // Start watcher even if indexer fails so we don't leave the daemon completely dead
+                this.watcher = startWatcher(this.dbs[0], this.projectDir);
+              });
           } else {
             this.watcher = startWatcher(this.dbs[0], this.projectDir);
           }

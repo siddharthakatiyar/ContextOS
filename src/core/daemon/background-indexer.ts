@@ -126,8 +126,8 @@ export class BackgroundIndexer {
       const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
       fs.writeFileSync(
         statusFile,
-        JSON.stringify({ 
-          fullIndexCompleted: true, 
+        JSON.stringify({
+          fullIndexCompleted: true,
           lastIndexTime: Date.now(),
           indexerVersion: INDEXER_VERSION
         })

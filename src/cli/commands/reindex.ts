@@ -52,7 +52,7 @@ export const reindexCommand = new Command('reindex')
       }
 
       console.log(chalk.yellow.bold(`Clearing local database at ${dbPath}...`));
-      
+
       try {
         const { daemonCommand } = await import('./daemon.js');
         await daemonCommand.parseAsync(['node', 'contextos', 'stop']);

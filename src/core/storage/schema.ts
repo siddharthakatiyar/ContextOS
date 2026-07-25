@@ -435,14 +435,14 @@ function migrateToV5(db: Database.Database): void {
 
 function migrateToV6(db: Database.Database): void {
   console.error('Migrating ContextOS database to v0.7.0 (schema v6)...');
-  
+
   db.exec(`
     DROP INDEX IF EXISTS idx_chunks_parent_symbol;
     DROP INDEX IF EXISTS idx_chunks_file_stem;
     CREATE INDEX idx_chunks_parent_symbol ON chunks(parent_symbol COLLATE NOCASE);
     CREATE INDEX idx_chunks_file_stem ON chunks(file_stem COLLATE NOCASE);
   `);
-  
+
   db.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS chunks_symbol_fts USING fts5(
       symbol_name, content=chunks, content_rowid=rowid, tokenize='trigram'

@@ -37,7 +37,7 @@ export async function executeGetContext(
   const { engine, sessionManager, knowledgeStore, promptsRepo, sessionStore } = deps;
   let maxTokens = opts.maxTokens ?? loadConfig().maxTokenBudget;
   let maxExactTokens = loadConfig().maxExactTokenBudget;
-  
+
   if (opts.tier === 'stub') {
     maxTokens = Math.min(maxTokens, 250);
     maxExactTokens = Math.min(maxExactTokens, 250);

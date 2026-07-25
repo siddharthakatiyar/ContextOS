@@ -38,7 +38,7 @@ describe('Compiler', () => {
   it('downgrades chunks to stubs when outside token budget', () => {
     const chunk1Text = 'word '.repeat(300);
     const chunk2Text = 'other '.repeat(300);
-    
+
     const chunk1 = makeChunk('1', chunk1Text, 10);
     const chunk2 = makeChunk('2', chunk2Text, 5);
     chunk2.sourceFile = 'other.ts';
