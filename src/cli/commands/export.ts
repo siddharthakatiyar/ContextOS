@@ -20,7 +20,7 @@ export const exportCommand = new Command('export')
       const files = dbInstance.prepare('SELECT * FROM files').all();
 
       const exportData = {
-        version: '0.2.0',
+        version: '1.0.0',
         exportedAt: Date.now(),
         data: {
           chunks,

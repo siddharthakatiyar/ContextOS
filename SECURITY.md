@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-Currently, only the latest minor release of the v0.x line is supported with security patches.
+From v1.0.0 onward, only the latest patch release of the current major version is supported with security patches.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.8.x   | :white_check_mark: |
-| < 0.8.0 | :x:                |
+| 1.0.x   | :white_check_mark: |
+| < 1.0.0 | :x:                |
 
 ## Reporting a Vulnerability
 

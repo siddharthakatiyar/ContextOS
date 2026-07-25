@@ -24,3 +24,11 @@ AUDIT-v1.md
 # Coverage output
 coverage/
 .vscode
+
+# Local benchmark output and scratch files
+benchmark-results.json
+benchmark-results-estimated-costs.json
+benchmark-results-unrestricted.json
+test_claude_output.json
+scratch/
+v1.0.0-release-notes.md

@@ -10,7 +10,7 @@ ContextOS follows [Semantic Versioning](https://semver.org/). This document defi
 - **MINOR** — new, backward-compatible functionality.
 - **PATCH** — backward-compatible bug fixes.
 
-Pre-1.0 (`0.x`) releases may change behavior in minor versions while the engine stabilizes. After upgrading, run `contextos reindex` so schema/chunking changes take effect.
+From v1.0.0 onward, breaking changes to any stable surface happen only in a **major** version bump (v2.0), with a deprecation notice first where practical. Pre-1.0 (`0.x`) releases changed behavior in minor versions while the engine stabilized.
 
 ## Stable surfaces
 

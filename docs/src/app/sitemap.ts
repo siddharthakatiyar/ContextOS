@@ -19,6 +19,9 @@ const STATIC_ROUTES: Array<{ path: string; changeFrequency: MetadataRoute.Sitema
   { path: "/docs/algorithms/graph-expansion", changeFrequency: "monthly", priority: 0.6 },
   { path: "/docs/algorithms/ranking", changeFrequency: "monthly", priority: 0.6 },
   { path: "/docs/algorithms/compression", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/docs/benchmarks", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/roadmap", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/docs/stability", changeFrequency: "monthly", priority: 0.6 },
   { path: "/releases", changeFrequency: "weekly", priority: 0.8 },
 ];
 

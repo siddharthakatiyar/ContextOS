@@ -108,7 +108,7 @@ export function ArchitectureContent() {
 
       <h3>SQLite Storage & Foreign Keys</h3>
       <p>
-        ContextOS guarantees transactional integrity through SQLite's WAL mode and cascading foreign keys. If a file is deleted, <code>this.filesRepo.deleteByPath(filePath)</code> instantly purges all associated chunks, relationships, and embeddings via <code>ON DELETE CASCADE</code>. The entire schema is defined locally in <code>.contextos/storage.db</code>, which means zero network latency.
+        ContextOS guarantees transactional integrity through SQLite's WAL mode and cascading foreign keys. If a file is deleted, <code>this.filesRepo.deleteByPath(filePath)</code> instantly purges all associated chunks, relationships, and embeddings via <code>ON DELETE CASCADE</code>. The entire schema is defined locally in <code>.contextos/index.db</code>, which means zero network latency.
       </p>
 
       <h3>Background Daemon & Concurrency</h3>

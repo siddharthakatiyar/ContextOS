@@ -47,7 +47,7 @@ export default function Home() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </span>
-              v1.0.0 is coming soon
+              v1.0.0 Stable is now available!
             </div>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
               ContextOS

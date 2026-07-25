@@ -24,7 +24,7 @@ export default function CompressionDocs() {
         If a user queries for the <code>validate()</code> method, standard vector DBs return the <i>entire file</i>. If that file is 3,000 lines long, it consumes 30k+ tokens instantly. 
       </p>
       <p>
-        ContextOS compiles results at the AST node level, enforcing a hard <code>maxTokenBudget</code> (default: 40k). 
+        ContextOS compiles results at the AST node level, enforcing a hard <code>maxTokenBudget</code> (default: 1,200 tokens; configurable). 
       </p>
 
       <h2>Token Budgeting Algorithm</h2>

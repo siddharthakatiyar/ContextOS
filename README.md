@@ -1,5 +1,7 @@
 # ContextOS
 
+[![NPM Version](https://img.shields.io/npm/v/@siddharthakatiyar/contextos.svg)](https://www.npmjs.com/package/@siddharthakatiyar/contextos)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 AI coding assistants waste thousands of tokens searching large codebases, often missing the files that actually matter.
 
 ContextOS indexes your repository into a semantic graph so agents like Cursor, Claude Code, and Codex retrieve only the relevant functions, classes, documentation, and dependencies—reducing token usage while improving accuracy.

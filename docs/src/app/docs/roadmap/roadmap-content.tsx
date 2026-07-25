@@ -8,22 +8,22 @@ export function RoadmapContent() {
   return (
     <DocPage
       title="Roadmap"
-      description="The high-level roadmap and future ambitions for ContextOS as we approach v1.0 and beyond."
+      description="The high-level roadmap and future direction of ContextOS following the v1.0 stable release."
       prev={{ title: "Benchmarks", href: "/docs/benchmarks" }}
       next={{ title: "Retrieval Pipeline", href: "/docs/algorithms/retrieval-pipeline" }}
     >
       <SourceLink path="ROADMAP.md" />
 
       <p className="mb-8">
-        This document outlines the high-level roadmap and future ambitions for ContextOS as we approach v1.0 and beyond. This is a living document and may change based on community feedback and emerging use cases.
+        This document outlines the high-level roadmap and future direction of ContextOS following the v1.0.0 stable release. This is a living document and may change based on community feedback and emerging use cases.
       </p>
 
       <div className="flex flex-col gap-12">
         {/* v1.0 */}
         <div className="flex flex-col gap-6">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight m-0">v1.0 (The "Stable" Release)</h2>
-            <div className="text-sm font-mono text-neutral-500 mt-2 uppercase tracking-widest">Target: Q3 2026</div>
+            <h2 className="text-2xl font-bold tracking-tight m-0">v1.0 (The &quot;Stable&quot; Release) ✅</h2>
+            <div className="text-sm font-mono text-green-600 mt-2 uppercase tracking-widest">Released: July 2026</div>
           </div>
           <p className="text-neutral-400">
             The goal for v1.0 is to ensure ContextOS is a tool you can depend on daily in your development workflow without worrying about database corruption, hanging daemons, or index desyncs.
@@ -59,17 +59,17 @@ export function RoadmapContent() {
               </div>
             </li>
             <li className="flex items-start gap-3">
-              <Circle className="w-5 h-5 text-neutral-600 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
               <div className="flex flex-col">
                 <span className="font-bold text-white">Cross-Language AST Completeness</span>
-                <span className="text-neutral-500 text-sm">Ensure all major languages parse reliably</span>
+                <span className="text-neutral-500 text-sm">TSX parser supports JS/JSX/Flow; all major languages parse reliably</span>
               </div>
             </li>
             <li className="flex items-start gap-3">
-              <Circle className="w-5 h-5 text-neutral-600 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
               <div className="flex flex-col">
                 <span className="font-bold text-white">Comprehensive Documentation</span>
-                <span className="text-neutral-500 text-sm">Interactive live examples and full API reference</span>
+                <span className="text-neutral-500 text-sm">Full CLI reference, architecture overview, and algorithm docs</span>
               </div>
             </li>
           </ul>

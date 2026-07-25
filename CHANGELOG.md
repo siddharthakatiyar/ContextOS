@@ -8,6 +8,18 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ---
 
+## [1.0.0] - 2026-07-26
+
+First stable release of ContextOS.
+
+See the full [release notes](./v1.0.0-release-notes.md) for highlights.
+
+### Added
+
+- **v1.0.0 Stable**: ContextOS is now production-ready. All core APIs, CLI commands, MCP tools, and the on-disk database schema are covered by the stability policy in `STABILITY.md`.
+
+---
+
 ## [0.9.4] - 2026-07-26
 
 ### Added

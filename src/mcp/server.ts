@@ -22,7 +22,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let version = '0.3.0';
+let version = '1.0.0';
 try {
   let pkgPath = path.join(__dirname, '../../package.json');
   if (!fs.existsSync(pkgPath)) {

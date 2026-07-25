@@ -9,7 +9,7 @@ export function BenchmarksContent() {
       title="Benchmarks & Performance"
       description="Performance metrics, latency, and context compression benchmarks for ContextOS."
       prev={{ title: "Architecture", href: "/docs/architecture" }}
-      next={{ title: "Algorithms", href: "/docs/algorithms" }}
+      next={{ title: "Algorithms", href: "/docs/algorithms/retrieval-pipeline" }}
     >
       <SourceLink path="tests/benchmarks" />
 
