@@ -83,9 +83,16 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         .describe(
           "Which context layers to search. By default searches local code only. Include 'global' if you explicitly need shared third-party or dependency context."
         ),
+      tier: z
+        .enum(['stub', 'full'])
+        .optional()
+        .default('stub')
+        .describe(
+          'Use "stub" (default) to receive lightweight summaries (like grep) to save tokens. Use "full" only if you already know exactly what you are looking for and need the entire function bodies.'
+        ),
       output_format: z.enum(['markdown', 'xml']).optional().describe('Legacy parameter (ignored).')
     },
-    async ({ prompt, max_tokens, layers, output_format }) => {
+    async ({ prompt, max_tokens, layers, tier, output_format }) => {
       try {
         const cacheKey = `${output_format}|${max_tokens}|${(layers || []).join(',')}|${prompt}`;
         const cached = cacheGet(cacheKey);
@@ -101,7 +108,8 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
             maxTokens: max_tokens,
             layers: layers as string[],
             outputFormat: output_format as any,
-            repoRoot
+            repoRoot,
+            tier: tier as 'stub' | 'full'
           },
           deps
         );

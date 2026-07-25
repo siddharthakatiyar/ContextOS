@@ -18,6 +18,7 @@ export interface GetContextOpts {
   layers?: string[];
   outputFormat?: 'markdown' | 'xml';
   repoRoot?: string;
+  tier?: 'stub' | 'full';
 }
 
 export interface GetContextDeps {
@@ -34,7 +35,14 @@ export async function executeGetContext(
   deps: GetContextDeps
 ) {
   const { engine, sessionManager, knowledgeStore, promptsRepo, sessionStore } = deps;
-  const maxTokens = opts.maxTokens ?? loadConfig().maxTokenBudget;
+  let maxTokens = opts.maxTokens ?? loadConfig().maxTokenBudget;
+  let maxExactTokens = loadConfig().maxExactTokenBudget;
+  
+  if (opts.tier === 'stub') {
+    maxTokens = Math.min(maxTokens, 250);
+    maxExactTokens = Math.min(maxExactTokens, 250);
+  }
+
   const layers = opts.layers ?? ['session', 'workspace', 'repo'];
   const outputFormat = opts.outputFormat ?? 'markdown';
   const repoRoot = opts.repoRoot ?? process.cwd();
@@ -78,6 +86,7 @@ export async function executeGetContext(
 
   const compiled = compile(result, {
     maxTokens,
+    maxExactTokens,
     outputFormat: 'markdown',
     signalTerms: [...(result.intent?.identifiers || []), ...(result.intent?.concepts || [])]
   });

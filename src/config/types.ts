@@ -28,6 +28,8 @@ export interface ContextOSConfig {
 
   maxRetrievalResults: number;
   maxTokenBudget: number;
+  /** Ceiling for token budget when doing exact symbol lookup. Default: 4000 */
+  maxExactTokenBudget: number;
   layerBoosts: Record<Layer, number>;
   graphExpansionDepth: number;
   graphExpansionMaxNodes: number;
@@ -74,6 +76,7 @@ export const configJsonSchema = z
     maxSymbolChunkTokens: z.number().positive().optional(),
     maxRetrievalResults: z.number().int().positive().optional(),
     maxTokenBudget: z.number().int().positive().optional(),
+    maxExactTokenBudget: z.number().int().positive().optional(),
     layerBoosts: z
       .object({
         session: z.number().optional(),

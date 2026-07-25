@@ -229,16 +229,17 @@ export class ChunksRepo {
     ) as Chunk[];
   }
 
-  /** Looser symbol search for concept tokens (e.g. schema → SCHEMA_SQL). */
   public findBySymbolFuzzy(name: string, opts?: QueryFilterOpts): Chunk[] {
     if (!name || name.length < 5) return [];
     let sql = `
-      SELECT * FROM chunks
-      WHERE lower(symbol_name) LIKE '%' || lower(?) || '%'
+      SELECT c.*
+      FROM chunks_symbol_fts fts
+      JOIN chunks c ON fts.rowid = c.rowid
+      WHERE fts.symbol_name LIKE ?
     `;
-    const params: any[] = [name];
+    const params: any[] = [`%${name}%`];
     if (opts?.layers && opts.layers.length > 0) {
-      sql += ` AND layer IN (${opts.layers.map(() => '?').join(',')})`;
+      sql += ` AND c.layer IN (${opts.layers.map(() => '?').join(',')})`;
       params.push(...opts.layers);
     }
     sql += ` LIMIT ?`;
@@ -265,41 +266,38 @@ export class ChunksRepo {
     ) as Chunk[];
   }
 
-  /**
-   * Find chunks whose indexed file_stem matches a prompt token
-   * (exact / prefix / contains), plus path-segment directory matches.
-   * Ranks in SQL before LIMIT — no LIMIT-before-rank on full-path LIKE.
-   */
   public findByFileStem(stem: string, limit: number = 20, opts?: QueryFilterOpts): Chunk[] {
     if (!stem || stem.length < 3) return [];
     const stemLower = stem.toLowerCase();
-    const prefix = `${stemLower}%`;
-    const contains = `%${stemLower}%`;
-    const dirUnix = `%/${stemLower}/%`;
-    const dirWin = `%\\${stemLower}\\%`;
+    const prefix = stemLower.replace(/[%_\\]/g, '\\$&') + '%';
+    const contains = '%' + stemLower.replace(/[%_\\]/g, '\\$&') + '%';
+    const dirUnix = '%/' + stemLower.replace(/[%_\\]/g, '\\$&') + '/%';
+    const dirWin = '%\\' + stemLower.replace(/[%_\\]/g, '\\$&') + '\\%';
+    const ftsContains = `%${stemLower}%`;
+    const ftsDirUnix = `%/${stemLower}/%`;
+    const ftsDirWin = `%\\${stemLower}\\%`;
 
     let sql = `
-      SELECT *,
+      SELECT c.*,
         CASE
-          WHEN lower(file_stem) = ? THEN 3
-          WHEN lower(file_stem) LIKE ? THEN 2
-          WHEN lower(file_stem) LIKE ? THEN 1
-          WHEN lower(source_file) LIKE ? OR lower(source_file) LIKE ? THEN 1
+          WHEN c.file_stem = ? COLLATE NOCASE THEN 3
+          WHEN c.file_stem LIKE ? ESCAPE '\\' THEN 2
+          WHEN c.file_stem LIKE ? ESCAPE '\\' THEN 1
+          WHEN c.source_file LIKE ? ESCAPE '\\' OR c.source_file LIKE ? ESCAPE '\\' THEN 1
           ELSE 0
         END AS stem_rank,
         CASE
-          WHEN source_file LIKE '%.test.%' OR source_file LIKE '%.spec.%' OR source_file LIKE '%/tests/%' THEN 0
-          WHEN symbol_kind IN ('function', 'method', 'class', 'struct') THEN 2
-          WHEN symbol_kind = 'file' THEN 1
+          WHEN c.source_file LIKE '%.test.%' OR c.source_file LIKE '%.spec.%' OR c.source_file LIKE '%/tests/%' THEN 0
+          WHEN c.symbol_kind IN ('function', 'method', 'class', 'struct') THEN 2
+          WHEN c.symbol_kind = 'file' THEN 1
           ELSE 1
         END AS kind_rank
-      FROM chunks
+      FROM chunks_file_fts fts
+      JOIN chunks c ON fts.rowid = c.rowid
       WHERE (
-        lower(file_stem) = ?
-        OR lower(file_stem) LIKE ?
-        OR lower(file_stem) LIKE ?
-        OR lower(source_file) LIKE ?
-        OR lower(source_file) LIKE ?
+        fts.file_stem LIKE ?
+        OR fts.source_file LIKE ?
+        OR fts.source_file LIKE ?
       )
     `;
     const params: any[] = [
@@ -308,16 +306,14 @@ export class ChunksRepo {
       contains,
       dirUnix,
       dirWin,
-      stemLower,
-      prefix,
-      contains,
-      dirUnix,
-      dirWin
+      ftsContains,
+      ftsDirUnix,
+      ftsDirWin
     ];
 
     const layers = opts?.layers;
     if (layers && layers.length > 0) {
-      sql += ` AND layer IN (${layers.map(() => '?').join(',')})`;
+      sql += ` AND c.layer IN (${layers.map(() => '?').join(',')})`;
       params.push(...layers);
     }
 

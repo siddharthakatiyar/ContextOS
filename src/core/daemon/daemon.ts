@@ -120,7 +120,6 @@ export class ContextOSDaemon {
       }
     }
 
-    this.watcher = startWatcher(this.dbs[0], this.projectDir);
 
     return new Promise((resolve, reject) => {
       this.server.once('error', (err) => {
@@ -179,9 +178,18 @@ export class ContextOSDaemon {
               needsFullIndex = false;
             }
           }
+
           if (needsFullIndex) {
             this.backgroundIndexer = new BackgroundIndexer(this.dbs[0], this.projectDir);
-            this.backgroundIndexer.startFullIndex(config).catch(console.error);
+            this.backgroundIndexer.startFullIndex(config).then(() => {
+              this.watcher = startWatcher(this.dbs[0], this.projectDir);
+            }).catch((err) => {
+              console.error(`[ERROR] Background indexer failed: ${err.message}`);
+              // Start watcher even if indexer fails so we don't leave the daemon completely dead
+              this.watcher = startWatcher(this.dbs[0], this.projectDir);
+            });
+          } else {
+            this.watcher = startWatcher(this.dbs[0], this.projectDir);
           }
         } catch (err: any) {
           console.error(`Failed to start background index: ${err.message}`);

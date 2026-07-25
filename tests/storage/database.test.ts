@@ -23,7 +23,7 @@ describe('database', () => {
     const version = instance
       .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
       .get() as { version: number };
-    expect(version.version).toBe(5);
+    expect(version.version).toBe(6);
 
     const cols = (instance.prepare('PRAGMA table_info(chunks)').all() as any[]).map((c) => c.name);
     expect(cols).toContain('start_line');

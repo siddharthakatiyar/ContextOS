@@ -41,22 +41,26 @@ function resolveEncode(): EncodeFn | null {
 
 import { loadConfig } from '../config/index.js';
 
-export function estimateTokens(text: string): number {
+export function estimateTokens(text: string, fast?: boolean): number {
   if (!text) return 0;
 
   const config = loadConfig();
   const calibration = typeof config.tokenCalibration === 'number' ? config.tokenCalibration : 1.0;
 
   let count = 0;
-  const encode = resolveEncode();
-  if (encode) {
-    try {
-      count = encode(text).length;
-    } catch {
+  if (fast) {
+    count = heuristicEstimate(text);
+  } else {
+    const encode = resolveEncode();
+    if (encode) {
+      try {
+        count = encode(text).length;
+      } catch {
+        count = heuristicEstimate(text);
+      }
+    } else {
       count = heuristicEstimate(text);
     }
-  } else {
-    count = heuristicEstimate(text);
   }
 
   return Math.ceil(count * calibration);
