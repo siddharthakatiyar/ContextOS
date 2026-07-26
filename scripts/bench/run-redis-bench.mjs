@@ -47,7 +47,7 @@ async function runBenchmark() {
   const redisScopedDbPath = path.join(redisPath, '.contextos', 'index.db');
   const db = new DB(redisScopedDbPath);
   console.log('Indexing Redis codebase...');
-  const indexer = new Indexer(db);
+  const indexer = new Indexer(db, redisPath);
 
   const { glob } = await import('glob');
   const { loadConfig } = await import('../../dist/src/config/index.js');
@@ -72,7 +72,8 @@ async function runBenchmark() {
   let i = 0;
   for (const f of allRepoFiles) {
     if (i % 100 === 0) console.log(`Indexed ${i} / ${allRepoFiles.size} files...`);
-    await indexer.indexFile(f, 'workspace', 'redis');
+    console.log('Indexing file:', f);
+    await indexer.indexFile(f, 'workspace', redisPath);
     i++;
   }
   console.log(`Indexing complete. Total files indexed: ${allRepoFiles.size}`);

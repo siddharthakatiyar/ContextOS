@@ -71,33 +71,34 @@ A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries
 | Metric | ContextOS |
 |--------|-----------|
 | **Targeted file recall** (exact-function queries) | **98%** (49/50) |
-| **Conceptual file recall** (broad queries) | **94%** (47/50) |
-| **Overall file recall** | **96%** (96/100) |
-| **Avg tokens / query** | **669** |
-| **Total tokens** (100 queries) | **66,852** |
+| **Conceptual file recall** (broad queries) | **96%** (48/50) |
+| **Overall file recall** | **97%** (97/100) |
+| **Avg tokens / query** | **589** |
+| **Total tokens** (100 queries) | **58,880** |
 
 *A one-time historical comparison against a Cursor `@codebase` proxy (ripgrep + file extraction) showed ContextOS using up to 99% fewer tokens for comparable recall. ContextOS is no longer benchmarked against competitors — the ongoing CI benchmark measures ContextOS retrieval recall only.*
 
 **Key Takeaways:**
-- **Surgical Precision:** ContextOS achieves 96% file-level accuracy while using **up to 99% fewer tokens** than traditional multi-file keyword chunking.
+- **Surgical Precision:** ContextOS achieves 97% file-level accuracy while using **up to 99% fewer tokens** than traditional multi-file keyword chunking.
 - **Near-Flawless Targeted Retrieval:** ContextOS's AST-aware matcher reliably zeroes in on exact function implementations (98% hit rate).
-- **Strong Conceptual Retrieval:** ContextOS successfully resolves broad queries (e.g. "How does Redis start up?") to core implementation files 94% of the time, avoiding noise from dependencies or test scripts.
+- **Strong Conceptual Retrieval:** ContextOS successfully resolves broad queries (e.g. "How does Redis start up?") to core implementation files 96% of the time, avoiding noise from dependencies or test scripts.
 
 ### Real-World Repository Benchmark
 
 A 25-query end-to-end benchmark measuring the ability of an AI agent to independently explore and answer complex architectural queries across 5 massive open-source repositories (5 queries each).
 
-| Repository | Agent Resolution Accuracy |
-|------------|---------------------------|
-| **Next.js** | 100% (5/5) |
-| **React** | 100% (5/5) |
-| **Langchain**| 100% (5/5) |
-| **FastAPI** | 100% (5/5) |
-| **Supabase** | 100% (5/5) |
+| Repository | Agent Resolution Accuracy | Avg Tokens / Query |
+|------------|---------------------------|--------------------|
+| **Next.js** | 100% (5/5) | ~132 |
+| **React** | 100% (5/5) | ~470 |
+| **Langchain**| 100% (5/5) | ~194 |
+| **FastAPI** | 100% (5/5) | ~262 |
+| **Supabase** | 100% (5/5) | ~333 |
+| **Overall** | 100% (25/25) | **~278** |
 
 **Key Takeaways:**
 - **Reliable Resolution:** ContextOS consistently provided the necessary semantic context for the agent to correctly resolve all 25 complex architectural queries.
-- **Deep Search Capability:** In highly complex repositories like Supabase that force the agent into long multi-turn explorations, ContextOS maintains perfect resolution accuracy while severely undercutting traditional token consumption.
+- **Deep Search Capability:** In highly complex repositories like Supabase that force the agent into long multi-turn explorations, ContextOS maintains perfect resolution accuracy while severely undercutting traditional token consumption (averaging just 278 tokens across all repos).
 
 ## Real Retrieval Example
 
@@ -276,9 +277,9 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 
 ## Quantifiable Benefits
 
-- **Token Efficiency:** ~669 tokens/query (66.8k across 100 queries); a one-time comparison measured up to 99% fewer tokens than a multi-file extraction proxy.
+- **Token Efficiency:** ~589 tokens/query (58.8k across 100 queries); a one-time comparison measured up to 99% fewer tokens than a multi-file extraction proxy.
 - **98% Precision on Exact Functions:** The AST-aware matcher reliably finds implementation bodies instead of grepping test files.
-- **Robust Conceptual Retrieval:** Resolves broad queries accurately 94% of the time.
+- **Robust Conceptual Retrieval:** Resolves broad queries accurately 96% of the time.
 - **Low latency:** Local SQLite FTS5 retrieval typically completes in milliseconds.
 - **Cost savings:** Smaller prompts for API-backed agents mean significantly lower spend per query, and fewer API round-trips.
 
