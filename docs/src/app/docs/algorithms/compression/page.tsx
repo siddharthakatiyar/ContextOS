@@ -38,6 +38,14 @@ export default function CompressionDocs() {
         <li><strong>Exact Token Measurement:</strong> We use the <code>gpt-tokenizer</code> package to physically count tokens on the fly.</li>
       </ol>
 
+      <h2>Token Clamping & Stub Tiers</h2>
+      <p>
+        To prevent large repositories from generating overwhelming context payloads, ContextOS utilizes <strong>Token Clamping</strong>. The compiler restricts exact token matches via a fast heuristic tokenizer before falling back to exact byte-pair encoding.
+      </p>
+      <p>
+        Additionally, MCP client requests can specify a <code>tier: "stub"</code> parameter (introduced in v0.9.4). This heavily clamps the maximum token budget (e.g., capping at 250 tokens), optimizing for ultra-low latency when the LLM only needs brief structural overviews rather than deep implementation details.
+      </p>
+
       <h2>Fallback Mechanisms</h2>
       <p>
         If the budget is exceeded mid-file, ContextOS triggers graceful degradation:
