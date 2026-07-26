@@ -23,6 +23,7 @@ async function runTokenBench() {
   
   let grandTotalTokens = 0;
   let grandTotalQueries = 0;
+  let grandTotalLatency = 0;
 
   for (const repoData of benchData) {
     const repoName = repoData.repo.toLowerCase();
@@ -53,31 +54,39 @@ async function runTokenBench() {
 
     console.log(`\n--- Evaluating ${repoData.repo} ---`);
     let repoTotalTokens = 0;
+    let repoTotalLatency = 0;
 
     for (const query of repoData.queries) {
       try {
+        const start = Date.now();
         const res = await executeGetContext(query, { limit: 10, maxTokens: 4000, repoRoot: repoPath }, deps);
+        const latency = Date.now() - start;
         const resText = res.text || res;
         const tokens = estimateTokens(resText);
         repoTotalTokens += tokens;
-        console.log(`[${tokens} tokens] Query: ${query}`);
+        repoTotalLatency += latency;
+        console.log(`[${tokens} tokens | ${latency}ms] Query: ${query}`);
       } catch (e) {
         console.error(`Error on query "${query}":`, e.message);
       }
     }
 
     const avgTokens = repoData.queries.length > 0 ? (repoTotalTokens / repoData.queries.length) : 0;
-    console.log(`=> Average tokens for ${repoData.repo}: ${avgTokens.toFixed(1)}`);
+    const avgLatency = repoData.queries.length > 0 ? (repoTotalLatency / repoData.queries.length) : 0;
+    console.log(`=> Average tokens for ${repoData.repo}: ${avgTokens.toFixed(1)} | Avg latency: ${avgLatency.toFixed(1)}ms`);
     
     grandTotalTokens += repoTotalTokens;
+    grandTotalLatency += repoTotalLatency;
     grandTotalQueries += repoData.queries.length;
     
     db.close();
   }
 
   const overallAvg = grandTotalQueries > 0 ? (grandTotalTokens / grandTotalQueries) : 0;
+  const overallAvgLatency = grandTotalQueries > 0 ? (grandTotalLatency / grandTotalQueries) : 0;
   console.log(`\n========================================`);
   console.log(`OVERALL AVERAGE: ${overallAvg.toFixed(1)} tokens per query`);
+  console.log(`OVERALL LATENCY: ${overallAvgLatency.toFixed(1)} ms per query`);
   console.log(`========================================`);
 }
 

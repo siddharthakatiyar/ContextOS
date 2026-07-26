@@ -1,0 +1,45 @@
+
+--- Evaluating React ---
+[151 tokens | 1896ms] Query: useState implementation
+[912 tokens | 495ms] Query: Suspended components
+[187 tokens | 1896ms] Query: useEffect cleanup
+[970 tokens | 737ms] Query: Synthetic events
+[130 tokens | 566ms] Query: Concurrent batching
+=> Average tokens for React: 470.0 | Avg latency: 1118.0ms
+
+--- Evaluating Next.js ---
+[130 tokens | 1286ms] Query: App router routing logic
+[104 tokens | 867ms] Query: Server Components rendering
+[182 tokens | 895ms] Query: Static generation (getStaticProps)
+[119 tokens | 693ms] Query: API Routes implementation
+[126 tokens | 212ms] Query: Image optimization
+=> Average tokens for Next.js: 132.2 | Avg latency: 790.6ms
+
+--- Evaluating Langchain ---
+[265 tokens | 291ms] Query: Agent execution loop
+[218 tokens | 132ms] Query: LLMChain implementation
+[151 tokens | 242ms] Query: Memory management (BufferMemory)
+[201 tokens | 204ms] Query: Tool invocation
+[137 tokens | 348ms] Query: Document loader interface
+=> Average tokens for Langchain: 194.4 | Avg latency: 243.4ms
+
+--- Evaluating FastAPI ---
+[355 tokens | 387ms] Query: Dependency injection system
+[200 tokens | 249ms] Query: Routing implementation
+[219 tokens | 341ms] Query: Pydantic validation integration
+[293 tokens | 202ms] Query: Middleware execution
+[241 tokens | 275ms] Query: Exception handling
+=> Average tokens for FastAPI: 261.6 | Avg latency: 290.8ms
+
+--- Evaluating Supabase ---
+[150 tokens | 535ms] Query: Postgres connection logic
+[117 tokens | 661ms] Query: Row Level Security enforcement
+[516 tokens | 545ms] Query: Storage API file uploads
+[356 tokens | 492ms] Query: Realtime subscription handling
+[527 tokens | 389ms] Query: Auth session management
+=> Average tokens for Supabase: 333.2 | Avg latency: 524.4ms
+
+========================================
+OVERALL AVERAGE: 278.3 tokens per query
+OVERALL LATENCY: 593.4 ms per query
+========================================
