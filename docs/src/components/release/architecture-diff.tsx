@@ -10,7 +10,7 @@ export function ArchitectureDiff() {
       {/* Header */}
       <div className="flex bg-neutral-900 border-b border-neutral-800 text-neutral-400">
         <div className="flex-1 py-3 px-6 border-r border-neutral-800">Old Retrieval Pipeline</div>
-        <div className="flex-1 py-3 px-6">New Retrieval Pipeline (v0.7.0)</div>
+        <div className="flex-1 py-3 px-6">New Retrieval Pipeline</div>
       </div>
 
       {/* Body */}

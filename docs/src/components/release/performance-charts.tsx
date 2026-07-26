@@ -19,7 +19,7 @@ export function PerformanceCharts() {
         
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-4">
-            <div className="w-16 text-neutral-500 text-right">v0.6.0</div>
+            <div className="w-20 text-neutral-500 text-right">Previous</div>
             <div className="flex-1 h-8 bg-[#1a1a1a] rounded relative overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
@@ -32,7 +32,7 @@ export function PerformanceCharts() {
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="w-16 text-white font-bold text-right">v0.7.0</div>
+            <div className="w-20 text-white font-bold text-right">Current</div>
             <div className="flex-1 h-8 bg-[#1a1a1a] rounded relative overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
@@ -55,7 +55,7 @@ export function PerformanceCharts() {
         
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-4">
-            <div className="w-16 text-neutral-500 text-right">v0.6.0</div>
+            <div className="w-20 text-neutral-500 text-right">Previous</div>
             <div className="flex-1 h-8 bg-[#1a1a1a] rounded relative overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
@@ -68,7 +68,7 @@ export function PerformanceCharts() {
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="w-16 text-white font-bold text-right">v0.7.0</div>
+            <div className="w-20 text-white font-bold text-right">Current</div>
             <div className="flex-1 h-8 bg-[#1a1a1a] rounded relative overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
@@ -91,7 +91,7 @@ export function PerformanceCharts() {
         
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-4">
-            <div className="w-16 text-neutral-500 text-right">v0.6.0</div>
+            <div className="w-20 text-neutral-500 text-right">Previous</div>
             <div className="flex-1 h-8 bg-[#1a1a1a] rounded relative overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
@@ -104,7 +104,7 @@ export function PerformanceCharts() {
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="w-16 text-white font-bold text-right">v0.7.0</div>
+            <div className="w-20 text-white font-bold text-right">Current</div>
             <div className="flex-1 h-8 bg-[#1a1a1a] rounded relative overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}

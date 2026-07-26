@@ -66,7 +66,7 @@ contextos reindex
 
 ### 100-Query Retrieval Benchmark (Redis 7.x Codebase)
 
-A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries) on the Redis 7.x C codebase (799 files), measured on v0.7.0. "Accuracy" here is file-level recall among the retrieved candidates.
+A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries) on the Redis 7.x C codebase (799 files). "Accuracy" here is file-level recall among the retrieved candidates.
 
 | Metric | ContextOS |
 |--------|-----------|
@@ -76,7 +76,6 @@ A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries
 | **Avg tokens / query** | **589** |
 | **Total tokens** (100 queries) | **58,880** |
 
-*A one-time historical comparison against a Cursor `@codebase` proxy (ripgrep + file extraction) showed ContextOS using up to 99% fewer tokens for comparable recall. ContextOS is no longer benchmarked against competitors — the ongoing CI benchmark measures ContextOS retrieval recall only.*
 
 **Key Takeaways:**
 - **Surgical Precision:** ContextOS achieves 97% file-level accuracy while using **up to 99% fewer tokens** than traditional multi-file keyword chunking.

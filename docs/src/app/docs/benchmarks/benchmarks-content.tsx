@@ -13,11 +13,6 @@ export function BenchmarksContent() {
     >
       <SourceLink path="tests/benchmarks" />
 
-      <h2>The Proxy Problem</h2>
-      <p>
-        Traditional RAG (Retrieval-Augmented Generation) systems naively stuff entire files into the prompt, hoping the LLM will find the needle in the haystack. In large codebases, this strategy fails catastrophically: token limits are breached, costs skyrocket, and LLM attention degrades ("lost in the middle"). 
-      </p>
-
       <h2>Compression Benchmarks</h2>
       <p>
         ContextOS solves this by aggressively stripping out noise: omitting unchanged imports, stripping documentation strings, and extracting only the exact code blocks necessary to satisfy the query.
@@ -30,10 +25,9 @@ export function BenchmarksContent() {
           <div className="flex flex-col gap-2">
             <span className="text-neutral-500 font-mono text-sm uppercase tracking-widest">Average Tokens / Query</span>
             <div className="flex items-end gap-4">
-              <span className="text-4xl font-bold text-white">669</span>
-              <span className="text-neutral-500 mb-1 line-through">6,534</span>
+              <span className="text-4xl font-bold text-white">589</span>
             </div>
-            <p className="text-xs text-neutral-400 mt-2">ContextOS vs Naive File-Level Proxy Retrieval. An ~89.7% reduction in token costs.</p>
+            <p className="text-xs text-neutral-400 mt-2">Average token usage per query across the 100-query benchmark.</p>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -55,7 +49,7 @@ export function BenchmarksContent() {
           <div className="flex flex-col gap-2">
             <span className="text-neutral-500 font-mono text-sm uppercase tracking-widest">Conceptual Accuracy</span>
             <div className="flex items-end gap-4">
-              <span className="text-4xl font-bold text-blue-400">94%</span>
+              <span className="text-4xl font-bold text-blue-400">96%</span>
             </div>
             <p className="text-xs text-neutral-400 mt-2">Successfully mapping the semantic intent of the query to correct codebase domains.</p>
           </div>
