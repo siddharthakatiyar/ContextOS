@@ -72,7 +72,7 @@ export default function ReleasesPage() {
 
         <div className="flex flex-col gap-8 relative">
           <div className="w-full rounded-xl overflow-hidden border border-neutral-800 shadow-2xl mb-8">
-            <Image src={queryWhereGif} alt="Claude Code using ContextOS" className="w-full object-cover" unoptimized />
+            <Image src={queryWhereGif} alt="AI Agent using ContextOS" className="w-full object-cover" unoptimized />
           </div>
 
           {/* Timeline Line */}

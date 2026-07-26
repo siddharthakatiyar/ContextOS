@@ -11,7 +11,7 @@ const pipelineSteps = [
   { id: "graph", title: "Graph Expansion", desc: "Follow imports and references to gather full context." },
   { id: "rank", title: "Intent Ranking", desc: "Score symbols based on relevance to the user's intent." },
   { id: "compress", title: "Compression", desc: "Truncate low-signal lines and fit within the token budget." },
-  { id: "llm", title: "LLM Context", desc: "The final surgical context package passed to Claude or GPT." },
+  { id: "llm", title: "LLM Context", desc: "The final surgical context package passed to the AI Agent." },
 ];
 
 export function PipelineVisualizer() {

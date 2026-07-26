@@ -49,7 +49,7 @@ export default function DesignDecisionsDocs() {
 
       <h2>Why MCP? (Model Context Protocol)</h2>
       <p>
-        Instead of building a bespoke VSCode extension, a JetBrains plugin, and a standalone chat UI, ContextOS exposes its retrieval engine via the open Model Context Protocol. This allows it to natively hook into Claude Desktop, Cursor, and any future AI agents without requiring any custom UI development.
+        Instead of building a bespoke VSCode extension, a JetBrains plugin, and a standalone chat UI, ContextOS exposes its retrieval engine via the open Model Context Protocol. This allows it to natively hook into any AI Agent without requiring any custom UI development.
       </p>
     </DocPage>
   );

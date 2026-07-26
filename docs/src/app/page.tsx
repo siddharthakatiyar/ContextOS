@@ -94,7 +94,7 @@ export default function Home() {
           <div className="flex flex-col gap-4">
             <h2 className="text-3xl font-bold tracking-tight">See it in action</h2>
             <p className="text-lg text-neutral-400 max-w-2xl">
-              A side-by-side comparison of Claude Code answering a question about the repository.
+              A side-by-side comparison of an AI Agent answering a question about the repository.
             </p>
           </div>
           
@@ -106,7 +106,7 @@ export default function Home() {
               </div>
               <p className="text-sm text-neutral-500 min-h-[40px]">Spawns expensive Explore subagents, blindly greps files, and suffers from massive context bloat.</p>
               <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900 aspect-[16/10] relative">
-                <img src="/without-contextos.gif" alt="Claude Code without ContextOS" className="absolute inset-0 w-full h-full object-cover object-left-top" />
+                <img src="/without-contextos.gif" alt="AI Agent without ContextOS" className="absolute inset-0 w-full h-full object-cover object-left-top" />
               </div>
             </div>
 
@@ -117,7 +117,7 @@ export default function Home() {
               </div>
               <p className="text-sm text-neutral-500 min-h-[40px]">Instant semantic retrieval, pinpoint accuracy, and minimal context usage in a single tool call.</p>
               <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900 aspect-[16/10] relative">
-                <img src="/query-where.gif" alt="Claude Code with ContextOS" className="absolute inset-0 w-full h-full object-cover object-left-top" />
+                <img src="/query-where.gif" alt="AI Agent with ContextOS" className="absolute inset-0 w-full h-full object-cover object-left-top" />
               </div>
             </div>
           </div>

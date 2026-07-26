@@ -69,7 +69,7 @@ export default function CliDocs() {
 
       <h3><code>daemon</code></h3>
       <p>
-        Starts the ContextOS HTTP / JSON-RPC server on a local port. This daemon is used by IDE extensions (like Cursor or VSCode) to communicate with the retrieval engine over a persistent connection.
+        Starts the ContextOS HTTP / JSON-RPC server on a local port. This daemon is used by IDE extensions (like any AI Agent or IDE) to communicate with the retrieval engine over a persistent connection.
       </p>
       <pre>
         <code className="language-bash">

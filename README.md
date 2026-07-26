@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 AI coding assistants waste thousands of tokens searching large codebases, often missing the files that actually matter.
 
-ContextOS indexes your repository into a semantic graph so agents like Cursor, Claude Code, and Codex retrieve only the relevant functions, classes, documentation, and dependencies—reducing token usage while improving accuracy.
+ContextOS indexes your repository into a semantic graph so AI Agents retrieve only the relevant functions, classes, documentation, and dependencies—reducing token usage while improving accuracy.
 
 Instead of sending entire files, ContextOS sends only the code the model actually needs.
 
@@ -23,7 +23,7 @@ Instead of relying on ripgrep and whole-file context, ContextOS understands your
 - ✓ **Incremental indexing** with stable chunk IDs and line ranges
 - ✓ **Local-first (SQLite + FTS5 + optional sqlite-vec)**
 - ✓ **Confidence-gated embeddings** — emb kNN only when keyword confidence is low (or when explicitly enabled)
-- ✓ **Works with Cursor, Claude Code, and any MCP client**
+- ✓ **Works with any AI Agent via MCP**
 
 ## Quick Start
 
@@ -37,9 +37,9 @@ contextos init
 ```
 
 > **Note:** You do **not** need to run `contextos serve` manually. 
-> The `serve` command is designed to be called by MCP clients (like Cursor, Claude Code, or RooCode) in the background over `stdio`. If you run it manually in your terminal, it will appear to hang as it waits for JSON-RPC messages.
+> The `serve` command is designed to be called by MCP clients (like any AI Agent) in the background over `stdio`. If you run it manually in your terminal, it will appear to hang as it waits for JSON-RPC messages.
 
-Open Cursor, Claude Desktop, or your preferred MCP client and start asking questions! That's it.
+Open your preferred AI Agent and start asking questions! That's it.
 
 After upgrading, reindex so schema and chunking changes take effect:
 
@@ -140,8 +140,8 @@ A 25-query end-to-end benchmark measuring the ability of an AI agent to independ
                   ▼
          MCP Server (Stdio)
                   │
-                  ▼
-       Cursor, Claude Code, Codex
+                   ▼
+        AI Agent (via MCP)
 ```
 
 ## Features
