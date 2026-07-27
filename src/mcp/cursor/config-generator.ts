@@ -12,11 +12,16 @@ export function generateCursorConfig(options: {
   projectRoot: string;
   workspaceName?: string;
 }): CursorMcpConfig {
+  const command = process.env.CONTEXTOS_MCP_COMMAND || 'contextos';
+  const args = process.env.CONTEXTOS_MCP_ARGS
+    ? process.env.CONTEXTOS_MCP_ARGS.split(' ').filter(Boolean)
+    : ['serve'];
+
   return {
     mcpServers: {
       contextos: {
-        command: 'node',
-        args: ['/Volumes/ExtremeSSD/code/contextOS/dist/bin/contextos.js', 'serve'],
+        command,
+        args,
         env: {
           CONTEXTOS_REPO_ROOT: options.projectRoot,
           CONTEXTOS_WORKSPACE: options.workspaceName ?? ''
