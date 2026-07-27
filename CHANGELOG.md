@@ -8,6 +8,14 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ---
 
+## [0.9.5] - 2026-07-27
+
+### Changed
+
+- Release version bump to `v0.9.5`.
+
+---
+
 ## [0.9.4] - 2026-07-26
 
 ### Added
