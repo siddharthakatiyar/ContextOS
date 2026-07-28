@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { generateCursorConfig, generateCursorConfigGlobal } from '../../src/mcp/cursor/config-generator.js';
+import {
+  generateCursorConfig,
+  generateCursorConfigGlobal
+} from '../../src/mcp/cursor/config-generator.js';
 
 describe('generateCursorConfig', () => {
   const originalCommand = process.env.CONTEXTOS_MCP_COMMAND;
