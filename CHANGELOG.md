@@ -20,6 +20,14 @@ See the full [release notes](./v1.0.0-release-notes.md) for highlights.
 
 ---
 
+## [0.9.5] - 2026-07-27
+
+### Changed
+
+- Release version bump to `v0.9.5`.
+
+---
+
 ## [0.9.4] - 2026-07-26
 
 ### Added
