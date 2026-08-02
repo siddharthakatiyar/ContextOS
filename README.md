@@ -282,6 +282,13 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 - **Low latency:** Local SQLite FTS5 retrieval typically completes in milliseconds.
 - **Cost savings:** Smaller prompts for API-backed agents mean significantly lower spend per query, and fewer API round-trips.
 
+## Author
+
+**Siddhartha Katiyar**
+
+- Twitter/X: [@siddharthakat25](https://x.com/siddharthakat25)
+- LinkedIn: [Siddhartha Katiyar](https://www.linkedin.com/in/siddharthakatiyar/)
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
