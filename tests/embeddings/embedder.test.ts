@@ -1,17 +1,35 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   isEmbeddingsAvailable,
   embedTexts,
   embedChunkText,
-  _resetEmbedderForTests
+  _resetEmbedderForTests,
+  getEmbeddingModelId,
+  getEmbeddingDims
 } from '../../src/core/embeddings/index.js';
 import type { Chunk } from '../../src/core/storage/types.js';
+
+const { pipelineMock, extractorMock, transformersEnv } = vi.hoisted(() => {
+  const extractor = vi.fn(async () => ({ data: new Float32Array(384).fill(1), dims: [1, 384] }));
+  return {
+    extractorMock: extractor,
+    pipelineMock: vi.fn(async () => extractor),
+    transformersEnv: { cacheDir: '', allowLocalModels: false }
+  };
+});
+
+vi.mock('@huggingface/transformers', () => ({
+  pipeline: pipelineMock,
+  env: transformersEnv
+}));
 
 describe('embeddings embedder', () => {
   const prevEnv = process.env.CONTEXTOS_EMBEDDINGS;
 
   beforeEach(() => {
     _resetEmbedderForTests();
+    pipelineMock.mockClear();
+    extractorMock.mockClear();
   });
 
   afterEach(() => {
@@ -44,6 +62,37 @@ describe('embeddings embedder', () => {
     _resetEmbedderForTests({ unavailable: true });
     expect(isEmbeddingsAvailable()).toBe(false);
     expect(await embedTexts(['x'])).toEqual([]);
+  });
+
+  it('loads the Hugging Face MiniLM pipeline with normalized 384-dimension output', async () => {
+    delete process.env.CONTEXTOS_EMBEDDINGS;
+    const result = await embedTexts(['hello world']);
+
+    expect(getEmbeddingModelId()).toBe('sentence-transformers/all-MiniLM-L6-v2');
+    expect(getEmbeddingDims()).toBe(384);
+    expect(pipelineMock).toHaveBeenCalledWith(
+      'feature-extraction',
+      'sentence-transformers/all-MiniLM-L6-v2'
+    );
+    expect(extractorMock).toHaveBeenCalledWith('hello world', {
+      pooling: 'mean',
+      normalize: true
+    });
+    expect(result[0]).toHaveLength(384);
+    expect(transformersEnv.cacheDir).toContain('.contextos');
+    expect(transformersEnv.allowLocalModels).toBe(true);
+  });
+
+  it('mean-pools token-level transformer output', async () => {
+    delete process.env.CONTEXTOS_EMBEDDINGS;
+    extractorMock.mockResolvedValueOnce({
+      data: new Float32Array([...new Array(384).fill(1), ...new Array(384).fill(3)]),
+      dims: [1, 2, 384]
+    });
+
+    const [result] = await embedTexts(['two tokens']);
+    expect(result).toHaveLength(384);
+    expect(result[0]).toBeCloseTo(1 / Math.sqrt(384));
   });
 });
 

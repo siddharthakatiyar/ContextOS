@@ -8,7 +8,6 @@ import { PromptsRepo } from '../../core/storage/prompts-repo.js';
 import { estimateTokens } from '../../utils/tokens.js';
 import { recordRetrievedChunks } from './feedback.js';
 import { loadConfig } from '../../config/index.js';
-import type { ScoredChunk } from '../../core/retrieval/types.js';
 
 import { mergeMemoryPipeline } from '../../core/session/memory-merge.js';
 import { globalSentRegistry } from '../../core/session/sent-registry.js';
@@ -87,7 +86,7 @@ export async function executeGetContext(
   const compiled = compile(result, {
     maxTokens,
     maxExactTokens,
-    outputFormat: 'markdown',
+    outputFormat,
     signalTerms: [...(result.intent?.identifiers || []), ...(result.intent?.concepts || [])]
   });
 

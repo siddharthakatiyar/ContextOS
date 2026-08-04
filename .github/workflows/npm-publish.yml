@@ -49,11 +49,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
-        
-      - name: Run tests
-        run: npm test
+      - name: Run release gates
+        run: |
+          npm run format:check
+          npm run lint
+          npm run build
+          npm test
+          npm run lint --workspace docs
+          npm run build --workspace docs
+          npm audit --omit=dev --audit-level=critical
+
+      - name: Smoke-test packed CLI
+        run: |
+          PACKAGE_TARBALL=$(npm pack --pack-destination "$RUNNER_TEMP" --silent)
+          npm install --prefix "$RUNNER_TEMP/contextos-smoke" "$RUNNER_TEMP/$PACKAGE_TARBALL" --no-audit --no-fund
+          "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --version | grep -Fx '1.0.0'
+          "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --help >/dev/null
 
       - name: Upgrade NPM for OIDC support
         run: npm install -g npm@latest

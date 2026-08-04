@@ -1,10 +1,22 @@
 # Changelog
 
-![Claude Code using ContextOS semantic search](docs/public/query-where.gif)
+![AI Agent using ContextOS semantic search](docs/public/query-where.gif)
 
 All notable changes to ContextOS are documented here.
 
 This project follows Semantic Versioning and Keep a Changelog.
+
+---
+
+## [1.0.0] - 2026-08-04
+
+First stable release of ContextOS.
+
+See the full [release notes](./v1.0.0-release-notes.md) for highlights.
+
+### Added
+
+- **v1.0.0 Stable**: ContextOS is now production-ready. Documented CLI commands, default MCP tools, and configuration keys are covered by the stability policy in `STABILITY.md`. The rebuildable SQLite index remains an internal implementation detail.
 
 ---
 
@@ -38,11 +50,11 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 > **AI agents now retrieve semantic context before wandering through your repository.**
 
-This release significantly improves the experience of using ContextOS with Claude Code and other MCP-compatible coding agents. It also makes large repository indexing substantially more resilient during massive filesystem changes.
+This release significantly improves the experience of using ContextOS with MCP-compatible AI Agents. It also makes large repository indexing substantially more resilient during massive filesystem changes.
 
 ### 🚀 Highlights
 
-- Claude Code now automatically receives semantic retrieval instructions during `contextos init`, ensuring it prioritizes `get_context` before falling back to expensive file exploration.
+- AI Agents now automatically receive semantic retrieval instructions during `contextos init`, ensuring they prioritize `get_context` before falling back to expensive file exploration.
 - Massive filesystem events (such as `git checkout`, `git switch`, or `npm install`) are now intelligently coalesced into a single background re-index instead of triggering thousands of individual updates.
 - Better defaults for AI coding workflows with no additional configuration.
 
@@ -56,7 +68,7 @@ ContextOS now configures supported AI coding agents to prefer semantic retrieval
 
 Supported today:
 
-- Claude Code (via automatic `CLAUDE.md` generation)
+- Any AI Agent (via automatic configuration generation)
 - MCP clients supporting the official `instructions` field
 
 This dramatically reduces unnecessary exploration while improving retrieval accuracy.
@@ -87,14 +99,14 @@ This keeps indexing responsive even on very large repositories.
 
 ### Changed
 
-- Improved initialization experience for Claude Code users.
+- Improved initialization experience for AI Agents.
 - Better indexing behaviour during large repository updates.
 
 ---
 
 ### Fixed
 
-- Claude Code now automatically receives retrieval guidance even though it currently ignores the MCP SDK `instructions` field.
+- AI Agents now automatically receive retrieval guidance even if they ignore the MCP SDK `instructions` field.
 
 ---
 

@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export const exportCommand = new Command('export')
   .description('Export the ContextOS graph to a JSON file for sharing')
@@ -20,7 +21,7 @@ export const exportCommand = new Command('export')
       const files = dbInstance.prepare('SELECT * FROM files').all();
 
       const exportData = {
-        version: '0.2.0',
+        version: '1.0.0',
         exportedAt: Date.now(),
         data: {
           chunks,
@@ -35,7 +36,7 @@ export const exportCommand = new Command('export')
       spinner.succeed(
         `Exported ${chunks.length} chunks, ${relationships.length} relationships, and ${files.length} files to ${chalk.green(outfile)}`
       );
-    } catch (e: any) {
-      spinner.fail(`Export failed: ${e.message}`);
+    } catch (error) {
+      spinner.fail(`Export failed: ${getErrorMessage(error)}`);
     }
   });

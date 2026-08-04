@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -36,7 +36,7 @@ vi.mock('../../src/mcp/cursor/config-generator.js', () => ({
 describe('CLI init command', () => {
   let tmpCwd: string;
   let originalCwd: () => string;
-  let homedirSpy: any;
+  let homedirSpy: MockInstance;
   let originalHome: string | undefined;
 
   beforeEach(() => {

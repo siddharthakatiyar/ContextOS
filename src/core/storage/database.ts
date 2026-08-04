@@ -3,7 +3,8 @@ import { loadConfig } from '../../config/index.js';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { SCHEMA_SQL, applyMigrations } from './schema.js';
+import { applyMigrations } from './schema.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export function getContextOSHome(): string {
   return path.join(os.homedir(), '.contextos');
@@ -60,12 +61,13 @@ export class DB {
       this.db = dbInstance;
       // 2. Run migrations
       this.runMigrations();
-    } catch (err: any) {
+    } catch (error) {
+      const message = getErrorMessage(error);
       // If corruption is detected either by quick_check, a SQLITE_CORRUPT error, or "file is not a database"
       if (
-        err.message.includes('corrupt') ||
-        err.message.includes('DatabaseCorruptedError') ||
-        err.message.includes('file is not a database')
+        message.includes('corrupt') ||
+        message.includes('DatabaseCorruptedError') ||
+        message.includes('file is not a database')
       ) {
         console.error(
           `[ContextOS] Database corruption detected at ${resolvedPath}. Auto-recovering...`
@@ -88,7 +90,7 @@ export class DB {
         // Re-run migrations
         this.runMigrations();
       } else {
-        throw err;
+        throw error;
       }
     }
   }
@@ -96,10 +98,10 @@ export class DB {
   private runMigrations() {
     try {
       applyMigrations(this.db);
-    } catch (e: any) {
-      console.error(`Error executing schema migrations: ${e.message}`);
+    } catch (error) {
+      console.error(`Error executing schema migrations: ${getErrorMessage(error)}`);
       // Re-throw so the constructor can catch SQLITE_CORRUPT and recover
-      throw e;
+      throw error;
     }
   }
 
@@ -117,7 +119,7 @@ export class DB {
         // TRUNCATE mode commits transactions and truncates the WAL file to zero bytes
         try {
           this.db.pragma('wal_checkpoint(TRUNCATE)');
-        } catch (e) {
+        } catch {
           // ignore checkpoint errors on close
         }
         this.db.close();
@@ -142,8 +144,8 @@ export class DB {
     const localDbPath = path.join(startDir, '.contextos', 'index.db');
     try {
       dbs.push(new DB(localDbPath));
-    } catch (e: any) {
-      console.error(`Failed to open local DB at ${localDbPath}: ${e.message}`);
+    } catch (error) {
+      console.error(`Failed to open local DB at ${localDbPath}: ${getErrorMessage(error)}`);
     }
 
     // 2. Add global DB if it exists and is different from local
@@ -151,8 +153,8 @@ export class DB {
     if (fs.existsSync(globalDbPath) && globalDbPath !== localDbPath) {
       try {
         dbs.push(new DB(globalDbPath));
-      } catch (e: any) {
-        console.error(`Failed to open global DB at ${globalDbPath}: ${e.message}`);
+      } catch (error) {
+        console.error(`Failed to open global DB at ${globalDbPath}: ${getErrorMessage(error)}`);
       }
     }
 

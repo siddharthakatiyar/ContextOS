@@ -23,7 +23,7 @@ describe('Watcher', () => {
 
     expect(chokidar.watch).toHaveBeenCalled();
     const callArgs = vi.mocked(chokidar.watch).mock.calls[0];
-    const options = callArgs[1] as any;
+    const options = callArgs[1] as { followSymlinks?: boolean };
 
     expect(options).toBeDefined();
     expect(options.followSymlinks).toBe(false);

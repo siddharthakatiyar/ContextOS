@@ -4,6 +4,7 @@ import { DB } from '../../core/storage/database.js';
 import { RelationshipsRepo } from '../../core/storage/relationships-repo.js';
 import { ChunksRepo } from '../../core/storage/chunks-repo.js';
 import { estimateTokens } from '../../utils/tokens.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export function registerGetGraphTools(server: McpServer, db: DB) {
   const relsRepo = new RelationshipsRepo(db.getInstance());
@@ -78,8 +79,11 @@ export function registerGetGraphTools(server: McpServer, db: DB) {
         }
 
         return { content: [{ type: 'text', text: output }] };
-      } catch (error: any) {
-        return { content: [{ type: 'text', text: `Error: ${error.message}` }], isError: true };
+      } catch (error) {
+        return {
+          content: [{ type: 'text', text: `Error: ${getErrorMessage(error)}` }],
+          isError: true
+        };
       }
     }
   );
@@ -129,9 +133,9 @@ export function registerLegacyGetGraphTools(server: McpServer, db: DB) {
         return {
           content: [{ type: 'text', text: output }]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error fetching neighbors: ${error.message}` }],
+          content: [{ type: 'text', text: `Error fetching neighbors: ${getErrorMessage(error)}` }],
           isError: true
         };
       }
@@ -162,9 +166,9 @@ export function registerLegacyGetGraphTools(server: McpServer, db: DB) {
         return {
           content: [{ type: 'text', text: output }]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error fetching symbol: ${error.message}` }],
+          content: [{ type: 'text', text: `Error fetching symbol: ${getErrorMessage(error)}` }],
           isError: true
         };
       }

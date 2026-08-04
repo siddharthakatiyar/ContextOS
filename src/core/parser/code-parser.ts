@@ -1,4 +1,5 @@
 import { createRequire } from 'module';
+import type Parser from 'web-tree-sitter';
 import { ParsedCodeDocument, CodeSymbol } from './types.js';
 
 const localRequire = createRequire(import.meta.url);
@@ -22,15 +23,15 @@ const LANGUAGE_EXT_MAP: Record<string, string> = {
   '.hpp': 'cpp'
 };
 
-let TreeSitter: any = null;
+let TreeSitter: typeof Parser | null = null;
 let parserInitPromise: Promise<void> | null = null;
-const languageCache = new Map<string, any>();
+const languageCache = new Map<string, Parser.Language>();
 
-async function getParser(langName: string): Promise<any> {
+async function getParser(langName: string): Promise<Parser | null> {
   if (langName === 'unknown') return null;
 
   if (!TreeSitter) {
-    TreeSitter = localRequire('web-tree-sitter');
+    TreeSitter = localRequire('web-tree-sitter') as typeof Parser;
   }
 
   if (!parserInitPromise) {
@@ -112,16 +113,17 @@ function symbolKindForNode(nodeType: string): CodeSymbol['kind'] {
   return 'function';
 }
 
-function extractDocstring(node: any, isExport: boolean): string | undefined {
+function extractDocstring(node: Parser.SyntaxNode, isExport: boolean): string | undefined {
   const target = isExport ? node.parent : node;
   let prev = target?.previousSibling;
 
   if (node.type === 'function_definition' || node.type === 'class_definition') {
     const body = node.childForFieldName('body');
     if (body) {
-      const firstExpr = body.children?.find((c: any) => c.type === 'expression_statement');
-      if (firstExpr && firstExpr.child(0)?.type === 'string') {
-        return firstExpr.child(0).text;
+      const firstExpr = body.children.find((child) => child.type === 'expression_statement');
+      const firstChild = firstExpr?.child(0);
+      if (firstChild?.type === 'string') {
+        return firstChild.text;
       }
     }
   }
@@ -151,7 +153,7 @@ function extractDocstring(node: any, isExport: boolean): string | undefined {
 }
 
 /** Extract module/path targets from an import AST node. */
-function extractImportTargets(node: any): string[] {
+function extractImportTargets(node: Parser.SyntaxNode): string[] {
   const targets: string[] = [];
   const seen = new Set<string>();
 
@@ -163,7 +165,7 @@ function extractImportTargets(node: any): string[] {
     targets.push(cleaned);
   }
 
-  function walk(n: any) {
+  function walk(n: Parser.SyntaxNode | null) {
     if (!n) return;
     // JS/TS: string after `from` or bare `import 'x'`
     if (n.type === 'string' || n.type === 'string_fragment') {
@@ -196,10 +198,10 @@ function extractImportTargets(node: any): string[] {
     node.childForFieldName?.('source') ||
     node.childForFieldName?.('path') ||
     node.children?.find?.(
-      (c: any) =>
-        c.type === 'string' ||
-        c.type === 'interpreted_string_literal' ||
-        c.type === 'raw_string_literal'
+      (child) =>
+        child.type === 'string' ||
+        child.type === 'interpreted_string_literal' ||
+        child.type === 'raw_string_literal'
     );
   if (sourceField) {
     add(sourceField.text);
@@ -212,7 +214,7 @@ function extractImportTargets(node: any): string[] {
 
   // For JS/TS import { Foo } from './bar' — also note PascalCase imported bindings
   if (node.type === 'import_statement' || node.type === 'import_declaration') {
-    const collectIds = (n: any) => {
+    const collectIds = (n: Parser.SyntaxNode | null) => {
       if (!n) return;
       if (n.type === 'identifier') {
         const t = n.text;
@@ -245,7 +247,7 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
   const tree = parser.parse(rawContent);
 
   try {
-    function traverse(node: any, parentName?: string, insideFunction = false) {
+    function traverse(node: Parser.SyntaxNode, parentName?: string, insideFunction = false) {
       let currentParent = parentName;
 
       if (IMPORT_TYPES.has(node.type)) {
@@ -274,24 +276,30 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
           if (p?.type === 'parenthesized_expression') p = p.parent;
           if (p?.type === 'variable_declarator') {
             nameNode =
-              p.childForFieldName('name') || p.children?.find((c: any) => c.type === 'identifier');
+              p.childForFieldName('name') ||
+              p.children.find((child) => child.type === 'identifier') ||
+              null;
           }
           // else leave unnamed (anonymous callback) — skipped below
         } else if (!nameNode) {
           nameNode = node.childForFieldName?.('declarator');
           if (!nameNode)
-            nameNode = node.children?.find(
-              (c: any) =>
-                c.type === 'function_declarator' ||
-                c.type === 'pointer_declarator' ||
-                c.type === 'array_declarator' ||
-                c.type === 'init_declarator'
-            );
+            nameNode =
+              node.children.find(
+                (child) =>
+                  child.type === 'function_declarator' ||
+                  child.type === 'pointer_declarator' ||
+                  child.type === 'array_declarator' ||
+                  child.type === 'init_declarator'
+              ) || null;
           if (!nameNode)
-            nameNode = node.children?.find(
-              (c: any) =>
-                c.type === 'identifier' || c.type === 'name' || c.type === 'type_identifier'
-            );
+            nameNode =
+              node.children.find(
+                (child) =>
+                  child.type === 'identifier' ||
+                  child.type === 'name' ||
+                  child.type === 'type_identifier'
+              ) || null;
         }
 
         // C/C++ AST: function identifier is often inside a nested declarator (e.g. function_declarator)
@@ -318,12 +326,13 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
             }
             let next = current.childForFieldName?.('declarator');
             if (!next)
-              next = current.children?.find(
-                (c: any) =>
-                  c.type === 'identifier' ||
-                  c.type === 'type_identifier' ||
-                  c.type === 'field_identifier'
-              );
+              next =
+                current.children.find(
+                  (child) =>
+                    child.type === 'identifier' ||
+                    child.type === 'type_identifier' ||
+                    child.type === 'field_identifier'
+                ) || null;
             if (!next && current.childCount > 0) next = current.child(0);
             if (!next || next === current) break;
             current = next;
@@ -362,7 +371,10 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
         const nameNode =
           node.childForFieldName('name') ||
           node.children.find(
-            (c: any) => c.type === 'identifier' || c.type === 'type_identifier' || c.type === 'name'
+            (child) =>
+              child.type === 'identifier' ||
+              child.type === 'type_identifier' ||
+              child.type === 'name'
           );
         if (nameNode) {
           const className = nameNode.text;
@@ -390,7 +402,7 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
           if (child?.type === 'variable_declarator') {
             const nameNode =
               child.childForFieldName('name') ||
-              child.children?.find((c: any) => c.type === 'identifier');
+              child.children.find((candidate) => candidate.type === 'identifier');
             if (nameNode) {
               const isExport = node.parent?.type === 'export_statement';
               const emitNode = isExport ? node.parent! : node;

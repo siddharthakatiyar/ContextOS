@@ -38,7 +38,7 @@ export async function checkForUpdates(): Promise<void> {
         );
       }
     });
-  } catch (error) {
+  } catch {
     // Top level catch to ensure we never crash the MCP server
   }
 }

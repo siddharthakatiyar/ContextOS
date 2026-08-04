@@ -21,11 +21,12 @@ import { BackgroundIndexer } from './background-indexer.js';
 
 import { fileURLToPath } from 'url';
 import type { FSWatcher } from 'chokidar';
+import { getErrorCode, getErrorMessage } from '../../utils/errors.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let version = '0.3.0';
+let version = '1.0.0';
 try {
   let pkgPath = path.join(__dirname, '../../../../package.json');
   if (!fs.existsSync(pkgPath)) {
@@ -71,8 +72,8 @@ export class ContextOSDaemon {
       this.handleConnection(socket);
     });
 
-    this.server.on('error', (err: any) => {
-      console.error(`Daemon server error: ${err.message}`);
+    this.server.on('error', (error) => {
+      console.error(`Daemon server error: ${getErrorMessage(error)}`);
     });
   }
 
@@ -84,11 +85,12 @@ export class ContextOSDaemon {
         try {
           process.kill(pid, 0); // Check if alive
           throw new Error(`Daemon is already running with PID ${pid}`);
-        } catch (err: any) {
-          if (err.code === 'EPERM') {
+        } catch (error) {
+          const code = getErrorCode(error);
+          if (code === 'EPERM') {
             throw new Error(`Daemon is already running with PID ${pid} (owned by another user)`);
-          } else if (err.code !== 'ESRCH') {
-            throw err;
+          } else if (code !== 'ESRCH') {
+            throw error;
           }
           // Stale PID file, clean it up
           console.warn(`[ContextOS] Cleaning up stale PID file ${this.pidPath}`);
@@ -133,7 +135,7 @@ export class ContextOSDaemon {
         const logPath = path.join(path.dirname(this.pidPath), 'daemon.log');
         const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
-        const logWithTime = (level: string, ...args: any[]) => {
+        const logWithTime = (level: string, ...args: unknown[]) => {
           const msg = args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ');
           logStream.write(`[${new Date().toISOString()}] [${level}] ${msg}\n`);
         };
@@ -151,7 +153,7 @@ export class ContextOSDaemon {
             `Daemon uncaughtException [${err?.name || 'Error'}]: ${err?.message}\n${err?.stack || ''}`
           );
         });
-        process.on('unhandledRejection', (reason: any) => {
+        process.on('unhandledRejection', (reason) => {
           const detail =
             reason instanceof Error ? `${reason.message}\n${reason.stack || ''}` : String(reason);
           console.error(`Daemon unhandledRejection: ${detail}`);
@@ -198,8 +200,8 @@ export class ContextOSDaemon {
           } else {
             this.watcher = startWatcher(this.dbs[0], this.projectDir);
           }
-        } catch (err: any) {
-          console.error(`Failed to start background index: ${err.message}`);
+        } catch (error) {
+          console.error(`Failed to start background index: ${getErrorMessage(error)}`);
         }
 
         resolve();

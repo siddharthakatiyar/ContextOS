@@ -13,8 +13,8 @@ export function handleCliError(error: unknown) {
 
   if (error instanceof ZodError) {
     console.error(chalk.red.bold('✖ Configuration Error'));
-    (error as any).errors.forEach((err: any) => {
-      console.error(chalk.red(`  - ${err.path.join('.')}: ${err.message}`));
+    error.issues.forEach((issue) => {
+      console.error(chalk.red(`  - ${issue.path.join('.')}: ${issue.message}`));
     });
   } else if (error instanceof Error) {
     console.error(chalk.red.bold('✖ Error: ') + chalk.red(error.message));

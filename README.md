@@ -1,8 +1,10 @@
 # ContextOS
 
+[![NPM Version](https://img.shields.io/npm/v/@siddharthakatiyar/contextos.svg)](https://www.npmjs.com/package/@siddharthakatiyar/contextos)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 AI coding assistants waste thousands of tokens searching large codebases, often missing the files that actually matter.
 
-ContextOS indexes your repository into a semantic graph so agents like Cursor, Claude Code, and Codex retrieve only the relevant functions, classes, documentation, and dependencies—reducing token usage while improving accuracy.
+ContextOS indexes your repository into a semantic graph so AI Agents retrieve only the relevant functions, classes, documentation, and dependencies—reducing token usage while improving accuracy.
 
 Instead of sending entire files, ContextOS sends only the code the model actually needs.
 
@@ -21,7 +23,7 @@ Instead of relying on ripgrep and whole-file context, ContextOS understands your
 - ✓ **Incremental indexing** with stable chunk IDs and line ranges
 - ✓ **Local-first (SQLite + FTS5 + optional sqlite-vec)**
 - ✓ **Confidence-gated embeddings** — emb kNN only when keyword confidence is low (or when explicitly enabled)
-- ✓ **Works with Cursor, Claude Code, and any MCP client**
+- ✓ **Works with any AI Agent via MCP**
 
 ## Quick Start
 
@@ -35,15 +37,13 @@ contextos init
 ```
 
 > **Note:** You do **not** need to run `contextos serve` manually. 
-> The `serve` command is designed to be called by MCP clients (like Cursor, Claude Code, or RooCode) in the background over `stdio`. If you run it manually in your terminal, it will appear to hang as it waits for JSON-RPC messages.
+> The `serve` command is designed to be called by MCP clients (like any AI Agent) in the background over `stdio`. If you run it manually in your terminal, it will appear to hang as it waits for JSON-RPC messages.
 
-Open Cursor, Claude Desktop, or your preferred MCP client and start asking questions! That's it.
+Open your preferred AI Agent and start asking questions! That's it.
 
-After upgrading, reindex so schema and chunking changes take effect:
-
-```bash
-contextos reindex
-```
+After upgrading, restart your MCP client. The daemon automatically rebuilds the
+index when the indexer format changes; use `contextos reindex` only when you
+explicitly want to force a fresh rebuild.
 
 ## The Problem: Traditional vs. ContextOS
 
@@ -64,24 +64,38 @@ contextos reindex
 
 ### 100-Query Retrieval Benchmark (Redis 7.x Codebase)
 
-A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries) on the Redis 7.x C codebase (799 files), measured on v0.7.0. "Accuracy" here is file-level recall among the retrieved candidates.
+A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries) on the Redis 7.x C codebase (799 files). "Accuracy" here is file-level recall among the retrieved candidates.
 
 | Metric | ContextOS |
 |--------|-----------|
 | **Targeted file recall** (exact-function queries) | **98%** (49/50) |
-| **Conceptual file recall** (broad queries) | **94%** (47/50) |
-| **Overall file recall** | **96%** (96/100) |
-| **Avg tokens / query** | **669** |
-| **Total tokens** (100 queries) | **66,852** |
+| **Conceptual file recall** (broad queries) | **96%** (48/50) |
+| **Overall file recall** | **97%** (97/100) |
+| **Avg tokens / query** | **589** |
+| **Total tokens** (100 queries) | **58,880** |
 
-*A one-time historical comparison against a Cursor `@codebase` proxy (ripgrep + file extraction) showed ContextOS using up to 99% fewer tokens for comparable recall. ContextOS is no longer benchmarked against competitors — the ongoing CI benchmark measures ContextOS retrieval recall only.*
 
 **Key Takeaways:**
-- **Surgical Precision:** ContextOS achieves 96% file-level accuracy while using **up to 99% fewer tokens** than traditional multi-file keyword chunking.
+- **Surgical Precision:** ContextOS achieves 97% file-level accuracy while using **up to 99% fewer tokens** than traditional multi-file keyword chunking.
 - **Near-Flawless Targeted Retrieval:** ContextOS's AST-aware matcher reliably zeroes in on exact function implementations (98% hit rate).
-- **Strong Conceptual Retrieval:** ContextOS successfully resolves broad queries (e.g. "How does Redis start up?") to core implementation files 94% of the time, avoiding noise from dependencies or test scripts.
+- **Strong Conceptual Retrieval:** ContextOS successfully resolves broad queries (e.g. "How does Redis start up?") to core implementation files 96% of the time, avoiding noise from dependencies or test scripts.
 
+### Real-World Repository Benchmark
 
+A 25-query end-to-end benchmark measuring the ability of an AI agent to independently explore and answer complex architectural queries across 5 massive open-source repositories (5 queries each).
+
+| Repository | Agent Resolution Accuracy | Avg Tokens / Query |
+|------------|---------------------------|--------------------|
+| **Next.js** | 100% (5/5) | ~132 |
+| **React** | 100% (5/5) | ~470 |
+| **Langchain**| 100% (5/5) | ~194 |
+| **FastAPI** | 100% (5/5) | ~262 |
+| **Supabase** | 100% (5/5) | ~333 |
+| **Overall** | 100% (25/25) | **~278** |
+
+**Key Takeaways:**
+- **Reliable Resolution:** ContextOS consistently provided the necessary semantic context for the agent to correctly resolve all 25 complex architectural queries.
+- **Deep Search Capability:** In highly complex repositories like Supabase that force the agent into long multi-turn explorations, ContextOS maintains perfect resolution accuracy while severely undercutting traditional token consumption (averaging just 278 tokens across all repos).
 
 ## Real Retrieval Example
 
@@ -124,8 +138,8 @@ A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries
                   ▼
          MCP Server (Stdio)
                   │
-                  ▼
-       Cursor, Claude Code, Codex
+                   ▼
+        AI Agent (via MCP)
 ```
 
 ## Features
@@ -139,7 +153,7 @@ Tree-sitter extracts functions, classes, and methods. Nested methods record `par
 When a class has methods, the class chunk stores a short member list instead of repeating every method body.
 
 **Local embeddings (index-time)**  
-On upsert, chunks are embedded with a local MiniLM model (`@xenova/transformers`) into `sqlite-vec` when available. Indexing is on by default; **retrieval fusion is off by default** (keyword/RRF path is the accuracy baseline). Opt in with `embeddingsRetrieval: true` or `CONTEXTOS_EMBEDDINGS_RETRIEVAL=1`.
+On upsert, chunks are embedded with a local MiniLM model (`@huggingface/transformers`) into `sqlite-vec` when available. Indexing is on by default; **retrieval fusion is off by default** (keyword/RRF path is the accuracy baseline). Opt in with `embeddingsRetrieval: true` or `CONTEXTOS_EMBEDDINGS_RETRIEVAL=1`.
 
 ### Retrieval
 
@@ -185,7 +199,7 @@ ContextOS's SQLite database is fundamentally an ephemeral index. If corruption o
 Repository indexing now runs with bounded concurrency to overlap CPU-intensive parsing and disk I/O, dramatically speeding up `init` and `reindex` on large codebases.
 
 **MCP tools**  
-`get_context`, `save_context`, `reindex_context`, `get_neighbors`, `get_symbol`, `ctx_symbol`, `ctx_read_file`, `ctx_expand`, `ctx_execute`, `learn_fact`, `forget_fact`, `ctx_remember`, `rate_chunk`, `ctx_list_topics`, `ctx_read_topic`, and `contextos_status`.
+The default stable tools are `get_context`, `reindex_context`, `contextos_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, `ctx_remember`, `learn_fact`, `forget_fact`, `rate_chunk`, `ctx_symbol`, `get_neighbors`, and `get_symbol`. Deprecated compatibility tools such as `save_context`, `ctx_list_topics`, and `ctx_read_topic` are available only when `legacyTools` is enabled.
 
 **Zero-config setup**  
 `contextos init` indexes the repo, writes MCP config if missing (does not overwrite an existing `contextos` MCP entry), and can start the background daemon.
@@ -260,11 +274,18 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 
 ## Quantifiable Benefits
 
-- **Token Efficiency:** ~669 tokens/query (66.8k across 100 queries); a one-time comparison measured up to 99% fewer tokens than a multi-file extraction proxy.
+- **Token Efficiency:** ~589 tokens/query (58.8k across 100 queries); a one-time comparison measured up to 99% fewer tokens than a multi-file extraction proxy.
 - **98% Precision on Exact Functions:** The AST-aware matcher reliably finds implementation bodies instead of grepping test files.
-- **Robust Conceptual Retrieval:** Resolves broad queries accurately 94% of the time.
+- **Robust Conceptual Retrieval:** Resolves broad queries accurately 96% of the time.
 - **Low latency:** Local SQLite FTS5 retrieval typically completes in milliseconds.
 - **Cost savings:** Smaller prompts for API-backed agents mean significantly lower spend per query, and fewer API round-trips.
+
+## Author
+
+**Siddhartha Katiyar**
+
+- Twitter/X: [@siddharthakat25](https://x.com/siddharthakat25)
+- LinkedIn: [Siddhartha Katiyar](https://www.linkedin.com/in/siddharthakatiyar/)
 
 ## License
 

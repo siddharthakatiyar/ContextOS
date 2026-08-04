@@ -24,7 +24,7 @@ export default function CompressionDocs() {
         If a user queries for the <code>validate()</code> method, standard vector DBs return the <i>entire file</i>. If that file is 3,000 lines long, it consumes 30k+ tokens instantly. 
       </p>
       <p>
-        ContextOS compiles results at the AST node level, enforcing a hard <code>maxTokenBudget</code> (default: 40k). 
+        ContextOS compiles results at the AST node level, enforcing a hard <code>maxTokenBudget</code> (default: 1,200 tokens; configurable). 
       </p>
 
       <h2>Token Budgeting Algorithm</h2>
@@ -37,6 +37,14 @@ export default function CompressionDocs() {
         <li><strong>Calculate Framing Overhead:</strong> For each file, we calculate the tokens required for XML framing: <code>&lt;file path="..."&gt;...&lt;/file&gt;</code>.</li>
         <li><strong>Exact Token Measurement:</strong> We use the <code>gpt-tokenizer</code> package to physically count tokens on the fly.</li>
       </ol>
+
+      <h2>Token Clamping & Stub Tiers</h2>
+      <p>
+        To prevent large repositories from generating overwhelming context payloads, ContextOS utilizes <strong>Token Clamping</strong>. The compiler restricts exact token matches via a fast heuristic tokenizer before falling back to exact byte-pair encoding.
+      </p>
+      <p>
+        Additionally, MCP client requests can specify a <code>tier: "stub"</code> parameter (introduced in v0.9.4). This heavily clamps the maximum token budget (e.g., capping at 250 tokens), optimizing for ultra-low latency when the LLM only needs brief structural overviews rather than deep implementation details.
+      </p>
 
       <h2>Fallback Mechanisms</h2>
       <p>

@@ -1,123 +1,176 @@
-import fs from 'fs';
-import path from 'path';
-import { execSync } from 'child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const EXAMPLES_DIR = path.join(import.meta.dirname, '../retrieval-examples');
 const CONTEXTOS_BIN = path.join(import.meta.dirname, '../dist/bin/contextos.js');
+const WAIT_BUFFER = new Int32Array(new SharedArrayBuffer(4));
 
-function runBenchmark() {
-  const dirs = fs.readdirSync(EXAMPLES_DIR).filter(d => fs.statSync(path.join(EXAMPLES_DIR, d)).isDirectory());
-  
+type BenchmarkCase = {
+  query: string;
+  expectedFiles: string[];
+  minRecall?: number;
+};
+
+type QueryResult = {
+  tokens?: number;
+  chunks: Array<{ sourceFile?: string }>;
+};
+
+function isolatedEnvironment(homeDirectory: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    HOME: homeDirectory,
+    USERPROFILE: homeDirectory
+  };
+}
+
+function copyFixture(sourceDirectory: string, targetDirectory: string): void {
+  fs.cpSync(sourceDirectory, targetDirectory, {
+    recursive: true,
+    filter(source) {
+      const relative = path.relative(sourceDirectory, source);
+      if (!relative) return true;
+      const firstSegment = relative.split(path.sep)[0];
+      return !['.contextos', '.mcp.json', '.vscode', 'CLAUDE.md'].includes(firstSegment);
+    }
+  });
+}
+
+function stopDaemon(projectDirectory: string): void {
+  const pidPath = path.join(projectDirectory, '.contextos', 'daemon.pid');
+  if (!fs.existsSync(pidPath)) return;
+  const pid = Number.parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);
+  if (!Number.isInteger(pid) || pid <= 0) return;
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    return;
+  }
+  for (let attempt = 0; attempt < 20; attempt++) {
+    Atomics.wait(WAIT_BUFFER, 0, 0, 100);
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+  }
+  // The PID came from this benchmark's isolated project and is safe to force-stop.
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {}
+}
+
+function runBenchmark(): void {
+  const directories = fs
+    .readdirSync(EXAMPLES_DIR)
+    .filter((entry) => fs.statSync(path.join(EXAMPLES_DIR, entry)).isDirectory());
   let totalQueries = 0;
   let passedQueries = 0;
   let totalRecall = 0;
-  
-  for (const dir of dirs) {
-    // if (dir === 'large-generated') continue; // Skip large repo for this quick test
+  let failed = false;
 
-    const dirPath = path.join(EXAMPLES_DIR, dir);
-    const benchmarkFile = path.join(dirPath, 'benchmark.json');
-    
+  for (const directory of directories) {
+    const sourceDirectory = path.join(EXAMPLES_DIR, directory);
+    const benchmarkFile = path.join(sourceDirectory, 'benchmark.json');
     if (!fs.existsSync(benchmarkFile)) continue;
-    
-    console.log(`\n--- Benchmarking ${dir} ---`);
-    const benchmarks = JSON.parse(fs.readFileSync(benchmarkFile, 'utf8'));
-    
-    // Init the project
+
+    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), `contextos-bench-${directory}-`));
+    const projectDirectory = path.join(temporaryRoot, 'project');
+    const homeDirectory = path.join(temporaryRoot, 'home');
+    fs.mkdirSync(homeDirectory, { recursive: true });
+    copyFixture(sourceDirectory, projectDirectory);
+    const environment = isolatedEnvironment(homeDirectory);
+
+    console.log(`\n--- Benchmarking ${directory} ---`);
+    const benchmarks = JSON.parse(fs.readFileSync(benchmarkFile, 'utf8')) as BenchmarkCase[];
+
     try {
-      const initOut = execSync(`node ${CONTEXTOS_BIN} init`, { cwd: dirPath });
-      console.log(`Init output for ${dir}:`, initOut.toString().substring(0, 500));
-      
-      // Wait for background indexing to complete before querying
-      let isIndexed = false;
-      for (let i = 0; i < 60; i++) {
-        const statusOut = execSync(`node ${CONTEXTOS_BIN} status --json`, { cwd: dirPath }).toString();
-        const status = JSON.parse(statusOut);
+      const initOutput = execFileSync(process.execPath, [CONTEXTOS_BIN, 'init'], {
+        cwd: projectDirectory,
+        env: environment
+      });
+      console.log(`Init output for ${directory}:`, initOutput.toString().substring(0, 500));
+
+      let indexed = false;
+      for (let attempt = 0; attempt < 60; attempt++) {
+        const statusOutput = execFileSync(process.execPath, [CONTEXTOS_BIN, 'status', '--json'], {
+          cwd: projectDirectory,
+          env: environment
+        }).toString();
+        const status = JSON.parse(statusOutput) as {
+          daemon?: { indexing?: { fullIndexCompleted?: boolean } };
+        };
         if (status.daemon?.indexing?.fullIndexCompleted) {
-          isIndexed = true;
+          indexed = true;
           break;
         }
-        // sleep 1 second
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+        Atomics.wait(WAIT_BUFFER, 0, 0, 1000);
       }
-      
-      if (!isIndexed) {
-        console.error(`Timeout waiting for indexing to complete for ${dir}`);
-        continue;
-      }
-    } catch (e: any) {
-      console.error(`Failed to init ContextOS in ${dir}:`, e.message, e.stdout?.toString(), e.stderr?.toString());
-      continue;
-    }
-    
-    for (const bm of benchmarks) {
-      totalQueries++;
-      const query = bm.query;
-      const expectedFiles: string[] = bm.expectedFiles;
-      
-      try {
-        const out = execSync(`node ${CONTEXTOS_BIN} query "${query}" --json`, { 
-          cwd: dirPath, 
-          stdio: 'pipe',
-          maxBuffer: 10 * 1024 * 1024 // 10MB
-        }).toString();
-        const results = JSON.parse(out);
-        
-        // Extract paths from context
-        const sourceFiles = new Set<string>();
-        for (const chunk of results.chunks) {
-          if (chunk.sourceFile) {
-            // E.g. "/Volumes/.../retrieval-examples/express-auth-routing/middleware/auth.ts"
-            // We want to match against "middleware/auth.ts"
-            const relativePath = path.relative(dirPath, chunk.sourceFile).replace(/\\/g, '/');
-            sourceFiles.add(relativePath);
-          }
-        }
-        
-        let foundCount = 0;
-        let missingFiles: string[] = [];
-        
-        for (const file of expectedFiles) {
-          if (sourceFiles.has(file)) {
-            foundCount++;
-          } else {
-            missingFiles.push(file);
-          }
-        }
-        
-        const recall = foundCount / expectedFiles.length;
-        const minRecall = bm.minRecall !== undefined ? bm.minRecall : 1.0;
-        const passed = recall >= minRecall;
-        
-        if (passed) passedQueries++;
-        totalRecall += recall;
-        
-        console.log(`Query: "${query}"`);
-        console.log(`  Recall: ${(recall * 100).toFixed(0)}% (${foundCount}/${expectedFiles.length})`);
-        console.log(`  Tokens: ${results.tokens || 'unknown'}`);
-        if (!passed) {
-          console.log(`  FAIL: Missing files: ${missingFiles.join(', ')}`);
-          if (results.chunks && results.chunks.length === 0) {
-            console.log(`  DEBUG: No chunks returned!`);
-          } else {
-            console.log(`  DEBUG: Chunks returned but mismatched paths?`);
-            for (const chunk of results.chunks) {
-              console.log(`    - ${chunk.sourceFile}`);
+      if (!indexed) throw new Error(`Timeout waiting for indexing to complete for ${directory}`);
+
+      for (const benchmark of benchmarks) {
+        totalQueries++;
+        try {
+          const output = execFileSync(
+            process.execPath,
+            [CONTEXTOS_BIN, 'query', benchmark.query, '--json'],
+            {
+              cwd: projectDirectory,
+              env: environment,
+              stdio: 'pipe',
+              maxBuffer: 10 * 1024 * 1024
             }
-          }
-        } else {
-          console.log(`  PASS`);
+          ).toString();
+          const results = JSON.parse(output) as QueryResult;
+          const sourceFiles = new Set(
+            results.chunks
+              .map((chunk) => chunk.sourceFile)
+              .filter((sourceFile): sourceFile is string => Boolean(sourceFile))
+              .map((sourceFile) => path.relative(projectDirectory, sourceFile).replace(/\\/g, '/'))
+          );
+          const missingFiles = benchmark.expectedFiles.filter((file) => !sourceFiles.has(file));
+          const foundCount = benchmark.expectedFiles.length - missingFiles.length;
+          const recall = foundCount / benchmark.expectedFiles.length;
+          const passed = recall >= (benchmark.minRecall ?? 1);
+          totalRecall += recall;
+          if (passed) passedQueries++;
+          else failed = true;
+
+          console.log(`Query: "${benchmark.query}"`);
+          console.log(
+            `  Recall: ${(recall * 100).toFixed(0)}% (${foundCount}/${benchmark.expectedFiles.length})`
+          );
+          console.log(`  Tokens: ${results.tokens ?? 'unknown'}`);
+          console.log(passed ? '  PASS' : `  FAIL: Missing files: ${missingFiles.join(', ')}`);
+        } catch (error) {
+          failed = true;
+          console.error(`Error running query: "${benchmark.query}"`);
+          console.error(error instanceof Error ? error.message : String(error));
         }
-      } catch (e: any) {
-        console.error(`Error running query: "${query}"`);
-        console.error(e.message);
       }
+    } catch (error) {
+      failed = true;
+      console.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      stopDaemon(projectDirectory);
+      fs.rmSync(temporaryRoot, { recursive: true, force: true });
     }
   }
-  
+
+  if (totalQueries === 0) {
+    console.error('No benchmark queries were executed.');
+    process.exitCode = 1;
+    return;
+  }
+  const averageRecall = (totalRecall / totalQueries) * 100;
   console.log(`\n=== Benchmark Summary ===`);
-  console.log(`Passed ${passedQueries} / ${totalQueries} queries (${((passedQueries / totalQueries) * 100).toFixed(1)}%)`);
-  console.log(`Average Recall: ${((totalRecall / totalQueries) * 100).toFixed(1)}%`);
+  console.log(
+    `Passed ${passedQueries} / ${totalQueries} queries (${((passedQueries / totalQueries) * 100).toFixed(1)}%)`
+  );
+  console.log(`Average Recall: ${averageRecall.toFixed(1)}%`);
+  if (failed) process.exitCode = 1;
 }
 
 runBenchmark();

@@ -5,6 +5,7 @@ import { DB, getContextOSHome } from '../../core/storage/database.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
 import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 import chalk from 'chalk';
+import { mergeContextosMcpConfig, validateJsonConfigs } from '../utils/mcp-config.js';
 
 export const initCommand = new Command('init')
   .description('Initialize ContextOS in the current repository')
@@ -12,6 +13,24 @@ export const initCommand = new Command('init')
     const cwd = process.cwd();
     const repoContextDir = path.join(cwd, '.contextos');
     const globalContextDir = path.join(getContextOSHome(), 'global');
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const antigravityGlobalPath = homeDir
+      ? path.join(homeDir, '.gemini', 'config', 'mcp_config.json')
+      : null;
+    const jsonConfigPaths = [
+      fs.existsSync(path.join(cwd, '.cursor')) ? path.join(cwd, '.cursor', 'mcp.json') : null,
+      antigravityGlobalPath,
+      fs.existsSync(path.join(cwd, '.agents'))
+        ? path.join(cwd, '.agents', 'mcp_config.json')
+        : null,
+      path.join(cwd, '.mcp.json'),
+      path.join(cwd, '.vscode', 'cline_mcp_settings.json'),
+      path.join(cwd, '.vscode', 'roo_mcp_settings.json')
+    ].filter((configPath): configPath is string => configPath !== null);
+
+    // Fail before writing any client configuration or starting the daemon. An
+    // invalid existing config must never be silently replaced.
+    validateJsonConfigs(jsonConfigPaths);
 
     // Create directories
     if (!fs.existsSync(repoContextDir)) fs.mkdirSync(repoContextDir, { recursive: true });
@@ -47,95 +66,46 @@ export const initCommand = new Command('init')
       // Generate cursor config if .cursor exists
       if (fs.existsSync(path.join(cwd, '.cursor'))) {
         const configPath = path.join(cwd, '.cursor', 'mcp.json');
-        let config: any = {};
-
-        if (fs.existsSync(configPath)) {
-          config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        }
-
-        if (!config.mcpServers) {
-          config.mcpServers = {};
-        }
-
-        // Only inject contexts if it doesn't already exist, so we don't overwrite manual local testing setups
-        if (!config.mcpServers.contextos) {
-          const generated = generateCursorConfig({
-            projectRoot: cwd
-          });
-
-          config.mcpServers = {
-            ...config.mcpServers,
-            ...generated.mcpServers
-          };
-        }
-
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-        console.log(`Updated Cursor MCP configuration at ${configPath}`);
+        const result = mergeContextosMcpConfig(
+          configPath,
+          generateCursorConfig({ projectRoot: cwd })
+        );
+        console.log(
+          `${result === 'preserved' ? 'Preserved' : 'Updated'} Cursor MCP configuration at ${configPath}`
+        );
       }
 
       // Generate Antigravity MCP config
       // 1. Global config: ~/.gemini/config/mcp_config.json (always written)
-      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-      const antigravityGlobalDir = path.join(homeDir, '.gemini', 'config');
-      if (homeDir) {
-        if (!fs.existsSync(antigravityGlobalDir)) {
-          fs.mkdirSync(antigravityGlobalDir, { recursive: true });
-        }
-        const globalConfigPath = path.join(antigravityGlobalDir, 'mcp_config.json');
-        let globalConfig: any = {};
-        if (fs.existsSync(globalConfigPath)) {
-          try {
-            const raw = fs.readFileSync(globalConfigPath, 'utf8').trim();
-            if (raw) globalConfig = JSON.parse(raw);
-          } catch (e) {}
-        }
-        const generatedAgy = generateCursorConfig({ projectRoot: cwd });
-        if (!globalConfig.mcpServers) globalConfig.mcpServers = {};
-        globalConfig.mcpServers = {
-          ...globalConfig.mcpServers,
-          ...generatedAgy.mcpServers
-        };
-        fs.writeFileSync(globalConfigPath, JSON.stringify(globalConfig, null, 2));
-        console.log(`Updated Antigravity global MCP configuration at ${globalConfigPath}`);
+      if (antigravityGlobalPath) {
+        const result = mergeContextosMcpConfig(
+          antigravityGlobalPath,
+          generateCursorConfig({ projectRoot: cwd })
+        );
+        console.log(
+          `${result === 'preserved' ? 'Preserved' : 'Updated'} Antigravity global MCP configuration at ${antigravityGlobalPath}`
+        );
       }
 
       // 2. Project-level config: .agents/mcp_config.json (if .agents dir exists)
       if (fs.existsSync(path.join(cwd, '.agents'))) {
         const configPath = path.join(cwd, '.agents', 'mcp_config.json');
-        let config: any = {};
-        if (fs.existsSync(configPath)) {
-          try {
-            const raw = fs.readFileSync(configPath, 'utf8').trim();
-            if (raw) config = JSON.parse(raw);
-          } catch (e) {}
-        }
-        const generatedLocal = generateCursorConfig({ projectRoot: cwd });
-        if (!config.mcpServers) config.mcpServers = {};
-        config.mcpServers = {
-          ...config.mcpServers,
-          ...generatedLocal.mcpServers
-        };
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-        console.log(`Updated Antigravity project MCP configuration at ${configPath}`);
+        const result = mergeContextosMcpConfig(
+          configPath,
+          generateCursorConfig({ projectRoot: cwd })
+        );
+        console.log(
+          `${result === 'preserved' ? 'Preserved' : 'Updated'} Antigravity project MCP configuration at ${configPath}`
+        );
       }
 
       // Generate Claude Code (and generic) MCP config (.mcp.json)
       const claudeConfigPath = path.join(cwd, '.mcp.json');
-      let claudeConfig: any = {};
-      if (fs.existsSync(claudeConfigPath)) {
-        try {
-          claudeConfig = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'));
-        } catch (e) {
-          // ignore parse errors
-        }
-      }
       const generated = generateCursorConfig({ projectRoot: cwd });
-      claudeConfig.mcpServers = {
-        ...claudeConfig.mcpServers,
-        ...generated.mcpServers
-      };
-      fs.writeFileSync(claudeConfigPath, JSON.stringify(claudeConfig, null, 2));
-      console.log(`Updated Claude Code MCP configuration at ${claudeConfigPath}`);
+      const claudeResult = mergeContextosMcpConfig(claudeConfigPath, generated);
+      console.log(
+        `${claudeResult === 'preserved' ? 'Preserved' : 'Updated'} Claude Code MCP configuration at ${claudeConfigPath}`
+      );
 
       // Ensure CLAUDE.md has instructions since Claude Code currently ignores MCP SDK instructions
       const claudeMdPath = path.join(cwd, 'CLAUDE.md');
@@ -164,21 +134,10 @@ export const initCommand = new Command('init')
 
       for (const { name, file } of vscodeMcpConfigs) {
         const configPath = path.join(vscodeDir, file);
-        let vsConfig: any = {};
-        if (fs.existsSync(configPath)) {
-          try {
-            vsConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-          } catch (e) {}
-        }
-        if (!vsConfig.mcpServers) {
-          vsConfig.mcpServers = {};
-        }
-        vsConfig.mcpServers = {
-          ...vsConfig.mcpServers,
-          ...generated.mcpServers
-        };
-        fs.writeFileSync(configPath, JSON.stringify(vsConfig, null, 2));
-        console.log(`Updated ${name} (VS Code) MCP configuration at ${configPath}`);
+        const result = mergeContextosMcpConfig(configPath, generated);
+        console.log(
+          `${result === 'preserved' ? 'Preserved' : 'Updated'} ${name} (VS Code) MCP configuration at ${configPath}`
+        );
       }
 
       // Generate Codex CLI config if .codex exists
@@ -208,7 +167,7 @@ export const initCommand = new Command('init')
         });
         daemonProcess.unref();
         console.log('ContextOS daemon started in background (zero-config).');
-      } catch (e) {
+      } catch {
         console.log('Failed to auto-start daemon, you can run `npx contextos daemon` manually.');
       }
 

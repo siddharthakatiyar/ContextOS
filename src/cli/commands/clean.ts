@@ -4,6 +4,15 @@ import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs';
 
+interface CountRow {
+  c: number;
+}
+
+interface JunkChunkRow {
+  id: string;
+  source_file: string;
+}
+
 export const cleanCommand = new Command('clean')
   .description('Purge polluted data (node_modules, junk) from ContextOS databases')
   .option('--rebuild', 'Delete and rebuild the database from scratch')
@@ -55,14 +64,15 @@ export const cleanCommand = new Command('clean')
       const dbInstance = db.getInstance();
       const dbName = dbInstance.name || 'in-memory';
 
-      const beforeCount = (dbInstance.prepare('SELECT COUNT(*) as c FROM chunks').get() as any).c;
+      const beforeCount = (dbInstance.prepare('SELECT COUNT(*) as c FROM chunks').get() as CountRow)
+        .c;
 
       let totalRemoved = 0;
       for (const pattern of JUNK_PATTERNS) {
         // Get chunk IDs first to cascade-delete relationships
         const junkChunks = dbInstance
           .prepare('SELECT id, source_file FROM chunks WHERE source_file LIKE ?')
-          .all(pattern) as any[];
+          .all(pattern) as JunkChunkRow[];
         if (junkChunks.length === 0) continue;
 
         // Delete relationships sourced from junk chunks
@@ -86,7 +96,8 @@ export const cleanCommand = new Command('clean')
         totalRemoved += junkChunks.length;
       }
 
-      const afterCount = (dbInstance.prepare('SELECT COUNT(*) as c FROM chunks').get() as any).c;
+      const afterCount = (dbInstance.prepare('SELECT COUNT(*) as c FROM chunks').get() as CountRow)
+        .c;
 
       if (totalRemoved > 0) {
         console.log(

@@ -28,7 +28,7 @@ export class KnowledgeStore {
     const existing = this.db
       .getInstance()
       .prepare('SELECT id, fact FROM knowledge_facts WHERE fact = ?')
-      .get(fact) as any;
+      .get(fact) as { id: string; fact: string } | undefined;
 
     if (existing) {
       // Reinforce existing fact

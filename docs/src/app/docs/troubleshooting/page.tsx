@@ -53,7 +53,7 @@ docs/out/
 
       <h2>Slow Indexing Performance</h2>
       <p>
-        If indexing is taking unusually long, ensure you are running Node.js 18+. ContextOS relies on modern native crypto hashing and worker threads. If you are indexing a mono-repo with millions of lines of code, the initial pass may take a minute, but subsequent incremental index runs will be sub-second as it only hashes and updates modified files.
+        If indexing is taking unusually long, ensure you are running Node.js 22.12.0 or later. ContextOS relies on modern native crypto hashing and worker threads. If you are indexing a mono-repo with millions of lines of code, the initial pass may take a minute, but subsequent incremental index runs will be sub-second as it only hashes and updates modified files.
       </p>
     </DocPage>
   );

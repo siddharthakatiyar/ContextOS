@@ -1,7 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { DB } from '../../core/storage/database.js';
-import { ChunksRepo } from '../../core/storage/chunks-repo.js';
+import { getErrorMessage } from '../../utils/errors.js';
+
+interface TopicContentRow {
+  content: string;
+  source_file: string;
+}
 
 export function registerLegacyReadTopicTool(server: McpServer, db: DB) {
   server.tool(
@@ -12,7 +17,6 @@ export function registerLegacyReadTopicTool(server: McpServer, db: DB) {
     },
     async ({ title }) => {
       try {
-        const repo = new ChunksRepo(db.getInstance());
         const stmt = db.getInstance().prepare(`
           SELECT content, source_file
           FROM chunks
@@ -20,7 +24,7 @@ export function registerLegacyReadTopicTool(server: McpServer, db: DB) {
           ORDER BY section_depth ASC
           LIMIT 10
         `);
-        const rows = stmt.all(title) as any[];
+        const rows = stmt.all(title) as TopicContentRow[];
 
         if (rows.length === 0) {
           return {
@@ -36,9 +40,9 @@ export function registerLegacyReadTopicTool(server: McpServer, db: DB) {
         return {
           content: [{ type: 'text', text: contents }]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error reading topic: ${error.message}` }],
+          content: [{ type: 'text', text: `Error reading topic: ${getErrorMessage(error)}` }],
           isError: true
         };
       }

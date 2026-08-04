@@ -134,7 +134,7 @@ export function containmentDedup(chunks: ScoredChunk[], identifiers: string[] = 
       const parentScore = parent.score || 0;
       for (const s of kids) {
         s.score = Math.max(s.score || 0, parentScore * 0.9);
-        (s as any).parentDropped = true;
+        s.parentDropped = true;
       }
       drop.add(parent.id);
     }
@@ -321,9 +321,9 @@ export class RetrievalEngine {
       .sort((a, b) => {
         // Treat intentionally dropped parents (via containmentDedup) as present so we don't punish their segments
         const aParent =
-          (a as any).parentDropped || parentNames.has((a.parentSymbol || '').toLowerCase()) ? 1 : 0;
+          a.parentDropped || parentNames.has((a.parentSymbol || '').toLowerCase()) ? 1 : 0;
         const bParent =
-          (b as any).parentDropped || parentNames.has((b.parentSymbol || '').toLowerCase()) ? 1 : 0;
+          b.parentDropped || parentNames.has((b.parentSymbol || '').toLowerCase()) ? 1 : 0;
         if (aParent !== bParent) return bParent - aParent;
         const aHits = promptTerms.filter(
           (t) => t.length >= 5 && a.content.toLowerCase().includes(t)

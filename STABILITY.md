@@ -10,7 +10,7 @@ ContextOS follows [Semantic Versioning](https://semver.org/). This document defi
 - **MINOR** — new, backward-compatible functionality.
 - **PATCH** — backward-compatible bug fixes.
 
-Pre-1.0 (`0.x`) releases may change behavior in minor versions while the engine stabilizes. After upgrading, run `contextos reindex` so schema/chunking changes take effect.
+From v1.0.0 onward, breaking changes to any stable surface happen only in a **major** version bump (v2.0), with a deprecation notice first where practical. Pre-1.0 (`0.x`) releases changed behavior in minor versions while the engine stabilized.
 
 ## Stable surfaces
 
@@ -18,7 +18,7 @@ Pre-1.0 (`0.x`) releases may change behavior in minor versions while the engine 
 The documented commands are stable: `init`, `reindex`, `serve`, `query`, `status`, `watch`, `visualize`, `clean`, `export`, `import`, `analytics`, `workspace`, `daemon`. Their names, core flags, and documented output will not change incompatibly within a major version.
 
 ### 2. MCP interface
-The registered MCP tools (e.g. `get_context`, `save_context`, `reindex_context`, `get_neighbors`, `get_symbol`, `ctx_read_file`, `ctx_expand`, `ctx_execute`, `learn_fact`, `forget_fact`, `rate_chunk`) keep their names and input schemas within a major version. New optional parameters may be added in minor releases.
+The default registered MCP tools (`get_context`, `reindex_context`, `contextos_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, `ctx_remember`, `learn_fact`, `forget_fact`, `rate_chunk`, `ctx_symbol`, `get_neighbors`, and `get_symbol`) keep their names and input schemas within a major version. New optional parameters may be added in minor releases. Tools exposed only through `legacyTools` are deprecated compatibility surfaces and are not covered by this guarantee.
 
 ### 3. Configuration
 Keys defined in [`config.schema.json`](config.schema.json) will not be removed or have their types changed within a major version. The reference defaults live in `src/config/defaults.ts`. Config is read from `.contextos/config.json` (repo) and `~/.contextos/config.json` (global).

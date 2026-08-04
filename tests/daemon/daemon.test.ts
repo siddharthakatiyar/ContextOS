@@ -22,7 +22,7 @@ vi.mock('net', () => ({
   default: {
     createServer: vi.fn(() => ({
       on: vi.fn(),
-      once: vi.fn((event, cb) => {
+      once: vi.fn((event, _cb) => {
         if (event === 'error') {
           // Do nothing
         }
@@ -59,7 +59,7 @@ describe('ContextOSDaemon Lifecycle', () => {
 
     // Inject a short local socket path so it doesn't exceed macOS 104 char limit
     const shortSocket = path.join(os.tmpdir(), `d-test-${Date.now()}.sock`);
-    (daemon as any).socketPath = shortSocket;
+    (daemon as unknown as { socketPath: string }).socketPath = shortSocket;
 
     // Since PID doesn't exist, process.kill(999999, 0) throws ESRCH
     // The daemon should catch this and delete the PID file
@@ -69,8 +69,7 @@ describe('ContextOSDaemon Lifecycle', () => {
     process.kill = (pid, sig) => {
       if (pid === fakePid) {
         caughtESRCH = true;
-        const err = new Error('No such process');
-        (err as any).code = 'ESRCH';
+        const err = Object.assign(new Error('No such process'), { code: 'ESRCH' });
         throw err;
       }
       return originalKill(pid, sig);
@@ -89,6 +88,7 @@ describe('ContextOSDaemon Lifecycle', () => {
       // It should have overwritten the PID file with our own PID
       const currentPidStr = fs.readFileSync(pidPath, 'utf-8');
       expect(parseInt(currentPidStr)).toBe(process.pid);
+      await startPromise;
     } finally {
       process.kill = originalKill;
       daemon.stop();

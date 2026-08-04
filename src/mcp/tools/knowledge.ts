@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DB } from '../../core/storage/database.js';
 import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
 import { SessionStore } from '../../core/session/session-store.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
   const primaryDb = dbs[0];
@@ -43,9 +44,9 @@ export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
             content: [{ type: 'text', text: `Successfully saved context note to session memory.` }]
           };
         }
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error managing memory: ${error.message}` }],
+          content: [{ type: 'text', text: `Error managing memory: ${getErrorMessage(error)}` }],
           isError: true
         };
       }
@@ -74,9 +75,9 @@ export function registerLegacyKnowledgeTools(server: McpServer, dbs: DB[]) {
         return {
           content: [{ type: 'text', text: `Successfully learned fact. ID: ${id}` }]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error learning fact: ${error.message}` }],
+          content: [{ type: 'text', text: `Error learning fact: ${getErrorMessage(error)}` }],
           isError: true
         };
       }
@@ -102,9 +103,9 @@ export function registerLegacyKnowledgeTools(server: McpServer, dbs: DB[]) {
             isError: true
           };
         }
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error forgetting fact: ${error.message}` }],
+          content: [{ type: 'text', text: `Error forgetting fact: ${getErrorMessage(error)}` }],
           isError: true
         };
       }

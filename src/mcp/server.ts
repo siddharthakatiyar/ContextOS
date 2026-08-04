@@ -2,7 +2,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { registerGetContextTool } from './tools/get-context.js';
 import { loadConfig } from '../config/index.js';
-import { registerSaveContextTool } from './tools/save-context.js';
 import { registerIndexFilesTool } from './tools/index-files.js';
 import { registerGetStatusTool } from './tools/get-status.js';
 import { registerGetGraphTools } from './tools/get-graph.js';
@@ -22,7 +21,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let version = '0.3.0';
+let version = '1.0.0';
 try {
   let pkgPath = path.join(__dirname, '../../package.json');
   if (!fs.existsSync(pkgPath)) {

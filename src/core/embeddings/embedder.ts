@@ -2,8 +2,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { loadConfig } from '../../config/index.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
-const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
+const MODEL_ID = 'sentence-transformers/all-MiniLM-L6-v2';
 const EMBEDDING_DIMS = 384;
 
 type FeatureExtractionPipeline = (
@@ -50,17 +51,17 @@ async function loadPipeline(): Promise<FeatureExtractionPipeline | null> {
       const cacheDir = modelsCacheDir();
       fs.mkdirSync(cacheDir, { recursive: true });
 
-      const transformers = await import('@xenova/transformers');
-      const { pipeline, env } = transformers as any;
+      const transformers = await import('@huggingface/transformers');
+      const { pipeline, env } = transformers;
       env.cacheDir = cacheDir;
       env.allowLocalModels = true;
 
       const extractor = await pipeline('feature-extraction', MODEL_ID);
       pipelineFn = extractor as FeatureExtractionPipeline;
       return pipelineFn;
-    } catch (e: any) {
+    } catch (error) {
       unavailable = true;
-      logUnavailableOnce(e?.message || String(e));
+      logUnavailableOnce(getErrorMessage(error));
       return null;
     } finally {
       loadPromise = null;
@@ -136,9 +137,9 @@ export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
       results.push(vec);
     }
     return results;
-  } catch (e: any) {
+  } catch (error) {
     unavailable = true;
-    logUnavailableOnce(e?.message || String(e));
+    logUnavailableOnce(getErrorMessage(error));
     return [];
   }
 }

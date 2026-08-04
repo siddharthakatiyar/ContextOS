@@ -69,7 +69,7 @@ export default function CliDocs() {
 
       <h3><code>daemon</code></h3>
       <p>
-        Starts the ContextOS HTTP / JSON-RPC server on a local port. This daemon is used by IDE extensions (like Cursor or VSCode) to communicate with the retrieval engine over a persistent connection.
+        Starts the ContextOS HTTP / JSON-RPC server on a local port. This daemon is used by IDE extensions (like any AI Agent or IDE) to communicate with the retrieval engine over a persistent connection.
       </p>
       <pre>
         <code className="language-bash">
@@ -81,6 +81,11 @@ export default function CliDocs() {
       <p>
         Forces a hard rebuild of the <code>.contextos</code> database. Useful if the database state becomes corrupted or if you change ignore patterns in <code>contextos.json</code>.
       </p>
+      <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 my-6 dark:bg-blue-900/20 dark:border-blue-800">
+        <p className="text-sm text-blue-800 dark:text-blue-300 m-0 leading-relaxed">
+          <strong className="font-semibold">Note:</strong> Since v0.9.4, ContextOS tracks the internal indexer schema version and will automatically trigger a background reindex if it detects you have upgraded to a newer version with schema changes. Explicit reindexing is generally not required during updates.
+        </p>
+      </div>
       <pre>
         <code className="language-bash">
 {`contextos reindex`}

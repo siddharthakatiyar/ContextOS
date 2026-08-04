@@ -1,0 +1,52 @@
+[
+  {
+    "repo": "React",
+    "queries": [
+      "useState implementation",
+      "Suspended components",
+      "useEffect cleanup",
+      "Synthetic events",
+      "Concurrent batching"
+    ]
+  },
+  {
+    "repo": "Next.js",
+    "queries": [
+      "App router routing logic",
+      "Server Components rendering",
+      "Static generation (getStaticProps)",
+      "API Routes implementation",
+      "Image optimization"
+    ]
+  },
+  {
+    "repo": "Langchain",
+    "queries": [
+      "Agent execution loop",
+      "LLMChain implementation",
+      "Memory management (BufferMemory)",
+      "Tool invocation",
+      "Document loader interface"
+    ]
+  },
+  {
+    "repo": "FastAPI",
+    "queries": [
+      "Dependency injection system",
+      "Routing implementation",
+      "Pydantic validation integration",
+      "Middleware execution",
+      "Exception handling"
+    ]
+  },
+  {
+    "repo": "Supabase",
+    "queries": [
+      "Postgres connection logic",
+      "Row Level Security enforcement",
+      "Storage API file uploads",
+      "Realtime subscription handling",
+      "Auth session management"
+    ]
+  }
+]

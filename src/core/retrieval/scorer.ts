@@ -76,7 +76,6 @@ export function applyGenericAdjustments(
   finalScore: number,
   ctx: ScoreAdjustContext
 ): number {
-  const snLower = (chunk.symbolName || '').toLowerCase();
   const fileStemLower = (
     chunk.fileStem || path.basename(chunk.sourceFile).replace(/\.[^.]+$/, '')
   ).toLowerCase();

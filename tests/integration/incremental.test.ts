@@ -4,7 +4,10 @@ import path from 'path';
 import os from 'os';
 import { DB } from '../../src/core/storage/database.js';
 import { Indexer } from '../../src/core/indexer/index.js';
-import { ChunksRepo } from '../../src/core/storage/chunks-repo.js';
+
+interface ContentRow {
+  content: string;
+}
 
 vi.mock('../../src/core/embeddings/index.js', () => ({
   isEmbeddingsAvailable: () => false,
@@ -45,7 +48,7 @@ describe('Incremental Indexing Integration', () => {
     const initialChunks = db
       .getInstance()
       .prepare('SELECT * FROM chunks WHERE source_file = ?')
-      .all(file) as any[];
+      .all(file) as ContentRow[];
 
     expect(initialChunks.length).toBeGreaterThan(0);
     const initialContent = initialChunks.map((c) => c.content).join(' ');
@@ -60,7 +63,7 @@ describe('Incremental Indexing Integration', () => {
     const updatedChunks = db
       .getInstance()
       .prepare('SELECT * FROM chunks WHERE source_file = ?')
-      .all(file) as any[];
+      .all(file) as ContentRow[];
     const updatedContent = updatedChunks.map((c) => c.content).join(' ');
 
     expect(updatedContent).toContain('newFunc');

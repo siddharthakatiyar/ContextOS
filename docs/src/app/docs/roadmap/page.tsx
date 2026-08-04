@@ -3,7 +3,7 @@ import { RoadmapContent } from "./roadmap-content";
 
 export const metadata = buildMetadata({
   title: "Roadmap",
-  description: "The high-level roadmap and future ambitions for ContextOS as we approach v1.0 and beyond.",
+  description: "The high-level roadmap and future direction of ContextOS following the v1.0 stable release.",
   path: "/docs/roadmap",
 });
 

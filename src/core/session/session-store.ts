@@ -19,6 +19,22 @@ export interface SessionEvent {
   createdAt: number;
 }
 
+interface SessionRow {
+  id: string;
+  started_at: number;
+  repo_root: string | null;
+  metadata: string | null;
+}
+
+interface SessionEventRow {
+  id: number;
+  session_id: string;
+  event_type: SessionEvent['eventType'];
+  content: string;
+  related_files: string | null;
+  created_at: number;
+}
+
 /** Default session max age before rotation (B22). */
 export const SESSION_ROTATION_MS = 24 * 60 * 60 * 1000;
 
@@ -48,7 +64,7 @@ export class SessionStore {
     this.db = dbInstance.getInstance();
   }
 
-  public createSession(repoRoot?: string, metadata?: any): Session {
+  public createSession(repoRoot?: string, metadata?: unknown): Session {
     const id = crypto.randomUUID();
     const startedAt = Date.now();
     const session: Session = {
@@ -68,7 +84,7 @@ export class SessionStore {
 
   public getSession(id: string): Session | null {
     const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ?');
-    const row = stmt.get(id) as any;
+    const row = stmt.get(id) as SessionRow | undefined;
     if (!row) return null;
     return {
       id: row.id,
@@ -80,7 +96,7 @@ export class SessionStore {
 
   public getLatestSession(): Session | null {
     const stmt = this.db.prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT 1');
-    const row = stmt.get() as any;
+    const row = stmt.get() as SessionRow | undefined;
     if (!row) return null;
     return {
       id: row.id,
@@ -109,7 +125,7 @@ export class SessionStore {
       ORDER BY created_at DESC 
       LIMIT ?
     `);
-    const rows = stmt.all(sessionId, limit) as any[];
+    const rows = stmt.all(sessionId, limit) as SessionEventRow[];
     return rows.reverse().map((row) => ({
       id: row.id,
       sessionId: row.session_id,
@@ -132,7 +148,7 @@ export class SessionStore {
       WHERE session_events_fts MATCH ?
     `;
     const sanitizedQuery = sanitizeFTSQuery(query);
-    const params: any[] = [sanitizedQuery];
+    const params: unknown[] = [sanitizedQuery];
 
     if (sessionId) {
       sql += ' AND e.session_id = ?';
@@ -143,7 +159,7 @@ export class SessionStore {
     params.push(limit);
 
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all(...params) as any[];
+    const rows = stmt.all(...params) as SessionEventRow[];
     return rows.map((row) => ({
       id: row.id,
       sessionId: row.session_id,

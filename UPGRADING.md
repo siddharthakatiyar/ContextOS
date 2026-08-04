@@ -2,7 +2,24 @@
 
 This guide covers breaking changes and migration steps for upgrading ContextOS across major and minor versions.
 
+## 0.9.x to 1.0.0
+
+### 1. Automatic schema migration (no action required)
+
+v1.0.0 ships Schema v6, which adds FTS5 trigram indices for extremely fast and accurate substring searches. The daemon detects the schema version automatically on startup via `INDEXER_VERSION` and triggers a background re-index. No manual steps are required.
+
+### 2. SemVer stability guarantees now apply
+
+From v1.0.0 onward, all stable CLI commands, MCP tools, and configuration keys are covered by the full SemVer stability policy described in [`STABILITY.md`](STABILITY.md). Breaking changes will only appear in a future v2.0 major release, with a deprecation notice first.
+
+### 3. Reindex recommendation
+
+After upgrading, run `contextos reindex` once to ensure the trigram FTS tables are fully populated and retrieval performance is optimal.
+
+---
+
 ## 0.8.x to 0.9.x
+
 
 ### 1. Reindex after upgrading
 Run `contextos reindex` once after upgrading so schema/chunking refinements take effect.

@@ -17,7 +17,7 @@ export function isBinaryFile(filePath: string): boolean {
         return true;
       }
     }
-  } catch (err) {
+  } catch {
     // If we can't read it, it's safer to skip it
     return true;
   }

@@ -38,6 +38,10 @@
       "type": "number",
       "description": "Target token budget for retrieval responses."
     },
+    "maxExactTokenBudget": {
+      "type": "number",
+      "description": "Hard upper token limit applied after exact token counting. Retrieval results are clamped to this budget."
+    },
     "layerBoosts": {
       "type": "object",
       "properties": {

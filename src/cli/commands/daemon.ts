@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { ContextOSDaemon } from '../../core/daemon/daemon.js';
 import fs from 'fs';
 import path from 'path';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export const daemonCommand = new Command('daemon').description(
   'Manage the ContextOS background daemon'
@@ -21,8 +22,8 @@ daemonCommand
     try {
       const daemon = new ContextOSDaemon(projectDir);
       await daemon.start();
-    } catch (e: any) {
-      process.stderr.write(`Failed to start daemon: ${e.message}\n`);
+    } catch (error) {
+      process.stderr.write(`Failed to start daemon: ${getErrorMessage(error)}\n`);
       process.exit(1);
     }
   });
@@ -40,8 +41,8 @@ daemonCommand
         process.kill(pid, 'SIGTERM');
         console.log(`Daemon (PID ${pid}) stopped.`);
         fs.unlinkSync(pidPath);
-      } catch (e: any) {
-        console.error(`Failed to stop daemon: ${e.message}`);
+      } catch (error) {
+        console.error(`Failed to stop daemon: ${getErrorMessage(error)}`);
       }
     } else {
       console.log('No daemon is currently running for this project.');

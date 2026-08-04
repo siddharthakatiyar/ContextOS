@@ -4,7 +4,7 @@ import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "SQLite Schema",
-  description: "The underlying relational structure of the Schema v5 .contextos database.",
+  description: "The underlying relational structure of the Schema v6 .contextos database.",
   path: "/docs/database/schema",
 });
 
@@ -12,7 +12,7 @@ export default function SchemaDocs() {
   return (
     <DocPage
       title="SQLite Schema"
-      description="The underlying relational structure of the Schema v5 .contextos database."
+      description="The underlying relational structure of the Schema v6 .contextos database."
       prev={{ title: "Context Compression", href: "/docs/algorithms/compression" }}
       next={{ title: "Framework Examples", href: "/docs/examples" }}
     >
@@ -31,7 +31,7 @@ export default function SchemaDocs() {
         <strong>2. Graph Traversal Speed:</strong> ContextOS relies heavily on resolving file dependencies. Relational joins in SQLite are orders of magnitude faster for local recursive CTE queries than making network hops to a graph database.
       </p>
 
-      <h2>Schema v5 Tables</h2>
+      <h2>Schema v6 Tables</h2>
 
       <h3>1. <code>files</code></h3>
       <p>
@@ -127,7 +127,7 @@ export default function SchemaDocs() {
 
       <h3>5. Advanced Systems</h3>
       <p>
-        Schema v5 also introduces several advanced tables for opt-in features:
+        Schema v6 also introduces FTS5 trigram indices for extremely fast substring searches, and several advanced tables for opt-in features:
       </p>
       <ul>
         <li><code>chunk_embeddings</code>: Stores dense vectors (BLOBs) for hybrid RRF fusion retrieval.</li>

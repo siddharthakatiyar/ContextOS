@@ -6,10 +6,7 @@ import { defaultConfig } from '../../src/config/defaults.js';
 describe('README.md Truth Pass', () => {
   const root = path.resolve(__dirname, '../../');
   const readmePath = path.join(root, 'README.md');
-  const pkgPath = path.join(root, 'package.json');
-
   const readme = fs.readFileSync(readmePath, 'utf8');
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
   it('documents current config defaults accurately', () => {
     // Guard against README Configuration-table drift from src/config/defaults.ts.
@@ -35,19 +32,29 @@ describe('README.md Truth Pass', () => {
     expect(readme).not.toContain('C2');
   });
 
-  it('documents core MCP tools', () => {
-    // Each core tool must be named (in backticks) somewhere in the README.
+  it('documents the default stable and legacy MCP tool surfaces', () => {
     const tools = [
       'get_context',
-      'ctx_execute',
       'reindex_context',
+      'contextos_status',
+      'ctx_execute',
       'ctx_read_file',
-      'get_symbol',
+      'ctx_expand',
+      'ctx_topics',
+      'ctx_remember',
       'learn_fact',
-      'forget_fact'
+      'forget_fact',
+      'rate_chunk',
+      'ctx_symbol',
+      'get_neighbors',
+      'get_symbol'
     ];
     for (const tool of tools) {
       expect(readme, `README should document the \`${tool}\` MCP tool`).toContain(`\`${tool}\``);
     }
+    for (const legacyTool of ['save_context', 'ctx_list_topics', 'ctx_read_topic']) {
+      expect(readme).toContain(`\`${legacyTool}\``);
+    }
+    expect(readme).toContain('Deprecated compatibility tools');
   });
 });

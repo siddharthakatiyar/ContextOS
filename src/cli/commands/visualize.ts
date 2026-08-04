@@ -4,6 +4,18 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
+interface GraphChunkRow {
+  id: string;
+  source_file: string;
+  symbol_name: string | null;
+}
+
+interface GraphRelationshipRow {
+  source_chunk_id: string;
+  target: string;
+  relationship_type: string;
+}
+
 export const visualizeCommand = new Command('visualize')
   .description('Generate an HTML visualization of the context graph')
   .option('-o, --out <path>', 'Output path for HTML file', 'contextos-graph.html')
@@ -15,11 +27,11 @@ export const visualizeCommand = new Command('visualize')
     const chunks = db
       .getInstance()
       .prepare('SELECT id, source_file, symbol_name FROM chunks')
-      .all() as any[];
+      .all() as GraphChunkRow[];
     const relationships = db
       .getInstance()
       .prepare('SELECT source_chunk_id, target, relationship_type FROM relationships')
-      .all() as any[];
+      .all() as GraphRelationshipRow[];
 
     // We need to map nodes.
     // Chunks are nodes, and expanded entities are also nodes.

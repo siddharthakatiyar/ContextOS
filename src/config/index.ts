@@ -86,8 +86,9 @@ export function validateConfigJson(
  * the target array instead of union-merging. The `!` suffix is stripped when applying.
  * Nested objects still use recursive mergeDeep.
  */
-function mergeDeep(target: any, source: any): any {
+function mergeDeep<T extends object, S extends object>(target: T, source: S): T & Partial<S> {
   if (isObject(target) && isObject(source)) {
+    const targetObject: Record<string, unknown> = target;
     for (const key of Object.keys(source)) {
       // Keys ending with `!` replace arrays (or overwrite scalars) instead of union-merging.
       const replace = key.endsWith('!');
@@ -97,11 +98,11 @@ function mergeDeep(target: any, source: any): any {
       if (replace) {
         Object.assign(target, { [actualKey]: Array.isArray(value) ? [...value] : value });
       } else if (isObject(value)) {
-        if (!target[actualKey]) Object.assign(target, { [actualKey]: {} });
-        mergeDeep(target[actualKey], value);
+        if (!targetObject[actualKey]) Object.assign(targetObject, { [actualKey]: {} });
+        mergeDeep(targetObject[actualKey] as object, value);
       } else if (Array.isArray(value)) {
-        if (Array.isArray(target[actualKey])) {
-          target[actualKey] = Array.from(new Set([...target[actualKey], ...value]));
+        if (Array.isArray(targetObject[actualKey])) {
+          targetObject[actualKey] = Array.from(new Set([...targetObject[actualKey], ...value]));
         } else {
           Object.assign(target, { [actualKey]: value });
         }
@@ -110,11 +111,11 @@ function mergeDeep(target: any, source: any): any {
       }
     }
   }
-  return target;
+  return target as T & Partial<S>;
 }
 
-function isObject(item: any) {
-  return item && typeof item === 'object' && !Array.isArray(item);
+function isObject(item: unknown): item is Record<string, unknown> {
+  return item !== null && typeof item === 'object' && !Array.isArray(item);
 }
 
 /** Exported for tests. */

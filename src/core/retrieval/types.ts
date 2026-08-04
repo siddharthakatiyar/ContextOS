@@ -20,6 +20,8 @@ export interface RetrievalOptions {
 
 export interface ScoredChunk extends Chunk {
   score: number;
+  /** Internal containment signal used to prefer a retained child over its dropped parent. */
+  parentDropped?: boolean;
 }
 
 export interface RetrievalResult {

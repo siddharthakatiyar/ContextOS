@@ -3,6 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import { getContextOSHome } from '../../core/storage/database.js';
 
+interface WorkspaceConfig {
+  name: string;
+  repos: string[];
+  contextDir: string;
+}
+
 export const workspaceCommand = new Command('workspace').description('Manage workspaces');
 
 workspaceCommand
@@ -10,7 +16,7 @@ workspaceCommand
   .description('Add a workspace')
   .action((name: string) => {
     const configPath = path.join(getContextOSHome(), 'workspaces.json');
-    let workspaces: any = {};
+    let workspaces: Record<string, WorkspaceConfig> = {};
     if (fs.existsSync(configPath)) {
       workspaces = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     }
@@ -34,7 +40,7 @@ workspaceCommand
     }
     const workspaces = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     console.log('Workspaces:');
-    for (const [name, ws] of Object.entries(workspaces)) {
+    for (const name of Object.keys(workspaces)) {
       console.log(`- ${name}`);
     }
   });

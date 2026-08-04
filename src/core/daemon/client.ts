@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import { getErrorCode, getErrorMessage } from '../../utils/errors.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,7 +39,7 @@ function connectToDaemon(socketPath: string): Promise<net.Socket> {
 }
 
 function spawnDaemon(projectDir: string): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     // Find the CLI binary
     // client.ts is in dist/src/core/daemon/client.js
     // bin/contextos.js is in dist/bin/contextos.js
@@ -73,7 +74,7 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
     let socket: net.Socket;
     try {
       socket = await connectToDaemon(socketPath);
-    } catch (e: any) {
+    } catch {
       await spawnDaemon(projectDir);
       let retries = 5;
       while (retries > 0) {
@@ -110,8 +111,8 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
       // Wait 100ms before trying to reconnect to let the port cleanup
       setTimeout(
         () =>
-          wireSocket().catch((e) => {
-            process.stderr.write(`Fatal reconnect error: ${e.message}\n`);
+          wireSocket().catch((error) => {
+            process.stderr.write(`Fatal reconnect error: ${getErrorMessage(error)}\n`);
             process.exit(1);
           }),
         100
@@ -119,10 +120,12 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
     };
 
     socket.once('close', onDisconnect);
-    socket.once('error', (err: any) => {
+    socket.once('error', (error) => {
       // Suppress ECONNRESET logs since we handle it seamlessly
-      if (err.code !== 'ECONNRESET') {
-        process.stderr.write(`Connection to daemon lost: ${err.message}. Reconnecting...\n`);
+      if (getErrorCode(error) !== 'ECONNRESET') {
+        process.stderr.write(
+          `Connection to daemon lost: ${getErrorMessage(error)}. Reconnecting...\n`
+        );
       }
       socket.destroy();
       // onDisconnect will be called by 'close' event
