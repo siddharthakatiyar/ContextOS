@@ -35,9 +35,9 @@ ContextOS serves context from whatever repository it points at. Two things to kn
 
 ## Known dependency advisories (accepted risk)
 
-`npm audit` reports advisories in transitive dependencies that ContextOS ships but does not exercise on its default path:
+`npm audit` reports high-severity advisories without an upstream fix in two transitive dependencies of `@huggingface/transformers`:
 
-- **`@xenova/transformers`** pulls a stale `onnxruntime-web` → `protobufjs` / `sharp` chain used for local embeddings. Embeddings are optional and off the default retrieval path, and the vulnerable code paths (dynamic protobuf schema loading, image decoding) are not reached by ContextOS's text-only usage. The upstream package is unmaintained; a migration to `@huggingface/transformers` is tracked.
-- **`@modelcontextprotocol/sdk`** pulls `ajv` → `fast-uri` and `@hono/node-server`. ContextOS uses the SDK over the **stdio** transport (no HTTP server), so the affected HTTP/URI code paths are not instantiated.
+- **`onnxruntime-node` → `adm-zip`** can allocate excessive memory when opening a malicious ZIP archive. ContextOS does not accept repository-provided model archives; it loads the configured, fixed Hugging Face model into its private cache.
+- **`sharp` / libvips** contains image-processing advisories. ContextOS uses the transformer pipeline for text embeddings and does not pass repository images to `sharp`.
 
-These are re-evaluated every release and patched once fixed upstream, without forcing a breaking downgrade.
+Embeddings are enabled during indexing by default, so these packages are reachable even though the affected archive/image inputs are not part of ContextOS's text-only workflow. The advisories are re-evaluated every release and will be patched when compatible upstream releases are available.

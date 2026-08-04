@@ -41,11 +41,9 @@ contextos init
 
 Open your preferred AI Agent and start asking questions! That's it.
 
-After upgrading, reindex so schema and chunking changes take effect:
-
-```bash
-contextos reindex
-```
+After upgrading, restart your MCP client. The daemon automatically rebuilds the
+index when the indexer format changes; use `contextos reindex` only when you
+explicitly want to force a fresh rebuild.
 
 ## The Problem: Traditional vs. ContextOS
 
@@ -155,7 +153,7 @@ Tree-sitter extracts functions, classes, and methods. Nested methods record `par
 When a class has methods, the class chunk stores a short member list instead of repeating every method body.
 
 **Local embeddings (index-time)**  
-On upsert, chunks are embedded with a local MiniLM model (`@xenova/transformers`) into `sqlite-vec` when available. Indexing is on by default; **retrieval fusion is off by default** (keyword/RRF path is the accuracy baseline). Opt in with `embeddingsRetrieval: true` or `CONTEXTOS_EMBEDDINGS_RETRIEVAL=1`.
+On upsert, chunks are embedded with a local MiniLM model (`@huggingface/transformers`) into `sqlite-vec` when available. Indexing is on by default; **retrieval fusion is off by default** (keyword/RRF path is the accuracy baseline). Opt in with `embeddingsRetrieval: true` or `CONTEXTOS_EMBEDDINGS_RETRIEVAL=1`.
 
 ### Retrieval
 
@@ -201,7 +199,7 @@ ContextOS's SQLite database is fundamentally an ephemeral index. If corruption o
 Repository indexing now runs with bounded concurrency to overlap CPU-intensive parsing and disk I/O, dramatically speeding up `init` and `reindex` on large codebases.
 
 **MCP tools**  
-`get_context`, `save_context`, `reindex_context`, `get_neighbors`, `get_symbol`, `ctx_symbol`, `ctx_read_file`, `ctx_expand`, `ctx_execute`, `learn_fact`, `forget_fact`, `ctx_remember`, `rate_chunk`, `ctx_list_topics`, `ctx_read_topic`, and `contextos_status`.
+The default stable tools are `get_context`, `reindex_context`, `contextos_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, `ctx_remember`, `learn_fact`, `forget_fact`, `rate_chunk`, `ctx_symbol`, `get_neighbors`, and `get_symbol`. Deprecated compatibility tools such as `save_context`, `ctx_list_topics`, and `ctx_read_topic` are available only when `legacyTools` is enabled.
 
 **Zero-config setup**  
 `contextos init` indexes the repo, writes MCP config if missing (does not overwrite an existing `contextos` MCP entry), and can start the background daemon.

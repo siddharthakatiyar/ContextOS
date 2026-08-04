@@ -3,9 +3,9 @@
 This document outlines the high-level roadmap and future ambitions for ContextOS following the v1.0 stable release.
 
 ## v1.0 (The "Stable" Release) ✅ Released
-*Released: July 2026*
+*Released: August 4, 2026*
 
-ContextOS v1.0.0 is stable and production-ready. All core functionality is covered by the stability policy in `STABILITY.md`.
+ContextOS v1.0.0 is stable and production-ready. Its documented CLI, default MCP tools, and configuration keys are covered by the stability policy in `STABILITY.md`.
 
 - [x] **Zero-dependency architecture** (Moved away from Redis/Qdrant to SQLite)
 - [x] **Non-blocking Indexing** (Background Daemon handles massive repos seamlessly)

@@ -32,3 +32,19 @@ jobs:
       - name: Coverage
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
         run: npm run coverage
+      - name: Lint documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
+        run: npm run lint --workspace docs
+      - name: Build documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
+        run: npm run build --workspace docs
+      - name: Reject critical production advisories
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Smoke-test packed CLI
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
+        run: |
+          PACKAGE_TARBALL=$(npm pack --pack-destination "$RUNNER_TEMP" --silent)
+          npm install --prefix "$RUNNER_TEMP/contextos-smoke" "$RUNNER_TEMP/$PACKAGE_TARBALL" --no-audit --no-fund
+          "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --version | grep -Fx '1.0.0'
+          "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --help >/dev/null

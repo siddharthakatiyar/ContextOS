@@ -8,7 +8,7 @@ describe('code-parser', () => {
     expect(detectLanguage('unknown.xyz')).toBe('unknown');
   });
 
-  it.skip('should parse functions using tree-sitter', async () => {
+  it('should parse functions using tree-sitter', async () => {
     const code = `
       function add(a: number, b: number): number {
         return a + b;
@@ -22,7 +22,7 @@ describe('code-parser', () => {
     expect(doc.symbols[0].body).toContain('return a + b');
   });
 
-  it.skip('should parse classes using tree-sitter', async () => {
+  it('should parse classes using tree-sitter', async () => {
     const code = `
       class Calculator {
         multiply(a, b) {

@@ -43,3 +43,6 @@ jobs:
             echo "::error::Recall $RECALL% is below the required 95.0% threshold."
             exit 1
           fi
+      - name: Verify benchmarks leave tracked files unchanged
+        if: always()
+        run: git diff --exit-code

@@ -9,8 +9,11 @@ describe('Path Traversal Guard', () => {
   let db: DB;
   let indexer: Indexer;
   let tempDir: string;
+  let previousEmbeddings: string | undefined;
 
   beforeEach(() => {
+    previousEmbeddings = process.env.CONTEXTOS_EMBEDDINGS;
+    process.env.CONTEXTOS_EMBEDDINGS = '0';
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-test-'));
     db = new DB(path.join(tempDir, 'test.db'));
     indexer = new Indexer(db);
@@ -19,6 +22,8 @@ describe('Path Traversal Guard', () => {
   afterEach(() => {
     db.close();
     fs.rmSync(tempDir, { recursive: true, force: true });
+    if (previousEmbeddings === undefined) delete process.env.CONTEXTOS_EMBEDDINGS;
+    else process.env.CONTEXTOS_EMBEDDINGS = previousEmbeddings;
   });
 
   it('rejects files outside the specified workspace root', async () => {

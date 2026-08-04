@@ -7,8 +7,11 @@ import { DB } from '../../src/core/storage/database.js';
 describe('BackgroundIndexer', () => {
   let tempDir: string;
   let db: DB;
+  let previousEmbeddings: string | undefined;
 
   beforeAll(() => {
+    previousEmbeddings = process.env.CONTEXTOS_EMBEDDINGS;
+    process.env.CONTEXTOS_EMBEDDINGS = '0';
     tempDir = path.join(process.cwd(), 'tests', 'fixtures', 'temp_background');
     if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
     fs.mkdirSync(tempDir, { recursive: true });
@@ -31,6 +34,8 @@ describe('BackgroundIndexer', () => {
       db.close();
     } catch {}
     if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
+    if (previousEmbeddings === undefined) delete process.env.CONTEXTOS_EMBEDDINGS;
+    else process.env.CONTEXTOS_EMBEDDINGS = previousEmbeddings;
   });
 
   test('indexes repository in background', async () => {
