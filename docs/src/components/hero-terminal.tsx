@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { motion, animate } from 'framer-motion';
+import { motion, animate, useReducedMotion } from 'framer-motion';
 
 function LoadingBar({ duration = 500 }: { duration?: number }) {
   const [progress, setProgress] = useState(0);
@@ -88,6 +88,8 @@ function Typewriter({
 export function HeroTerminal() {
   const [step, setStep] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const sequence = [
@@ -131,10 +133,37 @@ export function HeroTerminal() {
   }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const viewport = scrollRef.current;
+    const transcript = transcriptRef.current;
+    if (!viewport || !transcript) return;
+
+    if (step === 0 || step >= 12) {
+      viewport.scrollTo({ top: 0, behavior: 'auto' });
+      return;
     }
-  }, [step]);
+
+    let animationFrame: number | undefined;
+    const scrollToLatestOutput = () => {
+      if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
+
+      animationFrame = requestAnimationFrame(() => {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: prefersReducedMotion ? 'auto' : 'smooth'
+        });
+        animationFrame = undefined;
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(scrollToLatestOutput);
+    resizeObserver.observe(transcript);
+    scrollToLatestOutput();
+
+    return () => {
+      resizeObserver.disconnect();
+      if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
+    };
+  }, [step, prefersReducedMotion]);
 
   return (
     <div className="w-full rounded-xl border border-neutral-800 bg-[#0a0a0a] font-mono text-sm shadow-2xl overflow-hidden text-neutral-400">
@@ -150,8 +179,9 @@ export function HeroTerminal() {
       {/* Terminal Body */}
       <div
         ref={scrollRef}
-        className="p-6 h-[380px] overflow-y-auto flex flex-col gap-3 scroll-smooth text-left items-start"
+        className="p-6 h-[380px] overflow-y-auto text-left"
       >
+        <div ref={transcriptRef} className="flex w-full flex-col items-start gap-3">
         {step >= 1 && step < 12 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <span className="text-neutral-500">{'>'} </span>
@@ -254,6 +284,7 @@ export function HeroTerminal() {
           transition={{ repeat: Infinity, duration: 0.8 }}
           className="w-2.5 h-4 bg-neutral-500 inline-block ml-1 mt-4"
         />
+        </div>
       </div>
     </div>
   );
