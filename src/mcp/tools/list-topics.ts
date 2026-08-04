@@ -1,8 +1,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { DB } from '../../core/storage/database.js';
-import { ChunksRepo } from '../../core/storage/chunks-repo.js';
 import { loadConfig } from '../../config/index.js';
+import { getErrorMessage } from '../../utils/errors.js';
+
+interface TopicContentRow {
+  content: string;
+  source_file: string;
+}
+
+interface TopicSummaryRow {
+  source_file: string;
+  section_title: string;
+  summary: string | null;
+}
 
 export function registerListTopicsTool(server: McpServer, db: DB) {
   server.tool(
@@ -24,7 +35,7 @@ export function registerListTopicsTool(server: McpServer, db: DB) {
             ORDER BY section_depth ASC
             LIMIT 10
           `);
-          const rows = stmt.all(title) as any[];
+          const rows = stmt.all(title) as TopicContentRow[];
 
           if (rows.length === 0) {
             return {
@@ -43,7 +54,7 @@ export function registerListTopicsTool(server: McpServer, db: DB) {
             WHERE file_type = 'md' AND section_depth = 1 AND section_title IS NOT NULL
             LIMIT ${loadConfig().ftsLimit}
           `);
-          const rows = stmt.all() as any[];
+          const rows = stmt.all() as TopicSummaryRow[];
 
           if (rows.length === 0) {
             return {
@@ -66,9 +77,9 @@ export function registerListTopicsTool(server: McpServer, db: DB) {
             content: [{ type: 'text', text: `Available Context Topics:\n\n${topics}` }]
           };
         }
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error: ${error.message}` }],
+          content: [{ type: 'text', text: `Error: ${getErrorMessage(error)}` }],
           isError: true
         };
       }
@@ -89,7 +100,7 @@ export function registerLegacyListTopicsTool(server: McpServer, db: DB) {
           WHERE file_type = 'md' AND section_depth = 1 AND section_title IS NOT NULL
           LIMIT ${loadConfig().ftsLimit}
         `);
-        const rows = stmt.all() as any[];
+        const rows = stmt.all() as TopicSummaryRow[];
 
         if (rows.length === 0) {
           return {
@@ -112,9 +123,9 @@ export function registerLegacyListTopicsTool(server: McpServer, db: DB) {
         return {
           content: [{ type: 'text', text: `Available Context Topics:\n\n${topics}` }]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error fetching topics: ${error.message}` }],
+          content: [{ type: 'text', text: `Error fetching topics: ${getErrorMessage(error)}` }],
           isError: true
         };
       }

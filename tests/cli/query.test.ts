@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { queryCommand } from '../../src/cli/commands/query.js';
 
 vi.mock('../../src/core/storage/database.js', () => ({
@@ -56,7 +56,7 @@ vi.mock('../../src/core/compiler/index.js', () => ({
 }));
 
 describe('CLI query command', () => {
-  let consoleLogSpy: any;
+  let consoleLogSpy: MockInstance;
 
   beforeEach(() => {
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -71,7 +71,7 @@ describe('CLI query command', () => {
 
     // Check if console.log was called which signifies command executed properly
     expect(consoleLogSpy).toHaveBeenCalled();
-    const calls = consoleLogSpy.mock.calls.map((call: any) => call.join(' '));
+    const calls = consoleLogSpy.mock.calls.map((call) => call.join(' '));
     expect(calls.some((c: string) => c.includes('Intent Detection'))).toBe(true);
     expect(calls.some((c: string) => c.includes('Compiled Context'))).toBe(true);
   });

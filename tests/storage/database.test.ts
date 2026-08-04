@@ -9,9 +9,9 @@ describe('database', () => {
     expect(instance).toBeDefined();
 
     // Check if schema was applied
-    const tables = instance
-      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-      .all() as any[];
+    const tables = instance.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+      name: string;
+    }[];
     const tableNames = tables.map((t) => t.name);
 
     expect(tableNames).toContain('files');
@@ -25,7 +25,9 @@ describe('database', () => {
       .get() as { version: number };
     expect(version.version).toBe(6);
 
-    const cols = (instance.prepare('PRAGMA table_info(chunks)').all() as any[]).map((c) => c.name);
+    const cols = (instance.prepare('PRAGMA table_info(chunks)').all() as { name: string }[]).map(
+      (column) => column.name
+    );
     expect(cols).toContain('start_line');
     expect(cols).toContain('end_line');
     expect(cols).toContain('file_stem');
@@ -35,6 +37,7 @@ describe('database', () => {
     // resolveDatabases returns an array, fallback to global or local
     const dbs = DB.resolveDatabases(os.tmpdir());
     expect(dbs.length).toBeGreaterThanOrEqual(1);
+    for (const db of dbs) db.close();
   });
 
   it('should gracefully handle unopenable local databases', () => {
@@ -50,8 +53,9 @@ describe('database', () => {
 
     // Should not throw, should just log and continue
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const dbs = DB.resolveDatabases(tmpdir);
+    const resolvedDbs = DB.resolveDatabases(tmpdir);
     expect(consoleSpy).toHaveBeenCalled();
+    for (const db of resolvedDbs) db.close();
 
     // Cleanup
     consoleSpy.mockRestore();

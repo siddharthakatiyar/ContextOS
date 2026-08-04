@@ -2,13 +2,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { DB } from '../../core/storage/database.js';
 import { SessionStore } from '../../core/session/session-store.js';
-import { SessionManager } from '../../core/session/index.js';
-import { PromptsRepo } from '../../core/storage/prompts-repo.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export function registerSaveContextTool(server: McpServer, db: DB) {
   const sessionStore = new SessionStore(db);
-  const promptsRepo = new PromptsRepo(db.getInstance());
-
   server.tool(
     'save_context',
     'Save important notes or context to the current session memory. Use this to remember user preferences, important decisions, or architectural facts that should persist across subsequent queries in this session.',
@@ -41,9 +38,9 @@ export function registerSaveContextTool(server: McpServer, db: DB) {
             }
           ]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error saving context: ${error.message}` }],
+          content: [{ type: 'text', text: `Error saving context: ${getErrorMessage(error)}` }],
           isError: true
         };
       }

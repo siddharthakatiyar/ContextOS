@@ -2,6 +2,17 @@ import { Database } from 'better-sqlite3';
 import { Relationship, Layer } from './types.js';
 import { prepareCached } from './stmt-cache.js';
 
+interface RelationshipRow {
+  id: number;
+  source: string;
+  target: string;
+  relationship_type: string;
+  weight: number;
+  source_chunk_id: string;
+  layer: Layer | null;
+  created_at: number;
+}
+
 export class RelationshipsRepo {
   constructor(private db: Database) {}
 
@@ -44,12 +55,12 @@ export class RelationshipsRepo {
 
   public findBySource(source: string): Relationship[] {
     const stmt = prepareCached(this.db, 'SELECT * FROM relationships WHERE source = ?');
-    return (stmt.all(source) as any[]).map((r) => this.mapRow(r));
+    return (stmt.all(source) as RelationshipRow[]).map((r) => this.mapRow(r));
   }
 
   public findByTarget(target: string): Relationship[] {
     const stmt = prepareCached(this.db, 'SELECT * FROM relationships WHERE target = ?');
-    return (stmt.all(target) as any[]).map((r) => this.mapRow(r));
+    return (stmt.all(target) as RelationshipRow[]).map((r) => this.mapRow(r));
   }
 
   public findRelated(entity: string): Relationship[] {
@@ -57,7 +68,7 @@ export class RelationshipsRepo {
       this.db,
       'SELECT * FROM relationships WHERE source = ? OR target = ?'
     );
-    return (stmt.all(entity, entity) as any[]).map((r) => this.mapRow(r));
+    return (stmt.all(entity, entity) as RelationshipRow[]).map((r) => this.mapRow(r));
   }
 
   public deleteByChunk(chunkId: string): void {
@@ -65,7 +76,7 @@ export class RelationshipsRepo {
     stmt.run(chunkId);
   }
 
-  private mapRow(row: any): Relationship {
+  private mapRow(row: RelationshipRow): Relationship {
     return {
       id: row.id,
       source: row.source,

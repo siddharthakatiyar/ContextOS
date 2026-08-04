@@ -2,7 +2,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { registerGetContextTool } from './tools/get-context.js';
 import { loadConfig } from '../config/index.js';
-import { registerSaveContextTool } from './tools/save-context.js';
 import { registerIndexFilesTool } from './tools/index-files.js';
 import { registerGetStatusTool } from './tools/get-status.js';
 import { registerGetGraphTools } from './tools/get-graph.js';

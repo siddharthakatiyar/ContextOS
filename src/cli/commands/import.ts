@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export const importCommand = new Command('import')
   .description('Import a ContextOS graph from a JSON file')
@@ -99,7 +100,7 @@ export const importCommand = new Command('import')
       spinner.succeed(
         `Imported ${importData.data.chunks.length} chunks, ${importData.data.relationships.length} relationships, and ${importData.data.files.length} files from ${chalk.green(infile)}`
       );
-    } catch (e: any) {
-      spinner.fail(`Import failed: ${e.message}`);
+    } catch (error) {
+      spinner.fail(`Import failed: ${getErrorMessage(error)}`);
     }
   });

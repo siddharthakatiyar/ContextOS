@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DB } from '../../core/storage/database.js';
 import { FeedbackTracker } from '../../core/feedback/tracker.js';
 import path from 'path';
+import { getErrorMessage } from '../../utils/errors.js';
 
 /** Recent get_context chunk IDs keyed by normalized source file (B7 implicit feedback). */
 let lastRetrievedByFile: Map<string, string[]> = new Map();
@@ -96,9 +97,9 @@ export function registerLegacyFeedbackTools(server: McpServer, dbs: DB[]) {
         return {
           content: [{ type: 'text', text: `Successfully recorded feedback. ID: ${id}` }]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error recording feedback: ${error.message}` }],
+          content: [{ type: 'text', text: `Error recording feedback: ${getErrorMessage(error)}` }],
           isError: true
         };
       }

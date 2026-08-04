@@ -2,6 +2,16 @@ import { Database } from 'better-sqlite3';
 import { PromptHistory } from './types.js';
 import { prepareCached } from './stmt-cache.js';
 
+interface PromptRow {
+  id: string;
+  prompt: string;
+  extracted_concepts: string | null;
+  retrieved_chunk_ids: string | null;
+  compiled_token_count: number | null;
+  latency_ms: number | null;
+  created_at: number;
+}
+
 export class PromptsRepo {
   constructor(private db: Database) {}
 
@@ -21,10 +31,10 @@ export class PromptsRepo {
 
   public getRecent(limit: number = 5): PromptHistory[] {
     const stmt = prepareCached(this.db, 'SELECT * FROM prompts ORDER BY created_at DESC LIMIT ?');
-    return (stmt.all(limit) as any[]).map((r) => this.mapRow(r));
+    return (stmt.all(limit) as PromptRow[]).map((r) => this.mapRow(r));
   }
 
-  private mapRow(row: any): PromptHistory {
+  private mapRow(row: PromptRow): PromptHistory {
     return {
       id: row.id,
       prompt: row.prompt,

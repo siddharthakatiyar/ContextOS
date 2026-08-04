@@ -3,6 +3,12 @@ import path from 'path';
 import { glob } from 'glob';
 import { DB } from '../storage/database.js';
 import { Indexer } from '../indexer/index.js';
+import { getErrorMessage } from '../../utils/errors.js';
+
+interface IndexConfig {
+  ignorePatterns: string[];
+  indexablePatterns: string[];
+}
 
 export const INDEXER_VERSION = 1;
 
@@ -23,7 +29,7 @@ export class BackgroundIndexer {
     this.projectDir = projectDir;
   }
 
-  public async startFullIndex(config: any) {
+  public async startFullIndex(config: IndexConfig): Promise<void> {
     if (this.isIndexing) return;
     this.isIndexing = true;
     this.startTime = Date.now();
@@ -97,7 +103,7 @@ export class BackgroundIndexer {
               if (fileStat.size <= 100 * 1024) {
                 await this.indexer.indexFile(file, 'repo');
               }
-            } catch (e) {
+            } catch {
               // Silently skip failed parses
             }
             this.processedFiles++;
@@ -135,8 +141,8 @@ export class BackgroundIndexer {
       console.log(
         `[BackgroundIndexer] Full index completed in ${(Date.now() - this.startTime) / 1000}s`
       );
-    } catch (err: any) {
-      console.error(`[BackgroundIndexer] Error during indexing: ${err.message}`);
+    } catch (error) {
+      console.error(`[BackgroundIndexer] Error during indexing: ${getErrorMessage(error)}`);
     } finally {
       this.isIndexing = false;
     }

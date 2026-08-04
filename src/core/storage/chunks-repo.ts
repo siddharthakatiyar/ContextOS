@@ -18,6 +18,47 @@ export interface QueryFilterOpts {
   limit?: number;
 }
 
+interface ChunkRow {
+  id: string;
+  source_file: string;
+  layer: Layer;
+  workspace_name: string | null;
+  section_title: string | null;
+  section_depth: number;
+  content: string;
+  summary: string | null;
+  keywords: string | null;
+  hash: string;
+  importance: number;
+  token_count: number;
+  file_type?: Chunk['fileType'];
+  language?: string;
+  symbol_name?: string | null;
+  symbol_kind?: string;
+  parent_symbol?: string | null;
+  start_line?: number | null;
+  end_line?: number | null;
+  file_stem?: string | null;
+  created_at: number;
+  updated_at: number;
+  score?: number;
+}
+
+interface FeedbackAdjustmentRow {
+  chunk_id: string;
+  total_adjustment: number;
+}
+
+interface ChunkTotalsRow {
+  c: number;
+  t: number | null;
+}
+
+interface LayerCountRow {
+  layer: Layer;
+  c: number;
+}
+
 export class ChunksRepo {
   constructor(private db: Database) {}
 
@@ -142,7 +183,7 @@ export class ChunksRepo {
 
   public findByLayer(layer: Layer, limit: number = 100): Chunk[] {
     const stmt = prepareCached(this.db, 'SELECT * FROM chunks WHERE layer = ? LIMIT ?');
-    return (stmt.all(layer, limit) as any[]).map((r) => this.mapRow(r)) as Chunk[];
+    return (stmt.all(layer, limit) as ChunkRow[]).map((row) => this.mapRow(row));
   }
 
   public searchFTS(query: string, opts?: SearchOpts): ScoredChunk[] {
@@ -154,7 +195,7 @@ export class ChunksRepo {
     `;
     // Preserve caller-built OR/AND/NOT; sanitize only inside quoted terms
     const sanitizedQuery = sanitizeFTSQuery(query, { preserveOperators: true });
-    const params: any[] = [sanitizedQuery];
+    const params: unknown[] = [sanitizedQuery];
 
     if (opts?.layer) {
       sql += ` AND c.layer = ?`;
@@ -168,8 +209,8 @@ export class ChunksRepo {
     params.push(opts?.limit ?? 30);
 
     const stmt = prepareCached(this.db, sql);
-    const rows = stmt.all(...params) as any[];
-    return rows.map((r) => this.mapRow(r)) as ScoredChunk[];
+    const rows = stmt.all(...params) as ChunkRow[];
+    return rows.map((row) => this.mapRow(row) as ScoredChunk);
   }
 
   public findByKeyword(keyword: string, opts?: QueryFilterOpts): Chunk[] {
@@ -180,7 +221,7 @@ export class ChunksRepo {
       WHERE chunks_fts MATCH 'keywords:' || ?
     `;
     const sanitizedKeyword = sanitizeFTSTerm(keyword);
-    const params: any[] = [`"${sanitizedKeyword.replace(/"/g, '""')}"`];
+    const params: unknown[] = [`"${sanitizedKeyword.replace(/"/g, '""')}"`];
 
     if (opts?.layers && opts.layers.length > 0) {
       sql += ` AND c.layer IN (${opts.layers.map(() => '?').join(',')})`;
@@ -191,22 +232,22 @@ export class ChunksRepo {
     params.push(opts?.limit ?? 20);
 
     const stmt = prepareCached(this.db, sql);
-    const rows = stmt.all(...params) as any[];
-    return rows.map((r) => this.mapRow(r)) as Chunk[];
+    const rows = stmt.all(...params) as ChunkRow[];
+    return rows.map((row) => this.mapRow(row));
   }
 
   public findByTitleMatch(concept: string, opts?: QueryFilterOpts): Chunk[] {
     let sql = `SELECT * FROM chunks WHERE section_title LIKE ?`;
-    const params: any[] = [`%${concept}%`];
+    const params: unknown[] = [`%${concept}%`];
     if (opts?.layers && opts.layers.length > 0) {
       sql += ` AND layer IN (${opts.layers.map(() => '?').join(',')})`;
       params.push(...opts.layers);
     }
     sql += ` LIMIT ?`;
     params.push(opts?.limit ?? 20);
-    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
-      this.mapRow(r)
-    ) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as ChunkRow[]).map((row) =>
+      this.mapRow(row)
+    );
   }
 
   public findBySymbolName(name: string, opts?: QueryFilterOpts): Chunk[] {
@@ -217,16 +258,16 @@ export class ChunksRepo {
          OR symbol_name LIKE ? ESCAPE '\\')
     `;
     const prefix = name.replace(/[%_\\]/g, '\\$&') + '%';
-    const params: any[] = [name, prefix];
+    const params: unknown[] = [name, prefix];
     if (opts?.layers && opts.layers.length > 0) {
       sql += ` AND layer IN (${opts.layers.map(() => '?').join(',')})`;
       params.push(...opts.layers);
     }
     sql += ` LIMIT ?`;
     params.push(opts?.limit ?? 20);
-    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
-      this.mapRow(r)
-    ) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as ChunkRow[]).map((row) =>
+      this.mapRow(row)
+    );
   }
 
   public findBySymbolFuzzy(name: string, opts?: QueryFilterOpts): Chunk[] {
@@ -237,16 +278,16 @@ export class ChunksRepo {
       JOIN chunks c ON fts.rowid = c.rowid
       WHERE fts.symbol_name LIKE ?
     `;
-    const params: any[] = [`%${name}%`];
+    const params: unknown[] = [`%${name}%`];
     if (opts?.layers && opts.layers.length > 0) {
       sql += ` AND c.layer IN (${opts.layers.map(() => '?').join(',')})`;
       params.push(...opts.layers);
     }
     sql += ` LIMIT ?`;
     params.push(opts?.limit ?? 15);
-    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
-      this.mapRow(r)
-    ) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as ChunkRow[]).map((row) =>
+      this.mapRow(row)
+    );
   }
 
   public findByParentSymbol(name: string, opts?: QueryFilterOpts): Chunk[] {
@@ -254,16 +295,16 @@ export class ChunksRepo {
       SELECT * FROM chunks
       WHERE parent_symbol = ? COLLATE NOCASE
     `;
-    const params: any[] = [name];
+    const params: unknown[] = [name];
     if (opts?.layers && opts.layers.length > 0) {
       sql += ` AND layer IN (${opts.layers.map(() => '?').join(',')})`;
       params.push(...opts.layers);
     }
     sql += ` LIMIT ?`;
     params.push(opts?.limit ?? 30);
-    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
-      this.mapRow(r)
-    ) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as ChunkRow[]).map((row) =>
+      this.mapRow(row)
+    );
   }
 
   public findByFileStem(stem: string, limit: number = 20, opts?: QueryFilterOpts): Chunk[] {
@@ -300,7 +341,7 @@ export class ChunksRepo {
         OR fts.source_file LIKE ?
       )
     `;
-    const params: any[] = [
+    const params: unknown[] = [
       stemLower,
       prefix,
       contains,
@@ -320,16 +361,16 @@ export class ChunksRepo {
     sql += ` ORDER BY stem_rank DESC, kind_rank DESC LIMIT ?`;
     params.push(opts?.limit ?? limit);
 
-    return (prepareCached(this.db, sql).all(...params) as any[]).map((r) =>
-      this.mapRow(r)
-    ) as Chunk[];
+    return (prepareCached(this.db, sql).all(...params) as ChunkRow[]).map((row) =>
+      this.mapRow(row)
+    );
   }
 
   public getByIds(ids: string[]): Chunk[] {
     if (ids.length === 0) return [];
     const placeholders = ids.map(() => '?').join(',');
     const stmt = prepareCached(this.db, `SELECT * FROM chunks WHERE id IN (${placeholders})`);
-    return (stmt.all(...ids) as any[]).map((r) => this.mapRow(r)) as Chunk[];
+    return (stmt.all(...ids) as ChunkRow[]).map((row) => this.mapRow(row));
   }
 
   public getFeedbackAdjustments(chunkIds: string[]): Record<string, number> {
@@ -347,14 +388,14 @@ export class ChunksRepo {
         GROUP BY chunk_id
       `
         )
-        .all(...chunkIds) as any[];
+        .all(...chunkIds) as FeedbackAdjustmentRow[];
 
       const adjustments: Record<string, number> = {};
       for (const r of results) {
         adjustments[r.chunk_id] = r.total_adjustment;
       }
       return adjustments;
-    } catch (e) {
+    } catch {
       // Table might not exist yet
       return {};
     }
@@ -363,10 +404,10 @@ export class ChunksRepo {
   public getStats(): ChunkStats {
     const totalRow = this.db
       .prepare('SELECT COUNT(*) as c, SUM(token_count) as t FROM chunks')
-      .get() as any;
+      .get() as ChunkTotalsRow;
     const layersRow = this.db
       .prepare('SELECT layer, COUNT(*) as c FROM chunks GROUP BY layer')
-      .all() as any[];
+      .all() as LayerCountRow[];
 
     const stats: ChunkStats = {
       totalChunks: totalRow.c || 0,
@@ -381,7 +422,7 @@ export class ChunksRepo {
     return stats;
   }
 
-  private mapRow(row: any): any {
+  private mapRow(row: ChunkRow): Chunk & { score?: number } {
     return {
       id: row.id,
       sourceFile: row.source_file,

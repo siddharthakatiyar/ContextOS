@@ -14,16 +14,17 @@ export function parseMarkdown(filePath: string, rawContent: string): ParsedDocum
       for (const line of lines) {
         const [key, ...values] = line.split(':');
         if (key && values.length > 0) {
-          let val: any = values.join(':').trim();
-          if (val.startsWith('[') && val.endsWith(']')) {
+          const rawValue = values.join(':').trim();
+          let val: unknown = rawValue;
+          if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
             try {
-              val = JSON.parse(val.replace(/'/g, '"'));
-            } catch (e) {}
+              val = JSON.parse(rawValue.replace(/'/g, '"'));
+            } catch {}
           }
           frontmatter[key.trim()] = val;
         }
       }
-    } catch (e) {
+    } catch {
       // ignore frontmatter parse errors
     }
     content = content.substring(frontmatterMatch[0].length);

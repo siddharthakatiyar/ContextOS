@@ -9,6 +9,11 @@ export interface FeedbackSignal {
   created_at: number;
 }
 
+interface FeedbackAdjustmentRow {
+  chunk_id: string;
+  total_adjustment: number;
+}
+
 export class FeedbackTracker {
   constructor(private db: DB) {}
 
@@ -69,7 +74,7 @@ export class FeedbackTracker {
       GROUP BY chunk_id
     `
       )
-      .all(...chunkIds) as any[];
+      .all(...chunkIds) as FeedbackAdjustmentRow[];
 
     const adjustments: Record<string, number> = {};
     for (const r of results) {

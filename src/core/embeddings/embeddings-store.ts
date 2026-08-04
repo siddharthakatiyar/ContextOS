@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { createRequire } from 'node:module';
 import { getEmbeddingDims } from './embedder.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export interface EmbeddingHit {
   chunkId: string;
@@ -72,9 +73,9 @@ function ensureVecTable(db: Database.Database): boolean {
     }
     vecTableEnsuredDbs.add(db);
     return true;
-  } catch (e: any) {
+  } catch (error) {
     vecExtensionOk = false;
-    logVecOnce(e?.message || String(e));
+    logVecOnce(getErrorMessage(error));
     return false;
   }
 }
@@ -111,8 +112,8 @@ export class EmbeddingsStore {
         this.db
           .prepare(`INSERT INTO ${VEC_TABLE} (chunk_id, embedding) VALUES (?, ?)`)
           .run(chunkId, blob);
-      } catch (e: any) {
-        logVecOnce(`vec upsert failed: ${e?.message || e}`);
+      } catch (error) {
+        logVecOnce(`vec upsert failed: ${getErrorMessage(error)}`);
       }
     }
   }
@@ -157,8 +158,8 @@ export class EmbeddingsStore {
           chunkId: r.chunkId,
           score: 1 / (1 + (r.distance ?? 0))
         }));
-      } catch (e: any) {
-        logVecOnce(`vec search failed, using brute-force: ${e?.message || e}`);
+      } catch (error) {
+        logVecOnce(`vec search failed, using brute-force: ${getErrorMessage(error)}`);
       }
     }
 

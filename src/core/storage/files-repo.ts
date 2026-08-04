@@ -2,6 +2,16 @@ import { Database } from 'better-sqlite3';
 import { FileRecord, Layer } from './types.js';
 import { prepareCached } from './stmt-cache.js';
 
+interface FileRow {
+  path: string;
+  layer: Layer;
+  workspace_name: string | null;
+  hash: string;
+  last_indexed: number;
+  importance: number;
+  chunk_count: number;
+}
+
 export class FilesRepo {
   constructor(private db: Database) {}
 
@@ -27,7 +37,7 @@ export class FilesRepo {
 
   public getByPath(path: string): FileRecord | null {
     const stmt = prepareCached(this.db, 'SELECT * FROM files WHERE path = ?');
-    const row = stmt.get(path) as any;
+    const row = stmt.get(path) as FileRow | undefined;
     return row ? this.mapRow(row) : null;
   }
 
@@ -44,10 +54,10 @@ export class FilesRepo {
 
   public listByLayer(layer: Layer): FileRecord[] {
     const stmt = prepareCached(this.db, 'SELECT * FROM files WHERE layer = ?');
-    return (stmt.all(layer) as any[]).map((r) => this.mapRow(r));
+    return (stmt.all(layer) as FileRow[]).map((r) => this.mapRow(r));
   }
 
-  private mapRow(row: any): FileRecord {
+  private mapRow(row: FileRow): FileRecord {
     return {
       path: row.path,
       layer: row.layer,

@@ -275,7 +275,7 @@ function renderPass(
 ): { output: string; tokenCount: number; stubs: ScoredChunk[] } {
   const full = compressedChunks.filter((c) => !isStub(c));
   const stubs = compressedChunks.filter((c) => isStub(c));
-  const repoRoot = (opts as any).repoRoot;
+  const repoRoot = opts.repoRoot;
 
   const byLayer: Record<string, ScoredChunk[]> = {
     session: [],
@@ -409,7 +409,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     activeMaxTokens = Math.max(activeMaxTokens, opts.maxExactTokens || 4000);
   }
 
-  const framingFloor = (opts as any).framingReserve ?? 48;
+  const framingFloor = opts.framingReserve ?? 48;
   const firstPassBudget = Math.max(380, activeMaxTokens - framingFloor);
 
   let compressedChunks = compressChunks(result.chunks, firstPassBudget, ctxOpts);

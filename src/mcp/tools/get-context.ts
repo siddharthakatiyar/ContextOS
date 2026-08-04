@@ -10,6 +10,7 @@ import { SessionManager } from '../../core/session/index.js';
 import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
 import { loadConfig } from '../../config/index.js';
 import { executeGetContext } from './get-context-core.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 const PROMPT_CACHE_TTL_MS = 30_000;
 const PROMPT_CACHE_SIZE = 8;
@@ -107,7 +108,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           {
             maxTokens: max_tokens,
             layers: layers as string[],
-            outputFormat: output_format as any,
+            outputFormat: output_format === 'xml' ? 'xml' : 'markdown',
             repoRoot,
             tier: tier as 'stub' | 'full'
           },
@@ -124,16 +125,17 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
             }
           ]
         };
-      } catch (error: any) {
+      } catch (error) {
+        const message = getErrorMessage(error);
         sessionStore.addEvent({
           sessionId: sessionManager.getSessionId(),
           eventType: 'error',
-          content: `Error: ${error.message}`,
+          content: `Error: ${message}`,
           relatedFiles: null
         });
 
         return {
-          content: [{ type: 'text', text: `Error retrieving context: ${error.message}` }],
+          content: [{ type: 'text', text: `Error retrieving context: ${message}` }],
           isError: true
         };
       }

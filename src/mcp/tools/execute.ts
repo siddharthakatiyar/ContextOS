@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import path from 'path';
 import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
 import { loadConfig } from '../../config/index.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -246,7 +247,7 @@ export function registerExecuteTool(server: McpServer) {
             { type: 'text', text: output || 'Command completed successfully with no output.' }
           ]
         };
-      } catch (error: any) {
+      } catch (error) {
         const capOutput = (output: string) => {
           if (!output) return '';
           const lines = output.split('\n');
@@ -255,11 +256,21 @@ export function registerExecuteTool(server: McpServer) {
           const tail = lines.slice(lines.length - 50).join('\n');
           return `${head}\n\n... [${lines.length - 250} lines omitted by ContextOS] ...\n\n${tail}`;
         };
+        const failure =
+          typeof error === 'object' && error !== null
+            ? (error as { code?: unknown; stdout?: unknown; stderr?: unknown })
+            : {};
+        const exitCode =
+          typeof failure.code === 'string' || typeof failure.code === 'number'
+            ? failure.code
+            : 'unknown';
+        const stdoutText = typeof failure.stdout === 'string' ? failure.stdout : '';
+        const stderrText = typeof failure.stderr === 'string' ? failure.stderr : '';
         return {
           content: [
             {
               type: 'text',
-              text: `Command failed with exit code ${error.code}:\n\nSTDOUT:\n${capOutput(error.stdout)}\n\nSTDERR:\n${capOutput(error.stderr)}\n\nError Message:\n${error.message}`
+              text: `Command failed with exit code ${exitCode}:\n\nSTDOUT:\n${capOutput(stdoutText)}\n\nSTDERR:\n${capOutput(stderrText)}\n\nError Message:\n${getErrorMessage(error)}`
             }
           ],
           isError: true

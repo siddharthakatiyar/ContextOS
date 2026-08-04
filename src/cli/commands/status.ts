@@ -3,14 +3,24 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { DB, getContextOSHome } from '../../core/storage/database.js';
-import { loadConfig } from '../../config/index.js';
+import { getErrorCode } from '../../utils/errors.js';
+
+interface CountRow {
+  count: number;
+}
+
+interface IndexingStatus {
+  fullIndexCompleted?: boolean;
+  processed?: number;
+  total?: number;
+  progressPercentage?: number;
+}
 
 export const statusCommand = new Command('status')
   .description('Show the status of the local ContextOS index')
   .option('--json', 'Output in JSON format')
   .action(async (options) => {
     const cwd = process.cwd();
-    const config = loadConfig();
     const dbs = DB.resolveDatabases(cwd);
 
     // Check daemon status
@@ -27,8 +37,8 @@ export const statusCommand = new Command('status')
         } else {
           daemonPid = null;
         }
-      } catch (err: any) {
-        if (err.code === 'ESRCH') {
+      } catch (error) {
+        if (getErrorCode(error) === 'ESRCH') {
           daemonStatus = 'Stale PID (Stopped)';
         } else {
           daemonStatus = 'Error reading PID';
@@ -46,10 +56,13 @@ export const statusCommand = new Command('status')
       for (const dbInst of dbs) {
         const db = dbInst.getInstance();
 
-        const fileCount = (db.prepare('SELECT COUNT(*) as count FROM files').get() as any).count;
-        const chunkCount = (db.prepare('SELECT COUNT(*) as count FROM chunks').get() as any).count;
-        const relCount = (db.prepare('SELECT COUNT(*) as count FROM relationships').get() as any)
+        const fileCount = (db.prepare('SELECT COUNT(*) as count FROM files').get() as CountRow)
           .count;
+        const chunkCount = (db.prepare('SELECT COUNT(*) as count FROM chunks').get() as CountRow)
+          .count;
+        const relCount = (
+          db.prepare('SELECT COUNT(*) as count FROM relationships').get() as CountRow
+        ).count;
 
         let dbSize = 0;
         if (fs.existsSync(db.name)) {
@@ -74,12 +87,12 @@ export const statusCommand = new Command('status')
         totalRels += relCount;
       }
 
-      let indexingStatus = null;
+      let indexingStatus: IndexingStatus | null = null;
       const statusPath = path.join(cwd, '.contextos', 'status.json');
       if (fs.existsSync(statusPath)) {
         try {
           indexingStatus = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
-        } catch (e) {}
+        } catch {}
       }
 
       if (options.json) {

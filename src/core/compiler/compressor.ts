@@ -402,7 +402,6 @@ export function truncatePreservingSignals(
   // can drop short-but-critical terms like expander.expand under noisy prompts.
   const forced = (signalTerms || []).filter((t) => typeof t === 'string' && t.includes('.'));
   const termList = [...new Set([...forced, ...collectSignalTerms(signalTerms, concepts)])];
-  const signalRe = buildSignalRegex(termList);
   const selected = new Set<number>();
 
   // Rank signal lines by longest matching term (prefer specific identifiers)
@@ -770,7 +769,7 @@ export function pickPrimaries(
   maxTokens: number,
   ctx: CompressCtx
 ): ScoredChunk[] {
-  const { signalList, idSet, symbolNamedInPrompt, stemMatch } = ctx;
+  const { signalList, symbolNamedInPrompt, stemMatch } = ctx;
 
   const candidates = deduped.filter((c) => !isTestFile(c));
   if (candidates.length === 0) return deduped.slice(0, 3);

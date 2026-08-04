@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { loadConfig } from '../../config/index.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 const MODEL_ID = 'sentence-transformers/all-MiniLM-L6-v2';
 const EMBEDDING_DIMS = 384;
@@ -58,9 +59,9 @@ async function loadPipeline(): Promise<FeatureExtractionPipeline | null> {
       const extractor = await pipeline('feature-extraction', MODEL_ID);
       pipelineFn = extractor as FeatureExtractionPipeline;
       return pipelineFn;
-    } catch (e: any) {
+    } catch (error) {
       unavailable = true;
-      logUnavailableOnce(e?.message || String(e));
+      logUnavailableOnce(getErrorMessage(error));
       return null;
     } finally {
       loadPromise = null;
@@ -136,9 +137,9 @@ export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
       results.push(vec);
     }
     return results;
-  } catch (e: any) {
+  } catch (error) {
     unavailable = true;
-    logUnavailableOnce(e?.message || String(e));
+    logUnavailableOnce(getErrorMessage(error));
     return [];
   }
 }

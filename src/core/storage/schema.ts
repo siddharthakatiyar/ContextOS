@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -420,14 +421,14 @@ function migrateToV5(db: Database.Database): void {
 
   try {
     migrateRelationshipsUnique(db);
-  } catch (e: any) {
-    console.error(`Relationship UNIQUE migration failed: ${e.message}`);
+  } catch (error) {
+    console.error(`Relationship UNIQUE migration failed: ${getErrorMessage(error)}`);
   }
 
   try {
     ensureChunksFts(db, true);
-  } catch (e: any) {
-    console.error(`FTS rebuild failed: ${e.message}`);
+  } catch (error) {
+    console.error(`FTS rebuild failed: ${getErrorMessage(error)}`);
   }
 
   setSchemaVersion(db, 5);
@@ -529,8 +530,8 @@ export function applyMigrations(db: Database.Database) {
 
         // Upgrade straight to version 3
         db.prepare('UPDATE schema_version SET version = 3').run();
-      } catch (e: any) {
-        console.error(`Migration from v1 failed: ${e.message}`);
+      } catch (error) {
+        console.error(`Migration from v1 failed: ${getErrorMessage(error)}`);
       }
     } else if (currentVersion === 2) {
       console.error('Migrating ContextOS database to v0.4.0 (Adaptive Scoring)...');
@@ -538,8 +539,8 @@ export function applyMigrations(db: Database.Database) {
         // Version 3 adds feedback_signals
         db.exec(SCHEMA_SQL);
         db.prepare('UPDATE schema_version SET version = 3').run();
-      } catch (e: any) {
-        console.error(`Migration to v3 failed: ${e.message}`);
+      } catch (error) {
+        console.error(`Migration to v3 failed: ${getErrorMessage(error)}`);
       }
     }
 
@@ -556,8 +557,8 @@ export function applyMigrations(db: Database.Database) {
       try {
         db.exec(SCHEMA_SQL);
         setSchemaVersion(db, 4);
-      } catch (e: any) {
-        console.error(`Migration to v4 failed: ${e.message}`);
+      } catch (error) {
+        console.error(`Migration to v4 failed: ${getErrorMessage(error)}`);
       }
     }
 
@@ -566,8 +567,8 @@ export function applyMigrations(db: Database.Database) {
     if (afterVersion === 4) {
       try {
         migrateToV5(db);
-      } catch (e: any) {
-        console.error(`Migration to v5 failed: ${e.message}`);
+      } catch (error) {
+        console.error(`Migration to v5 failed: ${getErrorMessage(error)}`);
       }
     }
 
@@ -588,8 +589,8 @@ export function applyMigrations(db: Database.Database) {
       if (getSchemaVersion(db) === 4) {
         try {
           migrateToV5(db);
-        } catch (e: any) {
-          console.error(`Migration to v5 failed: ${e.message}`);
+        } catch (error) {
+          console.error(`Migration to v5 failed: ${getErrorMessage(error)}`);
         }
       }
     }
@@ -598,8 +599,8 @@ export function applyMigrations(db: Database.Database) {
     if (afterVersion === 5) {
       try {
         migrateToV6(db);
-      } catch (e: any) {
-        console.error(`Migration to v6 failed: ${e.message}`);
+      } catch (error) {
+        console.error(`Migration to v6 failed: ${getErrorMessage(error)}`);
       }
     }
   });

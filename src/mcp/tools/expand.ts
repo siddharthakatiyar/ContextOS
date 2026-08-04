@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { extractTermWindows } from '../../core/expand/window-extractor.js';
 import { DB } from '../../core/storage/database.js';
 import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
-export function registerExpandTool(server: McpServer, dbs: DB[]) {
+export function registerExpandTool(server: McpServer, _dbs: DB[]) {
   server.tool(
     'ctx_expand',
     'Extract targeted windows of code around specific terms from files. Use this when get_context returns stubs and you need to peek at specific implementations without loading the entire file.',
@@ -44,9 +45,9 @@ export function registerExpandTool(server: McpServer, dbs: DB[]) {
             }
           ]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error extracting windows: ${error.message}` }],
+          content: [{ type: 'text', text: `Error extracting windows: ${getErrorMessage(error)}` }],
           isError: true
         };
       }

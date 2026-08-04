@@ -4,7 +4,6 @@ import { DB } from '../../src/core/storage/database.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { loadConfig } from '../../src/config/index.js';
 
 vi.mock('../../src/core/embeddings/index.js', () => ({
   isEmbeddingsAvailable: () => false,
@@ -44,7 +43,7 @@ describe('Indexer', () => {
       fs.writeFileSync(target, 'hello');
       try {
         fs.symlinkSync(target, symlink);
-      } catch (e) {
+      } catch {
         return;
       }
 

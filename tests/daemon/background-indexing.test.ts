@@ -67,7 +67,9 @@ describe('BackgroundIndexer', () => {
     expect(savedStatus.fullIndexCompleted).toBe(true);
 
     // Database should be populated
-    const fileCount = (db.getInstance().prepare('SELECT count(*) as c FROM files').get() as any).c;
+    const fileCount = (
+      db.getInstance().prepare('SELECT count(*) as c FROM files').get() as { c: number }
+    ).c;
     expect(fileCount).toBeGreaterThan(0);
   });
 });

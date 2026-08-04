@@ -46,7 +46,7 @@ export async function buildFixtureDb(): Promise<string> {
     try {
       const stat = fs.statSync(file);
       hashStr += `${file}:${stat.size}:${stat.mtimeMs}\n`;
-    } catch (e) {}
+    } catch {}
   }
 
   const currentHash = crypto.createHash('sha256').update(hashStr).digest('hex');
@@ -72,7 +72,7 @@ export async function buildFixtureDb(): Promise<string> {
       if (fileStat.size <= 100 * 1024) {
         await indexer.indexFile(file, 'repo', cwd);
       }
-    } catch (e) {}
+    } catch {}
   }
   db.close();
 

@@ -3,6 +3,7 @@ import type { Chunk } from '../storage/types.js';
 import { ChunksRepo, type ScoredChunk } from '../storage/chunks-repo.js';
 import { embedTexts, getEmbeddingModelId, isEmbeddingsAvailable } from './embedder.js';
 import { EmbeddingsStore } from './embeddings-store.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export {
   embedTexts,
@@ -65,15 +66,15 @@ export async function indexChunkEmbeddings(
       for (let j = 0; j < n; j++) {
         try {
           store.upsertEmbedding(batch[j].id, vectors[j], model);
-        } catch (e: any) {
+        } catch (error) {
           console.error(
-            `[contextos] embedding upsert failed for ${batch[j].id}: ${e?.message || e}`
+            `[contextos] embedding upsert failed for ${batch[j].id}: ${getErrorMessage(error)}`
           );
         }
       }
     }
-  } catch (e: any) {
-    console.error(`[contextos] indexChunkEmbeddings failed: ${e?.message || e}`);
+  } catch (error) {
+    console.error(`[contextos] indexChunkEmbeddings failed: ${getErrorMessage(error)}`);
   }
 }
 
@@ -107,8 +108,8 @@ export async function searchEmbeddingChunks(
       scored.push({ ...chunk, score: hit.score });
     }
     return scored;
-  } catch (e: any) {
-    console.error(`[contextos] searchEmbeddingChunks failed: ${e?.message || e}`);
+  } catch (error) {
+    console.error(`[contextos] searchEmbeddingChunks failed: ${getErrorMessage(error)}`);
     return [];
   }
 }
@@ -123,7 +124,7 @@ export async function backfillAllEmbeddings(
 ): Promise<number> {
   if (!isEmbeddingsAvailable()) return 0;
   try {
-    const rows = db.prepare(`SELECT id FROM chunks`).all() as any[];
+    const rows = db.prepare(`SELECT id FROM chunks`).all() as { id: string }[];
     if (!rows.length) return 0;
 
     const repo = new ChunksRepo(db);
@@ -136,8 +137,8 @@ export async function backfillAllEmbeddings(
     }
     await indexChunkEmbeddings(db, chunks, signal);
     return chunks.length;
-  } catch (e: any) {
-    console.error(`[contextos] backfillAllEmbeddings failed: ${e?.message || e}`);
+  } catch (error) {
+    console.error(`[contextos] backfillAllEmbeddings failed: ${getErrorMessage(error)}`);
     return 0;
   }
 }

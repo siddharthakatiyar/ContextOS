@@ -2,6 +2,24 @@ import { Command } from 'commander';
 import { DB } from '../../core/storage/database.js';
 import chalk from 'chalk';
 
+interface PromptCountRow {
+  count: number;
+}
+
+interface PromptStatsRow {
+  sumTokens: number | null;
+  maxTokens: number | null;
+  sumLatency: number | null;
+  maxLatency: number | null;
+}
+
+interface RecentPromptRow {
+  prompt: string;
+  compiled_token_count: number;
+  latency_ms: number;
+  created_at: number;
+}
+
 export const analyticsCommand = new Command('analytics')
   .description('Show context retrieval analytics and prompt history stats')
   .action(async () => {
@@ -14,12 +32,14 @@ export const analyticsCommand = new Command('analytics')
     let maxTokens = 0;
     let totalLatency = 0;
     let maxLatency = 0;
-    const allRecent: any[] = [];
+    const allRecent: RecentPromptRow[] = [];
 
     for (const db of dbs) {
       const dbInstance = db.getInstance();
 
-      const totalPrompts = dbInstance.prepare('SELECT COUNT(*) as count FROM prompts').get() as any;
+      const totalPrompts = dbInstance
+        .prepare('SELECT COUNT(*) as count FROM prompts')
+        .get() as PromptCountRow;
       if (!totalPrompts || totalPrompts.count === 0) continue;
 
       const stats = dbInstance
@@ -33,7 +53,7 @@ export const analyticsCommand = new Command('analytics')
         FROM prompts
       `
         )
-        .get() as any;
+        .get() as PromptStatsRow;
 
       totalQueries += totalPrompts.count;
       totalTokens += stats.sumTokens || 0;
@@ -45,7 +65,7 @@ export const analyticsCommand = new Command('analytics')
         .prepare(
           'SELECT prompt, compiled_token_count, latency_ms, created_at FROM prompts ORDER BY created_at DESC LIMIT 5'
         )
-        .all() as any[];
+        .all() as RecentPromptRow[];
       allRecent.push(...recent);
     }
 

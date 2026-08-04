@@ -44,14 +44,17 @@ export const queryCommand = new Command('query')
         result.chunks.push({
           ...sc,
           sourceFile: 'session',
+          workspaceName: null,
           sectionTitle: null,
           sectionDepth: 0,
           summary: null,
           keywords: null,
           hash: '',
           tokenCount: 0,
-          score: sc.importance
-        } as any);
+          score: sc.importance,
+          createdAt: sc.createdAt ?? Date.now(),
+          updatedAt: sc.updatedAt ?? Date.now()
+        });
       }
 
       const config = loadConfig();

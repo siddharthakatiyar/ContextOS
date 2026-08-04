@@ -7,6 +7,7 @@ import { DB } from '../../core/storage/database.js';
 import { Indexer } from '../../core/indexer/index.js';
 import { loadConfig } from '../../config/index.js';
 import { glob } from 'glob';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export const watchCommand = new Command('watch')
   .description('Watch the current directory for changes and live re-index')
@@ -39,8 +40,8 @@ export const watchCommand = new Command('watch')
         spinner.text = `Initial sync: Indexed ${processed}/${files.length} files...`;
       }
       spinner.succeed(`Initial sync complete. Indexed ${processed} files.`);
-    } catch (e: any) {
-      spinner.fail(`Failed initial sync: ${e.message}`);
+    } catch (error) {
+      spinner.fail(`Failed initial sync: ${getErrorMessage(error)}`);
     }
 
     // Set up file watcher
@@ -62,8 +63,8 @@ export const watchCommand = new Command('watch')
         console.log(chalk.gray(`[ADD] ${path.relative(cwd, filePath)}`));
         try {
           await indexer.indexFile(filePath, 'workspace', options.workspace);
-        } catch (e: any) {
-          console.error(chalk.red(`Failed to index ${filePath}: ${e.message}`));
+        } catch (error) {
+          console.error(chalk.red(`Failed to index ${filePath}: ${getErrorMessage(error)}`));
         }
       })
       .on('change', async (filePath) => {
@@ -73,16 +74,18 @@ export const watchCommand = new Command('watch')
         console.log(chalk.yellow(`[CHANGE] ${path.relative(cwd, filePath)}`));
         try {
           await indexer.indexFile(filePath, 'workspace', options.workspace);
-        } catch (e: any) {
-          console.error(chalk.red(`Failed to update ${filePath}: ${e.message}`));
+        } catch (error) {
+          console.error(chalk.red(`Failed to update ${filePath}: ${getErrorMessage(error)}`));
         }
       })
       .on('unlink', async (filePath) => {
         console.log(chalk.red(`[DELETE] ${path.relative(cwd, filePath)}`));
         try {
           await indexer.removeFile(filePath);
-        } catch (e: any) {
-          console.error(chalk.red(`Failed to remove ${filePath} from index: ${e.message}`));
+        } catch (error) {
+          console.error(
+            chalk.red(`Failed to remove ${filePath} from index: ${getErrorMessage(error)}`)
+          );
         }
       });
 

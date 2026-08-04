@@ -3,6 +3,7 @@ import { z } from 'zod';
 import fs from 'fs';
 import { onFileRead } from './feedback.js';
 import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 export function registerReadFileTool(server: McpServer) {
   server.tool(
@@ -122,9 +123,9 @@ export function registerReadFileTool(server: McpServer) {
             }
           ]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error reading file: ${error.message}` }],
+          content: [{ type: 'text', text: `Error reading file: ${getErrorMessage(error)}` }],
           isError: true
         };
       }

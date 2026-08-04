@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import fs from 'fs';
 import { DB } from '../../core/storage/database.js';
 import { ChunksRepo } from '../../core/storage/chunks-repo.js';
+import { getErrorMessage } from '../../utils/errors.js';
 
 /** Cap stale-file mtime checks so status stays fast on large indexes. */
 const STALE_CHECK_LIMIT = 500;
@@ -97,9 +98,9 @@ export function registerGetStatusTool(server: McpServer, db: DB) {
             }
           ]
         };
-      } catch (error: any) {
+      } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error getting status: ${error.message}` }],
+          content: [{ type: 'text', text: `Error getting status: ${getErrorMessage(error)}` }],
           isError: true
         };
       }
