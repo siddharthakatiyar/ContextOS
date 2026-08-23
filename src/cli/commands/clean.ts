@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { DB, getContextOSHome } from '../../core/storage/database.js';
+import { EmbeddingsStore } from '../../core/embeddings/embeddings-store.js';
 import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs';
@@ -81,7 +82,12 @@ export const cleanCommand = new Command('clean')
         );
         const deleteChunk = dbInstance.prepare('DELETE FROM chunks WHERE id = ?');
 
+        // vec0 vectors have no FK support — garbage-collect them explicitly
+        const embeddingsStore = new EmbeddingsStore(dbInstance);
+        const junkIds = junkChunks.map((chunk) => chunk.id);
+
         const transaction = dbInstance.transaction(() => {
+          embeddingsStore.deleteByChunkIds(junkIds);
           for (const chunk of junkChunks) {
             deleteRels.run(chunk.id);
             deleteChunk.run(chunk.id);

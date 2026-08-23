@@ -33,6 +33,19 @@ describe('database', () => {
     expect(cols).toContain('file_stem');
   });
 
+  it('should give fresh databases the porter+prefix chunks_fts index', () => {
+    // Regression: fresh installs used to keep SCHEMA_SQL's default-tokenizer
+    // FTS table instead of the porter+prefix one used by upgraded databases.
+    const db = new DB(':memory:');
+    const row = db
+      .getInstance()
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='chunks_fts'")
+      .get() as { sql: string };
+    expect(row.sql).toContain('porter unicode61');
+    expect(row.sql).toContain("prefix='2 3'");
+    db.close();
+  });
+
   it('should resolve hierarchical databases', () => {
     // resolveDatabases returns an array, fallback to global or local
     const dbs = DB.resolveDatabases(os.tmpdir());

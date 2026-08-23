@@ -8,6 +8,18 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ---
 
+## [1.0.1] - 2026-08-15
+
+### Fixed
+
+- **Docs**: Stabilized hero terminal scrolling on the documentation site (#29).
+
+### Changed
+
+- Security dependency bumps for the `npm_and_yarn` group across the root and docs workspaces (#30).
+
+---
+
 ## [1.0.0] - 2026-08-04
 
 First stable release of ContextOS.
