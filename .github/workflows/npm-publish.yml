@@ -63,7 +63,8 @@ jobs:
         run: |
           PACKAGE_TARBALL=$(npm pack --pack-destination "$RUNNER_TEMP" --silent)
           npm install --prefix "$RUNNER_TEMP/contextos-smoke" "$RUNNER_TEMP/$PACKAGE_TARBALL" --no-audit --no-fund
-          "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --version | grep -Fx '1.0.0'
+          EXPECTED_VERSION=$(node -p "require('./package.json').version")
+          "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --version | grep -Fx "$EXPECTED_VERSION"
           "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --help >/dev/null
 
       - name: Upgrade NPM for OIDC support

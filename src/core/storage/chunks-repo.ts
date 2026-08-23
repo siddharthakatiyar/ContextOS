@@ -181,6 +181,12 @@ export class ChunksRepo {
     stmt.run(sourceFile);
   }
 
+  /** Chunk IDs for a file, collected before deletion so embedding vectors can be garbage-collected. */
+  public getIdsBySource(sourceFile: string): string[] {
+    const stmt = prepareCached(this.db, 'SELECT id FROM chunks WHERE source_file = ?');
+    return (stmt.all(sourceFile) as { id: string }[]).map((row) => row.id);
+  }
+
   public findByLayer(layer: Layer, limit: number = 100): Chunk[] {
     const stmt = prepareCached(this.db, 'SELECT * FROM chunks WHERE layer = ? LIMIT ?');
     return (stmt.all(layer, limit) as ChunkRow[]).map((row) => this.mapRow(row));

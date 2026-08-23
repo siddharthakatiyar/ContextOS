@@ -19,6 +19,7 @@ import { hashContent } from '../../utils/hash.js';
 import { isBinaryFile, isGeneratedFile } from '../../utils/file-heuristics.js';
 import { Layer, Chunk } from '../storage/types.js';
 import { indexChunkEmbeddings } from '../embeddings/index.js';
+import { EmbeddingsStore } from '../embeddings/embeddings-store.js';
 
 /** Skip files larger than this before reading (B25). */
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
@@ -171,7 +172,13 @@ export class Indexer {
       chunkCount: chunks.length
     });
 
-    // Cleanup old chunks and relationships for this file (FK cascade deletes relationships)
+    // Cleanup old chunks and relationships for this file (FK cascade deletes relationships).
+    // chunk_embeddings rows cascade via FK, but the sqlite-vec table has no FK
+    // support — collect stale chunk IDs first so vectors can be garbage-collected.
+    const staleChunkIds = this.chunksRepo.getIdsBySource(filePath);
+    if (staleChunkIds.length > 0) {
+      new EmbeddingsStore(this.chunksRepo.getDatabase()).deleteByChunkIds(staleChunkIds);
+    }
     this.chunksRepo.deleteBySource(filePath);
 
     // Upsert new chunks
@@ -214,6 +221,11 @@ export class Indexer {
   }
 
   public async removeFile(filePath: string): Promise<void> {
+    // Clean embedding vectors before the cascade — vec0 table has no FK support
+    const staleChunkIds = this.chunksRepo.getIdsBySource(filePath);
+    if (staleChunkIds.length > 0) {
+      new EmbeddingsStore(this.chunksRepo.getDatabase()).deleteByChunkIds(staleChunkIds);
+    }
     // Delete file record, which cascades to chunks and relationships due to SQLite foreign keys
     this.filesRepo.deleteByPath(filePath);
   }

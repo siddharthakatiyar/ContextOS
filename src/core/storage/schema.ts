@@ -513,7 +513,11 @@ export function applyMigrations(db: Database.Database) {
 
       // Run the full schema SQL to ensure all tables (like sessions) exist
       db.exec(SCHEMA_SQL);
-      ensureChunksFts(db, !!hasFiles);
+      // SCHEMA_SQL creates chunks_fts with the default tokenizer and no prefix
+      // indexes; always recreate with porter+prefix (rebuild is a no-op cost on
+      // a fresh empty table). Previously fresh installs silently kept the
+      // inferior index because `!!hasFiles` was undefined for new databases.
+      ensureChunksFts(db, true);
 
       if (hasFiles) {
         setSchemaVersion(db, 3);
