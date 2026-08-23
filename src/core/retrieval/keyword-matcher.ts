@@ -129,12 +129,20 @@ export class KeywordMatcher {
   }
 
   private runFTS(query: string, opts?: RetrievalOptions, ftsLimit?: number): ScoredChunk[] {
+    // A query that sanitizes to nothing (e.g. a quoted term made only of stripped
+    // characters like "---") must be skipped, not handed to FTS5.
+    if (!query || !query.trim()) return [];
     const hits: ScoredChunk[] = [];
     for (const repo of this.chunksRepos) {
-      if (opts?.layers && opts.layers.length > 0) {
-        hits.push(...repo.searchFTS(query, { layers: opts.layers, limit: ftsLimit }));
-      } else {
-        hits.push(...repo.searchFTS(query, { limit: ftsLimit }));
+      try {
+        if (opts?.layers && opts.layers.length > 0) {
+          hits.push(...repo.searchFTS(query, { layers: opts.layers, limit: ftsLimit }));
+        } else {
+          hits.push(...repo.searchFTS(query, { limit: ftsLimit }));
+        }
+      } catch {
+        // FTS5 syntax errors from adversarial prompts degrade to zero hits here —
+        // retrieval must never crash the caller over a malformed query.
       }
     }
     return rankByBm25(mergeUnique(hits));

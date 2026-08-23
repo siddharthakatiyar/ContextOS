@@ -264,6 +264,23 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
   const maxSymbolTokens = options.maxSymbolChunkTokens ?? config.maxSymbolChunkTokens ?? 900;
   const stem = fileStemFromPath(doc.filePath);
 
+  // Symbol titles must be unique per file or two chunks collide on the same
+  // stable ID and one silently overwrites the other in the DB (e.g. overload
+  // signatures sharing a name, or repeated member names across namespaces).
+  // Mirrors the existing `#seg` convention.
+  const usedIdKeys = new Set<string>();
+  const uniqueIdKey = (base: string): string => {
+    if (!usedIdKeys.has(base)) {
+      usedIdKeys.add(base);
+      return base;
+    }
+    let n = 1;
+    while (usedIdKeys.has(`${base}#dup${n}`)) n++;
+    const key = `${base}#dup${n}`;
+    usedIdKeys.add(key);
+    return key;
+  };
+
   for (const symbol of doc.symbols) {
     if (['import', 'variable'].includes(symbol.kind) && doc.symbols.length > 50) {
       // In large files, maybe skip individual imports, but for now we keep them
@@ -297,9 +314,9 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
       }
     }
 
-    const titleContext = emitSymbol.parent
-      ? `${emitSymbol.parent} > ${emitSymbol.name}`
-      : emitSymbol.name;
+    const titleContext = uniqueIdKey(
+      emitSymbol.parent ? `${emitSymbol.parent} > ${emitSymbol.name}` : emitSymbol.name
+    );
     chunks.push(
       createCodeChunk(emitSymbol, titleContext, doc.filePath, doc.language, options, stem)
     );
@@ -330,7 +347,7 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
   if (summaryContent.trim().length > 0) {
     const storedContent = `File: ${doc.filePath}\nLanguage: ${doc.language}\n\nSymbols:\n${summaryContent}`;
     const summaryHashVal = hashContent(storedContent);
-    const id = stableChunkId(doc.filePath, 'File Summary');
+    const id = stableChunkId(doc.filePath, uniqueIdKey('File Summary'));
 
     chunks.push({
       id,
@@ -366,7 +383,7 @@ export function chunkCode(doc: ParsedCodeDocument, options: ChunkCreationOptions
   if (realSymbolChunks.length === 0 && doc.rawContent && doc.rawContent.trim().length > 40) {
     const body = doc.rawContent.length > 8000 ? doc.rawContent.slice(0, 8000) : doc.rawContent;
     const contentHashVal = hashContent(body);
-    const id = stableChunkId(doc.filePath, 'whole');
+    const id = stableChunkId(doc.filePath, uniqueIdKey('whole'));
     chunks.push({
       id,
       sourceFile: doc.filePath,

@@ -24,4 +24,19 @@ describe('fts-sanitizer', () => {
     expect(q).toContain(' AND ');
     expect(q).toContain('"foo bar"');
   });
+
+  it('preserveOperators drops fully-stripped quoted terms instead of emitting empty phrases', () => {
+    // Regression: an empty `""` phrase is an FTS5 syntax error and used to
+    // crash retrieval for prompts quoting only stripped characters.
+    expect(sanitizeFTSQuery('"---"', { preserveOperators: true })).toBe('');
+    const q = sanitizeFTSQuery('"auth" OR "---"', { preserveOperators: true });
+    expect(q).toBe('"auth"');
+  });
+
+  it('preserveOperators collapses dangling operators around dropped terms', () => {
+    expect(sanitizeFTSQuery('"a" OR "---" OR "b"', { preserveOperators: true })).toBe('"a" OR "b"');
+    expect(sanitizeFTSQuery('"---" OR "b"', { preserveOperators: true })).toBe('"b"');
+    expect(sanitizeFTSQuery('"a" OR "---"', { preserveOperators: true })).toBe('"a"');
+    expect(sanitizeFTSQuery('NOT "---"', { preserveOperators: true })).toBe('');
+  });
 });

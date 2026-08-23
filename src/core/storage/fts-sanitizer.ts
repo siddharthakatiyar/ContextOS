@@ -18,14 +18,22 @@ export function sanitizeFTSTerm(term: string): string {
  * Sanitize an FTS5 MATCH query.
  * Default (preserveOperators=false): legacy strip of dashes and AND/OR/NOT everywhere.
  * With preserveOperators=true: only sanitize inside "quoted" terms so Strategy 1 OR/AND works.
+ *
+ * Fully-stripped quoted terms are DROPPED (not emitted as empty `""` phrases — FTS5
+ * rejects those with a syntax error), and dangling boolean operators left behind by
+ * dropped terms are collapsed/trimmed.
  */
 export function sanitizeFTSQuery(query: string, opts?: SanitizeFTSOptions): string {
   if (opts?.preserveOperators) {
     let result = query.replace(/"([^"]*)"/g, (_match, inner: string) => {
       const cleaned = sanitizeFTSTerm(inner);
-      if (!cleaned) return '""';
+      if (!cleaned) return '';
       return `"${cleaned.replace(/"/g, '""')}"`;
     });
+    // Collapse operators left dangling by dropped terms ("a" OR "" OR "b" → "a" OR "b")
+    result = result.replace(/\b(AND|OR|NOT)\b\s*(?=\b(?:AND|OR|NOT)\b)/gi, ' ');
+    result = result.replace(/^(?:\s*(?:AND|OR|NOT)\b)+/i, '');
+    result = result.replace(/(?:\b(?:AND|OR|NOT)\s*)+$/i, '');
     // Collapse leftover whitespace around operators
     result = result.replace(/\s+/g, ' ').trim();
     return result;

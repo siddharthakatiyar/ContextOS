@@ -9,7 +9,7 @@ import { pLimit } from '../../utils/async.js';
 import { BackgroundIndexer } from '../daemon/background-indexer.js';
 
 /** Dotfile/dir paths that should still be watched (B8). */
-const ALLOWED_DOT_SEGMENTS = new Set(['.cursor', '.contextos']);
+const ALLOWED_DOT_SEGMENTS = new Set(['.cursor']);
 
 /**
  * Ignore most dotfiles/dirs, but allow `.cursor/rules` and similar indexable paths.
@@ -17,20 +17,12 @@ const ALLOWED_DOT_SEGMENTS = new Set(['.cursor', '.contextos']);
 function isIgnoredDotPath(filePath: string): boolean {
   const normalized = filePath.replace(/\\/g, '/');
   const parts = normalized.split('/');
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
+  for (const part of parts) {
     if (!part.startsWith('.') || part === '.' || part === '..') continue;
-    if (ALLOWED_DOT_SEGMENTS.has(part)) {
-      // Allow .cursor/rules/** specifically; still ignore other .cursor children if desired
-      if (part === '.cursor') {
-        const next = parts[i + 1];
-        if (next === 'rules' || next === undefined) continue; // allow
-        // other .cursor/* (e.g. .cursor/mcp.json) — still allow if indexablePatterns match later
-        continue;
-      }
-      continue;
-    }
-    return true; // e.g. .git, .env, .DS_Store
+    // Internal state directory: status.json writes during a full index used to
+    // trigger parse/embed work on our own progress file.
+    if (part === '.contextos') return true;
+    if (!ALLOWED_DOT_SEGMENTS.has(part)) return true; // e.g. .git, .env, .DS_Store
   }
   return false;
 }
@@ -43,16 +35,126 @@ function matchesIndexablePatterns(filePath: string, patterns: string[], cwd: str
   );
 }
 
-export function startWatcher(db: DB, workspace?: string): FSWatcher {
+export interface WatcherOptions {
+  /**
+   * Buffer incoming events instead of indexing immediately. Call the returned
+   * watcher's flushBufferedEvents() once the initial full index completes so
+   * edits made during indexing are replayed (hash-skipping makes replays cheap)
+   * instead of being lost until restart.
+   */
+  buffered?: boolean;
+}
+
+export type ContextOSWatcher = FSWatcher & { flushBufferedEvents?: () => void };
+
+interface BufferedEvent {
+  filePath: string;
+  type: 'add' | 'change' | 'unlink';
+}
+
+const BUFFER_CAP = 10_000;
+
+export function startWatcher(
+  db: DB,
+  projectDir?: string,
+  options?: WatcherOptions
+): ContextOSWatcher {
   const config = loadConfig();
-  const indexer = new Indexer(db);
-  const cwd = process.cwd();
+  // Watch and index against the daemon's project directory explicitly — using
+  // process.cwd() here broke every path when the daemon was started elsewhere
+  // (e.g. CONTEXTOS_REPO_ROOT set by an MCP client).
+  const root = projectDir ? path.resolve(projectDir) : process.cwd();
+  const indexer = new Indexer(db, root);
   const limit = pLimit(5); // Throttle concurrent parses during massive file changes
 
-  // Note: Initial sync is skipped here to let the server start instantly.
-  // The MCP server handles its own initial indexing via ctx_index_files or assumes it's up to date.
+  // Note: Initial sync is intentionally NOT done here (the background full index
+  // owns initial state); with options.buffered we collect events meanwhile.
 
-  const watcher = chokidar.watch(cwd, {
+  let buffering = !!options?.buffered;
+  const buffer: BufferedEvent[] = [];
+
+  let eventCount = 0;
+  let windowStart = 0;
+  const BURST_THRESHOLD = 100;
+  const BURST_WINDOW_MS = 5000;
+
+  let bulkActive = false;
+
+  const triggerBulkReindex = (reason: string) => {
+    if (bulkActive || buffering) return;
+    bulkActive = true;
+    limit.clearQueue();
+    console.log(`\n[Watcher] ${reason} Triggering bulk background reindex...`);
+    eventCount = 0;
+
+    // BackgroundIndexer is single-flight per process, so this safely no-ops if
+    // another full index is already running.
+    const bgIndexer = new BackgroundIndexer(db, root);
+    bgIndexer
+      .startFullIndex(config)
+      .catch(console.error)
+      .finally(() => {
+        bulkActive = false;
+      });
+  };
+
+  const schedule = (filePath: string, type: 'add' | 'change' | 'unlink') => {
+    void limit(async () => {
+      try {
+        // Layer 'repo' matches the bulk/full-index path so scores don't flip-flop
+        // depending on whether a file arrived via watch events or full indexing.
+        if (type === 'add' || type === 'change') {
+          await indexer.indexFile(filePath, 'repo');
+        } else if (type === 'unlink') {
+          await indexer.removeFile(filePath);
+        }
+      } catch {
+        // silently ignore
+      }
+    });
+  };
+
+  const handleEvent = (filePath: string, type: 'add' | 'change' | 'unlink') => {
+    const ext = path.extname(filePath);
+    if (type !== 'unlink' && !ext && !filePath.includes('.cursor/rules')) return;
+
+    if (type !== 'unlink' && !matchesIndexablePatterns(filePath, config.indexablePatterns, root)) {
+      return;
+    }
+
+    if (buffering) {
+      if (buffer.length >= BUFFER_CAP) {
+        // Overflow: cheaper and more correct to rebuild than to drain 10k+ events
+        buffer.length = 0;
+        buffering = false;
+        triggerBulkReindex(`Watch buffer overflowed (> ${BUFFER_CAP} pending events).`);
+        return;
+      }
+      buffer.push({ filePath, type });
+      return;
+    }
+
+    if (bulkActive) return; // A full reindex owns the index state right now
+
+    // Literal rolling window: ">=100 events within 5s" — the previous reset-timer
+    // approach accumulated counts across unrelated periods under steady churn
+    // and tripped spurious full reindexes.
+    const now = Date.now();
+    if (now - windowStart > BURST_WINDOW_MS) {
+      windowStart = now;
+      eventCount = 0;
+    }
+    eventCount++;
+
+    if (eventCount >= BURST_THRESHOLD) {
+      triggerBulkReindex(`Massive burst detected (${eventCount} changes in ${BURST_WINDOW_MS}ms).`);
+      return;
+    }
+
+    schedule(filePath, type);
+  };
+
+  const watcher = chokidar.watch(root, {
     ignored: [
       (p: string) => isIgnoredDotPath(p),
       (p: string) => {
@@ -82,52 +184,14 @@ export function startWatcher(db: DB, workspace?: string): FSWatcher {
       stabilityThreshold: 400,
       pollInterval: 100
     }
-  });
+  }) as ContextOSWatcher;
 
-  let eventCount = 0;
-  let debounceTimer: NodeJS.Timeout | null = null;
-  const BURST_THRESHOLD = 100;
-  const DEBOUNCE_MS = 5000;
-
-  const handleEvent = (filePath: string, type: 'add' | 'change' | 'unlink') => {
-    const ext = path.extname(filePath);
-    if (type !== 'unlink' && !ext && !filePath.includes('.cursor/rules')) return;
-
-    if (type !== 'unlink' && !matchesIndexablePatterns(filePath, config.indexablePatterns, cwd)) {
-      return;
-    }
-
-    eventCount++;
-
-    if (debounceTimer) clearTimeout(debounceTimer);
-
-    if (eventCount >= BURST_THRESHOLD) {
-      limit.clearQueue();
-      console.log(
-        `\n[Watcher] Massive burst detected (${eventCount} changes). Triggering bulk background reindex...`
-      );
-      eventCount = 0;
-
-      const bgIndexer = new BackgroundIndexer(db, cwd);
-      bgIndexer.startFullIndex(config).catch(console.error);
-      return;
-    }
-
-    debounceTimer = setTimeout(() => {
-      eventCount = 0;
-    }, DEBOUNCE_MS);
-
-    limit(async () => {
-      try {
-        if (type === 'add' || type === 'change') {
-          await indexer.indexFile(filePath, 'workspace', workspace);
-        } else if (type === 'unlink') {
-          await indexer.removeFile(filePath);
-        }
-      } catch {
-        // silently ignore
-      }
-    });
+  watcher.flushBufferedEvents = () => {
+    if (!buffering) return;
+    buffering = false;
+    const drained = buffer.splice(0);
+    console.log(`[Watcher] Replaying ${drained.length} buffered change(s) from initial index.`);
+    for (const e of drained) schedule(e.filePath, e.type);
   };
 
   watcher

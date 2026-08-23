@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DB } from '../../src/core/storage/database.js';
+import { DB, isCorruptionMessage } from '../../src/core/storage/database.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -42,6 +42,45 @@ describe('Database Auto-Recovery', () => {
     }
 
     // Cleanup
+    fs.rmSync(tmpdir, { recursive: true, force: true });
+  });
+
+  it('recognizes SQLite malformed-image errors as corruption', () => {
+    // Regression: mid-operation corruption surfaces as "database disk image is
+    // malformed", which the old substring list missed entirely.
+    expect(isCorruptionMessage('database disk image is malformed')).toBe(true);
+    expect(isCorruptionMessage('file is not a database')).toBe(true);
+    expect(isCorruptionMessage('SQLiteCorruptException: corrupted page')).toBe(true);
+    expect(isCorruptionMessage('some unrelated failure')).toBe(false);
+  });
+
+  it('refuses destructive recovery while a live daemon holds the database', () => {
+    const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-test-dblive-'));
+    const ctxDir = path.join(tmpdir, '.contextos');
+    const dbPath = path.join(ctxDir, 'index.db');
+    fs.mkdirSync(ctxDir, { recursive: true });
+
+    new DB(dbPath).close();
+
+    const corrupt = () => {
+      const fd = fs.openSync(dbPath, 'r+');
+      fs.writeSync(fd, Buffer.alloc(100, 'x'), 0, 100, 0);
+      fs.closeSync(fd);
+    };
+
+    // Simulate a live daemon via its PID file (our own PID is provably alive)
+    fs.writeFileSync(path.join(ctxDir, 'daemon.pid'), String(process.pid));
+    corrupt();
+    expect(() => new DB(dbPath)).toThrow();
+
+    // With the daemon gone (stale PID), recovery proceeds again
+    fs.writeFileSync(path.join(ctxDir, 'daemon.pid'), String(999_999_999));
+    let recovered: DB | undefined;
+    expect(() => {
+      recovered = new DB(dbPath);
+    }).not.toThrow();
+    recovered?.close();
+
     fs.rmSync(tmpdir, { recursive: true, force: true });
   });
 });

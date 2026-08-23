@@ -12,6 +12,21 @@ describe('keyword-matcher', () => {
     expect(typeof matcher.matchChunks).toBe('function');
   });
 
+  it('survives prompts quoting fully-stripped terms instead of crashing FTS5', () => {
+    // Regression: `"---"` sanitized to an empty `""` phrase, which made FTS5
+    // throw a syntax error straight out of get_context.
+    const db = new DB(':memory:');
+    const matcher = new KeywordMatcher([new ChunksRepo(db.getInstance())]);
+    const intent = {
+      concepts: [],
+      identifiers: [],
+      quotedTerms: ['---'],
+      intentType: 'general',
+      rawPrompt: 'explain the "---" semantics please'
+    };
+    expect(() => matcher.matchChunks(intent)).not.toThrow();
+  });
+
   it('reciprocalRankFusion prefers items ranked high in multiple lists', () => {
     const a = { id: 'a', score: 0 } as ScoredChunk;
     const b = { id: 'b', score: 0 } as ScoredChunk;

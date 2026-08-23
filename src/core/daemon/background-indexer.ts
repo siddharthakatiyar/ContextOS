@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
 import { DB } from '../storage/database.js';
-import { Indexer } from '../indexer/index.js';
+import { Indexer, MAX_INDEXABLE_FILE_BYTES } from '../indexer/index.js';
 import { getErrorMessage } from '../../utils/errors.js';
 
 interface IndexConfig {
@@ -11,6 +11,18 @@ interface IndexConfig {
 }
 
 export const INDEXER_VERSION = 1;
+
+// Single-flight guard at module level: the daemon's startup indexer and any
+// watcher-burst indexer share one process, so a per-instance flag allowed two
+// full indexes to run concurrently (duplicate work + racing status writes).
+let activeFullIndex: Promise<void> | null = null;
+
+/** Write JSON atomically (tmp + rename) so readers never see torn files. */
+function writeJsonAtomic(filePath: string, data: unknown): void {
+  const tmp = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, filePath);
+}
 
 export class BackgroundIndexer {
   private db: DB;
@@ -25,13 +37,28 @@ export class BackgroundIndexer {
 
   constructor(db: DB, projectDir: string) {
     this.db = db;
-    this.indexer = new Indexer(db);
+    // Explicit traversal root — never depend on process.cwd() matching projectDir
+    this.indexer = new Indexer(db, projectDir);
     this.projectDir = projectDir;
   }
 
-  public async startFullIndex(config: IndexConfig): Promise<void> {
-    if (this.isIndexing) return;
+  public startFullIndex(config: IndexConfig): Promise<void> {
+    // Single-flight: activeFullIndex is cleared in .finally() when the run ends,
+    // so any non-null value here means a full index is still running.
+    if (activeFullIndex) {
+      console.log('[BackgroundIndexer] Full index already running — skipping duplicate trigger.');
+      return activeFullIndex;
+    }
     this.isIndexing = true;
+    activeFullIndex = this.runFullIndex(config).finally(() => {
+      this.isIndexing = false;
+      activeFullIndex = null;
+    });
+    return activeFullIndex;
+  }
+
+  private async runFullIndex(config: IndexConfig): Promise<void> {
+    const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
     this.startTime = Date.now();
     this.processedFiles = 0;
     this.totalFiles = 0;
@@ -52,7 +79,9 @@ export class BackgroundIndexer {
         '**/*.min.css',
         '**/*.map',
         '**/*.lock',
-        '**/vendor/**'
+        '**/vendor/**',
+        // Never index our own internal state directory
+        '**/.contextos/**'
       ];
       const userIgnore = config.ignorePatterns || [];
       const ignore = [...new Set([...SAFETY_IGNORE, ...userIgnore])];
@@ -77,14 +106,10 @@ export class BackgroundIndexer {
         console.error(
           `[BackgroundIndexer] Repository too large: ${this.totalFiles} files found. Maximum allowed is ${MAX_FILES}.`
         );
-        const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
-        fs.writeFileSync(
-          statusFile,
-          JSON.stringify({
-            error: `Repository too large: ${this.totalFiles} files found. Maximum allowed is ${MAX_FILES}. Please narrow your indexablePatterns in .contextosconfig.`,
-            fullIndexCompleted: false
-          })
-        );
+        writeJsonAtomic(statusFile, {
+          error: `Repository too large: ${this.totalFiles} files found. Maximum allowed is ${MAX_FILES}. Please narrow your indexablePatterns in .contextosconfig.`,
+          fullIndexCompleted: false
+        });
         return;
       }
 
@@ -92,6 +117,7 @@ export class BackgroundIndexer {
 
       // Process in batches yielding to the event loop
       const BATCH_SIZE = 10;
+      let skippedTooLarge = 0;
 
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         const batch = files.slice(i, i + BATCH_SIZE);
@@ -100,8 +126,12 @@ export class BackgroundIndexer {
           batch.map(async (file) => {
             try {
               const fileStat = fs.statSync(file);
-              if (fileStat.size <= 100 * 1024) {
+              // Same size cap as the incremental/watcher path so coverage does
+              // not depend on which indexing route touched a file first.
+              if (fileStat.size <= MAX_INDEXABLE_FILE_BYTES) {
                 await this.indexer.indexFile(file, 'repo');
+              } else {
+                skippedTooLarge++;
               }
             } catch {
               // Silently skip failed parses
@@ -115,36 +145,34 @@ export class BackgroundIndexer {
 
         if (this.processedFiles % 1000 === 0) {
           console.log(`[BackgroundIndexer] Progress: ${this.processedFiles} / ${this.totalFiles}`);
-          const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
-          fs.writeFileSync(
-            statusFile,
-            JSON.stringify({
-              fullIndexCompleted: false,
-              processed: this.processedFiles,
-              total: this.totalFiles,
-              progressPercentage: Math.round((this.processedFiles / this.totalFiles) * 100)
-            })
-          );
+          writeJsonAtomic(statusFile, {
+            fullIndexCompleted: false,
+            processed: this.processedFiles,
+            total: this.totalFiles,
+            progressPercentage: Math.round((this.processedFiles / this.totalFiles) * 100)
+          });
         }
       }
 
+      if (skippedTooLarge > 0) {
+        console.log(
+          `[BackgroundIndexer] Skipped ${skippedTooLarge} file(s) larger than ${Math.round(
+            MAX_INDEXABLE_FILE_BYTES / 1024
+          )}KB.`
+        );
+      }
+
       // Mark full index as complete
-      const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
-      fs.writeFileSync(
-        statusFile,
-        JSON.stringify({
-          fullIndexCompleted: true,
-          lastIndexTime: Date.now(),
-          indexerVersion: INDEXER_VERSION
-        })
-      );
+      writeJsonAtomic(statusFile, {
+        fullIndexCompleted: true,
+        lastIndexTime: Date.now(),
+        indexerVersion: INDEXER_VERSION
+      });
       console.log(
         `[BackgroundIndexer] Full index completed in ${(Date.now() - this.startTime) / 1000}s`
       );
     } catch (error) {
       console.error(`[BackgroundIndexer] Error during indexing: ${getErrorMessage(error)}`);
-    } finally {
-      this.isIndexing = false;
     }
   }
 

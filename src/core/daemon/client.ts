@@ -67,6 +67,13 @@ function spawnDaemon(projectDir: string): Promise<void> {
   });
 }
 
+/** Exponential backoff for transparent reconnects: 200ms, 400ms, ... capped at 8s. */
+export function computeBackoffMs(attempt: number): number {
+  return Math.min(100 * Math.pow(2, Math.max(0, attempt)), 8_000);
+}
+
+const MAX_RECONNECT_ATTEMPTS = 10;
+
 export async function runDaemonClient(projectDir: string): Promise<void> {
   const socketPath = getSocketPath(projectDir);
 
@@ -102,21 +109,34 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
     process.stdin.pipe(socket);
     socket.pipe(process.stdout);
 
+    let reconnectAttempts = 0;
+
     const onDisconnect = () => {
       // Cleanup existing bindings
       process.stdin.unpipe(socket);
       socket.unpipe(process.stdout);
 
-      // The daemon died or dropped us. Reconnect transparently.
-      // Wait 100ms before trying to reconnect to let the port cleanup
-      setTimeout(
-        () =>
-          wireSocket().catch((error) => {
+      // The daemon died or dropped us. Reconnect with exponential backoff —
+      // previously this looped spawn→crash→respawn every ~600ms forever when
+      // the daemon could not start (e.g. corrupt DB), pinning the CPU.
+      reconnectAttempts++;
+      if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+        process.stderr.write(
+          `ContextOS daemon unreachable after ${MAX_RECONNECT_ATTEMPTS} reconnect attempts at ${socketPath}. Giving up.\n`
+        );
+        process.exit(1);
+      }
+      const delay = computeBackoffMs(reconnectAttempts);
+      setTimeout(() => {
+        wireSocket()
+          .then(() => {
+            reconnectAttempts = 0; // healthy again
+          })
+          .catch((error) => {
             process.stderr.write(`Fatal reconnect error: ${getErrorMessage(error)}\n`);
             process.exit(1);
-          }),
-        100
-      );
+          });
+      }, delay);
     };
 
     socket.once('close', onDisconnect);
