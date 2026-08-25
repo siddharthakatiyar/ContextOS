@@ -61,13 +61,21 @@ export default function Home() {
         {/* HERO SECTION */}
         <section className="flex flex-col items-center text-center gap-12 mt-12">
           <div className="flex flex-col items-center gap-6 max-w-3xl">
-            <div className="bg-neutral-900/50 border border-neutral-800 text-sm font-mono px-4 py-1.5 rounded-full inline-flex items-center gap-2 text-neutral-300 mb-2">
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              v1.0.0 Stable is now available!
-            </div>
+            <a
+              href="https://www.producthunt.com/products/contextos-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-contextos-2"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-2 transition-opacity hover:opacity-80"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- official Product Hunt embed SVG */}
+              <img
+                alt="ContextOS - Intelligent context routing for AI coding assistants | Product Hunt"
+                width={250}
+                height={54}
+                loading="lazy"
+                src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1231828&theme=dark&t=1787663975745"
+              />
+            </a>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight">ContextOS</h1>
             <p className="text-xl md:text-2xl text-neutral-400 font-mono">
               Memory infrastructure for AI agents.
