@@ -10,6 +10,11 @@ export function getContextOSHome(): string {
   return path.join(os.homedir(), '.contextos');
 }
 
+/** The global index may be open in several per-project daemon processes. */
+export function isSharedGlobalDatabasePath(dbPath: string): boolean {
+  return path.resolve(dbPath) === path.resolve(getContextOSHome(), 'index.db');
+}
+
 /**
  * Match every SQLite/Node error surface that indicates a corrupt database file.
  * String-matching is required because better-sqlite3 surfaces mid-operation
@@ -107,18 +112,20 @@ export class DB {
       // If corruption is detected either by quick_check, a SQLITE_CORRUPT error,
       // "file is not a database", or SQLite's mid-operation malformed-image error
       if (isCorruptionMessage(message)) {
-        console.error(
-          `[ContextOS] Database corruption detected at ${resolvedPath}. Auto-recovering...`
-        );
+        console.error(`[ContextOS] Database corruption detected at ${resolvedPath}.`);
 
-        // Never delete files out from under a live daemon — it would keep
-        // writing to the unlinked inode and diverge from the fresh DB.
-        if (hasLiveDaemonFor(resolvedPath)) {
+        // Never destructively recover the shared global DB automatically: its
+        // daemon PID files live in arbitrary project directories, so a sibling
+        // PID check cannot prove that no other process has it open.
+        const isSharedGlobal = isSharedGlobalDatabasePath(resolvedPath);
+        if (isSharedGlobal || hasLiveDaemonFor(resolvedPath)) {
           console.error(
-            `[ContextOS] A live daemon appears to be using this database (${path.join(
-              path.dirname(resolvedPath),
-              'daemon.pid'
-            )}). Skipping destructive recovery; stop the daemon ('contextos daemon stop' or kill it) and retry.`
+            isSharedGlobal
+              ? `[ContextOS] ${resolvedPath} is the shared global database. Skipping destructive auto-recovery because another project daemon may have it open; stop all ContextOS daemons, remove the global index, and retry.`
+              : `[ContextOS] A live daemon appears to be using this database (${path.join(
+                  path.dirname(resolvedPath),
+                  'daemon.pid'
+                )}). Skipping destructive recovery; stop the daemon ('contextos daemon stop' or kill it) and retry.`
           );
           if (dbInstance) {
             try {
@@ -133,6 +140,8 @@ export class DB {
             dbInstance.close();
           } catch {}
         }
+
+        console.error(`[ContextOS] Auto-recovering ${resolvedPath}...`);
 
         // Delete all DB files to start fresh
         if (fs.existsSync(resolvedPath)) fs.unlinkSync(resolvedPath);

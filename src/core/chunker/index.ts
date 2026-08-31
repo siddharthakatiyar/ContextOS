@@ -134,21 +134,34 @@ export function splitBlocksRespectingFences(content: string): string[] {
   const lines = content.split('\n');
   const blocks: string[] = [];
   let current: string[] = [];
-  let inFence = false;
-  let fenceMarker = '';
+  let fenceChar: '`' | '~' | null = null;
+  let fenceLength = 0;
 
   for (const line of lines) {
-    const fenceMatch = /^\s*(```|~~~)/.exec(line);
-    if (fenceMatch) {
-      if (!inFence) {
-        inFence = true;
-        fenceMarker = fenceMatch[1];
-      } else if (line.trim().startsWith(fenceMarker)) {
-        inFence = false;
+    if (fenceChar) {
+      // CommonMark closers use the same marker, contain at least as many marker
+      // characters as the opener, and have only whitespace after the marker.
+      const closeMatch = /^ {0,3}(`{3,}|~{3,})[\t ]*$/.exec(line);
+      if (closeMatch && closeMatch[1][0] === fenceChar && closeMatch[1].length >= fenceLength) {
+        fenceChar = null;
+        fenceLength = 0;
+      }
+    } else {
+      // CommonMark permits up to three leading spaces. Backtick info strings
+      // cannot themselves contain a backtick.
+      const openMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if (openMatch) {
+        const marker = openMatch[1];
+        const markerChar = marker[0] as '`' | '~';
+        const info = openMatch[2];
+        if (markerChar === '~' || !info.includes('`')) {
+          fenceChar = markerChar;
+          fenceLength = marker.length;
+        }
       }
     }
 
-    if (!inFence && line.trim() === '') {
+    if (!fenceChar && line.trim() === '') {
       if (current.length > 0) {
         blocks.push(current.join('\n'));
         current = [];

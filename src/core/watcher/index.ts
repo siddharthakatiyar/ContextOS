@@ -79,10 +79,29 @@ export function startWatcher(
   const BURST_WINDOW_MS = 5000;
 
   let bulkActive = false;
+  // Latest observed state per path. This includes the events that caused a
+  // burst and all events received while the full index is running. Replaying
+  // them after the bulk pass closes both races: queued/in-flight incremental
+  // work cannot win last with stale content, and edits after a file was scanned
+  // by the bulk pass are not lost.
+  const bulkReplay = new Map<string, BufferedEvent['type']>();
+  let burstEvents: BufferedEvent[] = [];
+
+  const rememberForBulkReplay = (events: BufferedEvent[]) => {
+    for (const event of events) bulkReplay.set(event.filePath, event.type);
+  };
+
+  const replayAfterBulk = () => {
+    const drained = Array.from(bulkReplay, ([filePath, type]) => ({ filePath, type }));
+    bulkReplay.clear();
+    for (const event of drained) schedule(event.filePath, event.type);
+  };
 
   const triggerBulkReindex = (reason: string) => {
     if (bulkActive || buffering) return;
     bulkActive = true;
+    rememberForBulkReplay(burstEvents);
+    burstEvents = [];
     limit.clearQueue();
     console.log(`\n[Watcher] ${reason} Triggering bulk background reindex...`);
     eventCount = 0;
@@ -95,6 +114,7 @@ export function startWatcher(
       .catch(console.error)
       .finally(() => {
         bulkActive = false;
+        replayAfterBulk();
       });
   };
 
@@ -124,8 +144,11 @@ export function startWatcher(
 
     if (buffering) {
       if (buffer.length >= BUFFER_CAP) {
-        // Overflow: cheaper and more correct to rebuild than to drain 10k+ events
-        buffer.length = 0;
+        // The startup full index may already be the module-level single flight.
+        // Preserve the overflowed events for a replay when that pass finishes;
+        // merely requesting another full index would return the active promise.
+        buffer.push({ filePath, type });
+        rememberForBulkReplay(buffer.splice(0));
         buffering = false;
         triggerBulkReindex(`Watch buffer overflowed (> ${BUFFER_CAP} pending events).`);
         return;
@@ -134,7 +157,10 @@ export function startWatcher(
       return;
     }
 
-    if (bulkActive) return; // A full reindex owns the index state right now
+    if (bulkActive) {
+      bulkReplay.set(filePath, type);
+      return;
+    }
 
     // Literal rolling window: ">=100 events within 5s" — the previous reset-timer
     // approach accumulated counts across unrelated periods under steady churn
@@ -143,8 +169,10 @@ export function startWatcher(
     if (now - windowStart > BURST_WINDOW_MS) {
       windowStart = now;
       eventCount = 0;
+      burstEvents = [];
     }
     eventCount++;
+    burstEvents.push({ filePath, type });
 
     if (eventCount >= BURST_THRESHOLD) {
       triggerBulkReindex(`Massive burst detected (${eventCount} changes in ${BURST_WINDOW_MS}ms).`);

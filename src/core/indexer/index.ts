@@ -17,7 +17,7 @@ import { extractRelationships, extractImportRelationships } from '../graph/extra
 import { scoreFileImportance } from './importance-scorer.js';
 import { hashContent } from '../../utils/hash.js';
 import { isBinaryFile, isGeneratedFile } from '../../utils/file-heuristics.js';
-import { Layer, Chunk } from '../storage/types.js';
+import { Layer, Chunk, Relationship } from '../storage/types.js';
 import { indexChunkEmbeddings } from '../embeddings/index.js';
 import { EmbeddingsStore } from '../embeddings/embeddings-store.js';
 
@@ -167,6 +167,20 @@ export class Indexer {
       chunk.importance = importance;
     }
 
+    // Build graph edges before changing the hash-gated persistent state so the
+    // file row, chunks, and relationships can commit or roll back together.
+    const allRels: Relationship[] = [];
+    for (const chunk of chunks) {
+      allRels.push(...extractRelationships(chunk));
+    }
+
+    // File-level import edges attached to the File Structure (or first) chunk
+    if (imports.length > 0 && chunks.length > 0) {
+      const anchor = chunks.find((c) => c.sectionTitle === 'File Structure') || chunks[0];
+      const fileStem = path.basename(filePath).replace(/\.[^.]+$/, '');
+      allRels.push(...extractImportRelationships(anchor, imports, fileStem));
+    }
+
     // Persist the whole file replacement atomically: file record upsert, stale
     // vector GC, old-chunk deletion and new-chunk insertion must succeed or fail
     // together. Previously a crash between delete and insert left the file row
@@ -197,9 +211,17 @@ export class Indexer {
 
       // Upsert new chunks
       this.chunksRepo.bulkUpsert(chunks);
+
+      // Relationship rows are hash-gated just like chunks. Keeping them in this
+      // transaction ensures a failed graph write leaves the previous file hash,
+      // chunks, and graph intact so a retry can converge.
+      if (allRels.length > 0) {
+        this.relsRepo.bulkUpsert(allRels);
+      }
     });
     persistFile();
     chunksCreated = chunks.length;
+    relationshipsFound = allRels.length;
 
     // Embeddings are retrieval-side only — never block indexing on model failures
     try {
@@ -207,25 +229,6 @@ export class Indexer {
       await indexChunkEmbeddings(this.chunksRepo.getDatabase(), chunks, signal);
     } catch {
       // continue without embeddings
-    }
-
-    // Extract and upsert relationships
-    const allRels = [];
-    for (const chunk of chunks) {
-      const rels = extractRelationships(chunk);
-      allRels.push(...rels);
-    }
-
-    // File-level import edges attached to the File Structure (or first) chunk
-    if (imports.length > 0 && chunks.length > 0) {
-      const anchor = chunks.find((c) => c.sectionTitle === 'File Structure') || chunks[0];
-      const fileStem = path.basename(filePath).replace(/\.[^.]+$/, '');
-      allRels.push(...extractImportRelationships(anchor, imports, fileStem));
-    }
-
-    if (allRels.length > 0) {
-      this.relsRepo.bulkUpsert(allRels);
-      relationshipsFound = allRels.length;
     }
 
     return {

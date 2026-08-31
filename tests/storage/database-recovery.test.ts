@@ -1,8 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { DB, isCorruptionMessage } from '../../src/core/storage/database.js';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  DB,
+  getContextOSHome,
+  isCorruptionMessage,
+  isSharedGlobalDatabasePath
+} from '../../src/core/storage/database.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import os from 'os';
 
 describe('Database Auto-Recovery', () => {
   it('detects corruption and auto-recreates the database', () => {
@@ -52,6 +57,33 @@ describe('Database Auto-Recovery', () => {
     expect(isCorruptionMessage('file is not a database')).toBe(true);
     expect(isCorruptionMessage('SQLiteCorruptException: corrupted page')).toBe(true);
     expect(isCorruptionMessage('some unrelated failure')).toBe(false);
+  });
+
+  it('recognizes the shared global database so destructive recovery can be refused', () => {
+    expect(isSharedGlobalDatabasePath(path.join(getContextOSHome(), 'index.db'))).toBe(true);
+    expect(
+      isSharedGlobalDatabasePath(path.join(os.tmpdir(), 'project', '.contextos', 'index.db'))
+    ).toBe(false);
+  });
+
+  it('does not delete a corrupt shared global database automatically', () => {
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-test-global-recovery-'));
+    const homedir = vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+    try {
+      const dbPath = path.join(getContextOSHome(), 'index.db');
+      const db = new DB(dbPath);
+      db.close();
+
+      const fd = fs.openSync(dbPath, 'r+');
+      fs.writeSync(fd, Buffer.alloc(100, 'x'), 0, 100, 0);
+      fs.closeSync(fd);
+
+      expect(() => new DB(dbPath)).toThrow();
+      expect(fs.readFileSync(dbPath).subarray(0, 4).toString()).toBe('xxxx');
+    } finally {
+      homedir.mockRestore();
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 
   it('refuses destructive recovery while a live daemon holds the database', () => {

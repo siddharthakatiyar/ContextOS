@@ -9,6 +9,17 @@ const RRF_K = 60;
 const MAX_CLASS_EXPAND_PER_ID = 3;
 type CandidateChunk = Chunk & { score?: number };
 
+/** Errors produced by the bound FTS5 MATCH expression, not storage failures. */
+export function isFTSQuerySyntaxError(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes('fts5: syntax error') ||
+    message.includes('unterminated string') ||
+    message.includes('malformed match expression')
+  );
+}
+
 export interface WeightedList {
   list: ScoredChunk[];
   weight: number;
@@ -140,9 +151,10 @@ export class KeywordMatcher {
         } else {
           hits.push(...repo.searchFTS(query, { limit: ftsLimit }));
         }
-      } catch {
+      } catch (error) {
         // FTS5 syntax errors from adversarial prompts degrade to zero hits here —
         // retrieval must never crash the caller over a malformed query.
+        if (!isFTSQuerySyntaxError(error)) throw error;
       }
     }
     return rankByBm25(mergeUnique(hits));

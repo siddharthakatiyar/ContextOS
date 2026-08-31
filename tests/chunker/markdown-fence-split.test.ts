@@ -70,6 +70,25 @@ after`);
     expect(blocks.filter((b) => b === 'before' || b === 'after')).toHaveLength(2);
   });
 
+  it('does not close a longer fence on a shorter marker or marker-like code line', () => {
+    const blocks = splitBlocksRespectingFences(`before
+
+\`\`\`\`markdown
+alpha
+
+\`\`\`inside
+
+omega
+\`\`\`\`
+
+after`);
+    const fenced = blocks.find((block) => block.includes('alpha'));
+    expect(fenced).toContain('```inside\n\nomega');
+    expect(fenced).toContain('````markdown');
+    expect(fenced).toContain('````');
+    expect(blocks).toEqual(['before', fenced, 'after']);
+  });
+
   it('hard-splits a single oversized paragraph instead of emitting one giant chunk', () => {
     const giantParagraph = Array.from(
       { length: 60 },

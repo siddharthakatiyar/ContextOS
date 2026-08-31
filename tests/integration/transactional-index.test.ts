@@ -5,6 +5,7 @@ import os from 'os';
 import { DB } from '../../src/core/storage/database.js';
 import { Indexer } from '../../src/core/indexer/index.js';
 import { ChunksRepo } from '../../src/core/storage/chunks-repo.js';
+import { RelationshipsRepo } from '../../src/core/storage/relationships-repo.js';
 
 vi.mock('../../src/core/embeddings/index.js', () => ({
   isEmbeddingsAvailable: () => false,
@@ -89,5 +90,61 @@ describe('Transactional file indexing', () => {
       .map((r) => r.content)
       .join('\n');
     expect(retryContents).toContain('"v2"');
+  });
+
+  it('rolls back the file hash and chunks when relationship persistence fails', async () => {
+    const file = path.join(tmpdir, 'graph.ts');
+    const v1 = [
+      'export function connectServices() {',
+      '  // api-service depends on cache-service',
+      '  return "v1";',
+      '}'
+    ].join('\n');
+    fs.writeFileSync(file, v1);
+    const indexer = new Indexer(db);
+    await indexer.indexFile(file, 'repo', tmpdir);
+
+    const beforeHash = (
+      db.getInstance().prepare('SELECT hash FROM files WHERE path = ?').get(file) as {
+        hash: string;
+      }
+    ).hash;
+    const beforeChunks = db
+      .getInstance()
+      .prepare('SELECT content FROM chunks WHERE source_file = ? ORDER BY id')
+      .all(file) as { content: string }[];
+
+    const relationshipFailure = vi
+      .spyOn(RelationshipsRepo.prototype, 'bulkUpsert')
+      .mockImplementation(() => {
+        throw new Error('relationship write failed');
+      });
+    fs.writeFileSync(file, v1.replace('v1', 'v2'));
+    await expect(indexer.indexFile(file, 'repo', tmpdir)).rejects.toThrow(
+      'relationship write failed'
+    );
+    relationshipFailure.mockRestore();
+
+    const afterHash = (
+      db.getInstance().prepare('SELECT hash FROM files WHERE path = ?').get(file) as {
+        hash: string;
+      }
+    ).hash;
+    const afterChunks = db
+      .getInstance()
+      .prepare('SELECT content FROM chunks WHERE source_file = ? ORDER BY id')
+      .all(file) as { content: string }[];
+    expect(afterHash).toBe(beforeHash);
+    expect(afterChunks).toEqual(beforeChunks);
+
+    await indexer.indexFile(file, 'repo', tmpdir);
+    const retryContent = (
+      db.getInstance().prepare('SELECT content FROM chunks WHERE source_file = ?').all(file) as {
+        content: string;
+      }[]
+    )
+      .map((row) => row.content)
+      .join('\n');
+    expect(retryContent).toContain('"v2"');
   });
 });
