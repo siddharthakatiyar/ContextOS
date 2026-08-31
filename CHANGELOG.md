@@ -8,6 +8,22 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Retrieval crash**: prompts quoting fully-stripped terms (e.g. `"---"`) no longer crash FTS5 with a syntax error; malformed queries degrade gracefully.
+- **Indexing atomicity**: per-file persistence (file record, vector GC, chunk replacement) now runs in a single SQLite transaction — crashes can no longer leave a file claiming chunks it does not have.
+- **Daemon path handling**: the watcher and background indexer operate on the daemon's project directory explicitly; indexing no longer silently fails when the process is started from a different working directory (`CONTEXTOS_REPO_ROOT`).
+- **Ranking consistency**: files edited after the initial index keep their `repo` layer instead of flipping to `workspace`, so scores no longer depend on edit history.
+- **Duplicate symbols/headings**: same-named overload signatures and repeated markdown section titles now get distinct chunk IDs (`#dupN`) instead of silently overwriting each other in the index.
+- **Markdown chunking**: fenced code blocks are never split mid-fence when an oversized section is chunked, and single oversized paragraphs are hard-split so chunk budgets hold.
+- **Corruption recovery**: recognizes SQLite's "database disk image is malformed" error, and refuses destructive self-heal while a live daemon still holds the database (prevents split-brain databases).
+- **Daemon reconnect loop**: exponential backoff (100ms→8s, 10 attempts) replaces the tight respawn spin when the daemon cannot start.
+- **Watcher bursts**: full reindexes are single-flight across daemon startup and burst triggers; `.contextos/**` internal state is never indexed; burst detection uses a literal 5s rolling window; `status.json` writes are atomic.
+
+---
+
 ## [1.0.1] - 2026-08-15
 
 ### Fixed

@@ -15,7 +15,7 @@ import { registerListTopicsTool } from '../../mcp/tools/list-topics.js';
 import { registerKnowledgeTools } from '../../mcp/tools/knowledge.js';
 import { registerFeedbackTools } from '../../mcp/tools/feedback.js';
 import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
-import { startWatcher } from '../watcher/index.js';
+import { startWatcher, type ContextOSWatcher } from '../watcher/index.js';
 import { SessionStore } from '../session/session-store.js';
 import { BackgroundIndexer } from './background-indexer.js';
 
@@ -186,17 +186,28 @@ export class ContextOSDaemon {
           }
 
           if (needsFullIndex) {
+            // Start the watcher BEFORE indexing (buffered): events fired during
+            // the full index used to be lost until restart. Buffered replays are
+            // cheap — indexFile hash-skips unchanged files.
+            this.watcher = startWatcher(this.dbs[0], this.projectDir, { buffered: true });
+            const flushBufferedEvents = () => {
+              try {
+                (this.watcher as ContextOSWatcher | undefined)?.flushBufferedEvents?.();
+              } catch (err) {
+                console.error(
+                  `[ContextOS] Failed replaying buffered watch events: ${getErrorMessage(err as Error)}`
+                );
+              }
+            };
             this.backgroundIndexer = new BackgroundIndexer(this.dbs[0], this.projectDir);
-            this.backgroundIndexer
-              .startFullIndex(config)
-              .then(() => {
-                this.watcher = startWatcher(this.dbs[0], this.projectDir);
-              })
-              .catch((err) => {
+            void this.backgroundIndexer.startFullIndex(config).then(
+              () => flushBufferedEvents(),
+              (err: Error) => {
                 console.error(`[ERROR] Background indexer failed: ${err.message}`);
-                // Start watcher even if indexer fails so we don't leave the daemon completely dead
-                this.watcher = startWatcher(this.dbs[0], this.projectDir);
-              });
+                // Flush even if indexing failed so we don't leave the daemon deaf
+                flushBufferedEvents();
+              }
+            );
           } else {
             this.watcher = startWatcher(this.dbs[0], this.projectDir);
           }

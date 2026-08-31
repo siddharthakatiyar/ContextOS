@@ -17,12 +17,13 @@ import { extractRelationships, extractImportRelationships } from '../graph/extra
 import { scoreFileImportance } from './importance-scorer.js';
 import { hashContent } from '../../utils/hash.js';
 import { isBinaryFile, isGeneratedFile } from '../../utils/file-heuristics.js';
-import { Layer, Chunk } from '../storage/types.js';
+import { Layer, Chunk, Relationship } from '../storage/types.js';
 import { indexChunkEmbeddings } from '../embeddings/index.js';
 import { EmbeddingsStore } from '../embeddings/embeddings-store.js';
 
-/** Skip files larger than this before reading (B25). */
-const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
+/** Skip files larger than this before reading (B25). Shared by bulk + watcher paths. */
+export const MAX_INDEXABLE_FILE_BYTES = 2 * 1024 * 1024; // 2MB
+const MAX_FILE_BYTES = MAX_INDEXABLE_FILE_BYTES;
 
 export interface IndexStats {
   filesProcessed: number;
@@ -40,11 +41,17 @@ export class Indexer {
   private chunksRepo: ChunksRepo;
   private filesRepo: FilesRepo;
   private relsRepo: RelationshipsRepo;
+  private rootDir: string;
 
-  constructor(db: DB) {
+  constructor(db: DB, rootDir?: string) {
     this.chunksRepo = new ChunksRepo(db.getInstance());
     this.filesRepo = new FilesRepo(db.getInstance());
     this.relsRepo = new RelationshipsRepo(db.getInstance());
+    // Security root for path-traversal checks. Defaults to process.cwd() but
+    // long-lived callers (daemon/watcher) pass their project dir explicitly so
+    // indexing never breaks when the process was started from another directory
+    // (e.g. via CONTEXTOS_REPO_ROOT).
+    this.rootDir = rootDir ? path.resolve(rootDir) : process.cwd();
   }
 
   public async indexFile(
@@ -62,7 +69,7 @@ export class Indexer {
     }
 
     // Path traversal guard
-    const root = workspaceName ? path.resolve(workspaceName) : process.cwd();
+    const root = workspaceName ? path.resolve(workspaceName) : this.rootDir;
     const resolvedPath = path.resolve(filePath);
     if (!isInsideWorkspace(resolvedPath, root)) {
       throw new Error(`Path traversal blocked: ${filePath} is outside workspace root (${root})`);
@@ -160,44 +167,11 @@ export class Indexer {
       chunk.importance = importance;
     }
 
-    // Update file record first to satisfy foreign key constraints
-    signal?.throwIfAborted();
-    this.filesRepo.upsert({
-      path: filePath,
-      layer,
-      workspaceName: workspaceName || null,
-      hash,
-      lastIndexed: Date.now(),
-      importance,
-      chunkCount: chunks.length
-    });
-
-    // Cleanup old chunks and relationships for this file (FK cascade deletes relationships).
-    // chunk_embeddings rows cascade via FK, but the sqlite-vec table has no FK
-    // support — collect stale chunk IDs first so vectors can be garbage-collected.
-    const staleChunkIds = this.chunksRepo.getIdsBySource(filePath);
-    if (staleChunkIds.length > 0) {
-      new EmbeddingsStore(this.chunksRepo.getDatabase()).deleteByChunkIds(staleChunkIds);
-    }
-    this.chunksRepo.deleteBySource(filePath);
-
-    // Upsert new chunks
-    this.chunksRepo.bulkUpsert(chunks);
-    chunksCreated = chunks.length;
-
-    // Embeddings are retrieval-side only — never block indexing on model failures
-    try {
-      signal?.throwIfAborted();
-      await indexChunkEmbeddings(this.chunksRepo.getDatabase(), chunks, signal);
-    } catch {
-      // continue without embeddings
-    }
-
-    // Extract and upsert relationships
-    const allRels = [];
+    // Build graph edges before changing the hash-gated persistent state so the
+    // file row, chunks, and relationships can commit or roll back together.
+    const allRels: Relationship[] = [];
     for (const chunk of chunks) {
-      const rels = extractRelationships(chunk);
-      allRels.push(...rels);
+      allRels.push(...extractRelationships(chunk));
     }
 
     // File-level import edges attached to the File Structure (or first) chunk
@@ -207,9 +181,54 @@ export class Indexer {
       allRels.push(...extractImportRelationships(anchor, imports, fileStem));
     }
 
-    if (allRels.length > 0) {
-      this.relsRepo.bulkUpsert(allRels);
-      relationshipsFound = allRels.length;
+    // Persist the whole file replacement atomically: file record upsert, stale
+    // vector GC, old-chunk deletion and new-chunk insertion must succeed or fail
+    // together. Previously a crash between delete and insert left the file row
+    // claiming chunk_count > 0 while zero actual chunks existed.
+    // (bulkUpsert's internal transaction nests as a savepoint.)
+    signal?.throwIfAborted();
+    const persistFile = this.chunksRepo.getDatabase().transaction(() => {
+      // Update file record first to satisfy foreign key constraints
+      this.filesRepo.upsert({
+        path: filePath,
+        layer,
+        workspaceName: workspaceName || null,
+        hash,
+        lastIndexed: Date.now(),
+        importance,
+        chunkCount: chunks.length
+      });
+
+      // FK cascades remove chunk_embeddings rows, but the sqlite-vec table has no
+      // FK support — collect stale chunk IDs first so vectors can be garbage-collected.
+      const staleChunkIds = this.chunksRepo.getIdsBySource(filePath);
+      if (staleChunkIds.length > 0) {
+        new EmbeddingsStore(this.chunksRepo.getDatabase()).deleteByChunkIds(staleChunkIds);
+      }
+
+      // Cleanup old chunks and relationships for this file (FK cascade deletes relationships)
+      this.chunksRepo.deleteBySource(filePath);
+
+      // Upsert new chunks
+      this.chunksRepo.bulkUpsert(chunks);
+
+      // Relationship rows are hash-gated just like chunks. Keeping them in this
+      // transaction ensures a failed graph write leaves the previous file hash,
+      // chunks, and graph intact so a retry can converge.
+      if (allRels.length > 0) {
+        this.relsRepo.bulkUpsert(allRels);
+      }
+    });
+    persistFile();
+    chunksCreated = chunks.length;
+    relationshipsFound = allRels.length;
+
+    // Embeddings are retrieval-side only — never block indexing on model failures
+    try {
+      signal?.throwIfAborted();
+      await indexChunkEmbeddings(this.chunksRepo.getDatabase(), chunks, signal);
+    } catch {
+      // continue without embeddings
     }
 
     return {

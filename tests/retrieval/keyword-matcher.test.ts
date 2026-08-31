@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { KeywordMatcher, reciprocalRankFusion } from '../../src/core/retrieval/keyword-matcher.js';
+import {
+  isFTSQuerySyntaxError,
+  KeywordMatcher,
+  reciprocalRankFusion
+} from '../../src/core/retrieval/keyword-matcher.js';
 import { DB } from '../../src/core/storage/database.js';
 import { ChunksRepo } from '../../src/core/storage/chunks-repo.js';
 import { ScoredChunk } from '../../src/core/retrieval/types.js';
@@ -10,6 +14,42 @@ describe('keyword-matcher', () => {
     const matcher = new KeywordMatcher([new ChunksRepo(db.getInstance())]);
     expect(matcher).toBeDefined();
     expect(typeof matcher.matchChunks).toBe('function');
+  });
+
+  it('survives prompts quoting fully-stripped terms instead of crashing FTS5', () => {
+    // Regression: `"---"` sanitized to an empty `""` phrase, which made FTS5
+    // throw a syntax error straight out of get_context.
+    const db = new DB(':memory:');
+    const matcher = new KeywordMatcher([new ChunksRepo(db.getInstance())]);
+    const intent = {
+      concepts: [],
+      identifiers: [],
+      quotedTerms: ['---'],
+      intentType: 'general',
+      rawPrompt: 'explain the "---" semantics please'
+    };
+    expect(() => matcher.matchChunks(intent)).not.toThrow();
+  });
+
+  it('suppresses only FTS query syntax errors and propagates storage failures', () => {
+    const syntaxRepo = {
+      searchFTS: () => {
+        throw new Error('fts5: syntax error near ""');
+      }
+    } as unknown as ChunksRepo;
+    const storageRepo = {
+      searchFTS: () => {
+        throw new Error('database disk image is malformed');
+      }
+    } as unknown as ChunksRepo;
+    type RunFTS = (query: string) => ScoredChunk[];
+
+    const syntaxMatcher = new KeywordMatcher(syntaxRepo) as unknown as { runFTS: RunFTS };
+    const storageMatcher = new KeywordMatcher(storageRepo) as unknown as { runFTS: RunFTS };
+    expect(syntaxMatcher.runFTS('bad query')).toEqual([]);
+    expect(() => storageMatcher.runFTS('valid query')).toThrow('database disk image is malformed');
+    expect(isFTSQuerySyntaxError(new Error('unterminated string'))).toBe(true);
+    expect(isFTSQuerySyntaxError(new Error('database is locked'))).toBe(false);
   });
 
   it('reciprocalRankFusion prefers items ranked high in multiple lists', () => {

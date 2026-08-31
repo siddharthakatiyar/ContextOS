@@ -8,26 +8,39 @@ export interface LimitFunction {
   clearQueue: () => void;
 }
 
+interface QueueEntry {
+  cancelled: boolean;
+  resolve: () => void;
+}
+
 export function pLimit(concurrency: number): LimitFunction {
   if (concurrency < 1) {
     throw new TypeError('Expected `concurrency` to be a number from 1 and up');
   }
 
-  const queue: Array<() => void> = [];
+  const queue: QueueEntry[] = [];
   let activeCount = 0;
 
   const next = () => {
     activeCount--;
     if (queue.length > 0) {
-      queue.shift()?.();
+      queue.shift()!.resolve();
     }
   };
 
   const runner = async <T>(fn: () => Promise<T>): Promise<T> => {
     if (activeCount >= concurrency) {
-      await new Promise<void>((resolve) => {
-        queue.push(resolve);
+      const entry: QueueEntry = { cancelled: false, resolve: () => {} };
+      const gate = new Promise<void>((resolve) => {
+        entry.resolve = resolve;
       });
+      queue.push(entry);
+      await gate;
+      if (entry.cancelled) {
+        // Abandoned via clearQueue(): settle without executing so callers'
+        // promises never hang and active bookkeeping stays consistent.
+        return undefined as T;
+      }
     }
 
     activeCount++;
@@ -40,7 +53,11 @@ export function pLimit(concurrency: number): LimitFunction {
   };
 
   runner.clearQueue = () => {
-    queue.length = 0;
+    while (queue.length > 0) {
+      const entry = queue.shift()!;
+      entry.cancelled = true;
+      entry.resolve();
+    }
   };
 
   return runner;

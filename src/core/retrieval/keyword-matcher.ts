@@ -9,6 +9,17 @@ const RRF_K = 60;
 const MAX_CLASS_EXPAND_PER_ID = 3;
 type CandidateChunk = Chunk & { score?: number };
 
+/** Errors produced by the bound FTS5 MATCH expression, not storage failures. */
+export function isFTSQuerySyntaxError(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes('fts5: syntax error') ||
+    message.includes('unterminated string') ||
+    message.includes('malformed match expression')
+  );
+}
+
 export interface WeightedList {
   list: ScoredChunk[];
   weight: number;
@@ -129,12 +140,21 @@ export class KeywordMatcher {
   }
 
   private runFTS(query: string, opts?: RetrievalOptions, ftsLimit?: number): ScoredChunk[] {
+    // A query that sanitizes to nothing (e.g. a quoted term made only of stripped
+    // characters like "---") must be skipped, not handed to FTS5.
+    if (!query || !query.trim()) return [];
     const hits: ScoredChunk[] = [];
     for (const repo of this.chunksRepos) {
-      if (opts?.layers && opts.layers.length > 0) {
-        hits.push(...repo.searchFTS(query, { layers: opts.layers, limit: ftsLimit }));
-      } else {
-        hits.push(...repo.searchFTS(query, { limit: ftsLimit }));
+      try {
+        if (opts?.layers && opts.layers.length > 0) {
+          hits.push(...repo.searchFTS(query, { layers: opts.layers, limit: ftsLimit }));
+        } else {
+          hits.push(...repo.searchFTS(query, { limit: ftsLimit }));
+        }
+      } catch (error) {
+        // FTS5 syntax errors from adversarial prompts degrade to zero hits here —
+        // retrieval must never crash the caller over a malformed query.
+        if (!isFTSQuerySyntaxError(error)) throw error;
       }
     }
     return rankByBm25(mergeUnique(hits));
