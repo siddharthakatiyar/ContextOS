@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const resultsFile = path.join(process.cwd(), 'scripts', 'bench', 'redis-results.json');
-const mapFile = path.join(process.cwd(), 'scripts', 'bench', 'expected-files-map.json');
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const resultsFile = process.env.CONTEXTOS_REDIS_RESULTS || path.join(scriptDir, 'redis-results.json');
+const mapFile = path.join(scriptDir, 'expected-files-map.json');
 
 const results = JSON.parse(fs.readFileSync(resultsFile, 'utf8')).results;
 const expectedMap = JSON.parse(fs.readFileSync(mapFile, 'utf8'));

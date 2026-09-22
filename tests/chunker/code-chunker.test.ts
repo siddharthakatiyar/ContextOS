@@ -37,6 +37,28 @@ describe('code-chunker', () => {
     expect(chunks[0].fileStem).toBe('test');
   });
 
+  it('keeps a named one-line function in the index', () => {
+    const chunks = chunkCode(
+      {
+        filePath: 'small.ts',
+        language: 'typescript',
+        symbols: [
+          {
+            name: 'tempFunc',
+            kind: 'function',
+            startLine: 1,
+            endLine: 1,
+            body: 'export function tempFunc() { return 1; }'
+          }
+        ],
+        rawContent: 'export function tempFunc() { return 1; }'
+      },
+      { layer: 'repo' }
+    );
+
+    expect(chunks.some((chunk) => chunk.symbolName === 'tempFunc')).toBe(true);
+  });
+
   it('should use stable IDs that survive content edits', () => {
     const make = (body: string) =>
       chunkCode(

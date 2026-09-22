@@ -5,9 +5,12 @@ import { Indexer } from '../../core/indexer/index.js';
 import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
 import { globalSentRegistry } from '../../core/session/sent-registry.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import { loadConfig } from '../../config/index.js';
 
 export function registerIndexFilesTool(server: McpServer, db: DB) {
-  const indexer = new Indexer(db);
+  const root = getWorkspaceRoot();
+  const config = loadConfig({ cwd: root });
+  const indexer = new Indexer(db, root, config.ignorePatterns);
 
   server.tool(
     'reindex_context',
@@ -21,7 +24,6 @@ export function registerIndexFilesTool(server: McpServer, db: DB) {
     },
     async ({ path: filePath, layer, workspaceName }) => {
       try {
-        const root = getWorkspaceRoot();
         const resolvedPath = resolveWithinWorkspace(root, filePath);
         if (resolvedPath === null) {
           return {

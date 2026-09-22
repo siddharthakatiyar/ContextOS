@@ -106,7 +106,7 @@ export default function SchemaDocs() {
         </code>
       </pre>
 
-      <h3>4. <code>fts_chunks</code> (BM25 Engine)</h3>
+      <h3>4. <code>chunks_fts</code> (BM25 Engine)</h3>
       <p>
         The virtual table powering the BM25 text search. We explicitly utilize the <code>porter unicode61</code> tokenizer and a prefix index of <code>'2 3'</code> to guarantee sub-millisecond keyword matches across large codebases.
       </p>

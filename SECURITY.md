@@ -29,15 +29,27 @@ We are particularly interested in:
 
 ContextOS serves context from whatever repository it points at. Two things to know when that repository is not fully trusted:
 
-- **`ctx_execute` runs the repository's own scripts.** By default the `ctx_execute` MCP tool allows `npm test`, `npm run build|lint`, and `npx vitest|jest`, which execute the target repo's `package.json` scripts and test files — i.e. repo-controlled code. When indexing an untrusted repository, disable this with `execAllowRepoScripts: false` in your config or `CONTEXTOS_EXEC_ALLOW_SCRIPTS=0`. Read-only commands (`ls`, `cat`, `grep`, `find`, `tree`, `git status|log|diff`) remain available.
+- **`ctx_execute` repository scripts are opt-in.** The `ctx_execute` MCP tool can run `npm test`, `npm run build|lint`, and `npx vitest|jest` only when `execAllowRepoScripts: true` is configured (or `CONTEXTOS_EXEC_ALLOW_SCRIPTS=1` is set). These commands execute the target repository's `package.json` scripts and test files, so keep the setting disabled for untrusted repositories. Read-only commands (`ls`, `cat`, `grep`, `find`, `tree`, `git status|log|diff`) remain available.
 - **File access is confined to the workspace root.** The file-reading and indexing MCP tools resolve every path against `CONTEXTOS_REPO_ROOT` and reject anything that escapes it — including via `..` segments and symlinks.
 - **`git` on a repo shipped with its own `.git`.** `ctx_execute` allows read-only `git status|log|diff|branch`. A repository *delivered as a directory containing an attacker-controlled `.git/config`* (e.g. an extracted archive rather than a normal `git clone`) could set `diff.external` to run a command when the agent runs `git diff`. A normal `git clone` writes a fresh, safe `.git/config`; only fully-untrusted, pre-packaged repositories carry this risk.
 
-## Known dependency advisories (accepted risk)
+## Dependency and runtime notes
 
-`npm audit` reports high-severity advisories without an upstream fix in two transitive dependencies of `@huggingface/transformers`:
+The current lockfile was checked with `npm audit` for both the full graph and
+the production graph; both reports contained zero vulnerabilities at the time
+of this release. Re-run the audit after dependency changes because transitive
+metadata and advisories can change.
 
-- **`onnxruntime-node` → `adm-zip`** can allocate excessive memory when opening a malicious ZIP archive. ContextOS does not accept repository-provided model archives; it loads the configured, fixed Hugging Face model into its private cache.
-- **`sharp` / libvips** contains image-processing advisories. ContextOS uses the transformer pipeline for text embeddings and does not pass repository images to `sharp`.
-
-Embeddings are enabled during indexing by default, so these packages are reachable even though the affected archive/image inputs are not part of ContextOS's text-only workflow. The advisories are re-evaluated every release and will be patched when compatible upstream releases are available.
+- **`onnxruntime-node` → `adm-zip`** is used by the ONNX Runtime package
+  installer. ContextOS does not accept repository-provided model archives; it
+  requests the fixed `sentence-transformers/all-MiniLM-L6-v2` model through the
+  Transformers runtime and keeps its cache under `~/.contextos/models`.
+- **`sharp` / libvips** is an optional transitive dependency of
+  `@huggingface/transformers`. ContextOS's embedding path is text-only and does
+  not pass repository images to `sharp`. The installed libvips package carries
+  LGPL-3.0-or-later metadata; see the repository's third-party inventory for
+  redistribution notes.
+- **Optional CUDA files:** on Linux x64, `onnxruntime-node` may download CUDA
+  provider files during installation. CPU-only installations can set
+  `ONNXRUNTIME_NODE_INSTALL=skip`; this retains the bundled CPU runtime and
+  avoids that optional download.

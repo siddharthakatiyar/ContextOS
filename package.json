@@ -1,6 +1,6 @@
 {
   "name": "@siddharthakatiyar/contextos",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "ContextOS - Universal knowledge graph for coding agents",
   "repository": {
     "type": "git",
@@ -18,7 +18,9 @@
     "dist/src/",
     "dist/bin/",
     "README.md",
-    ".contextosignore.default"
+    ".contextosignore.default",
+    "config.schema.json",
+    "THIRD-PARTY-NOTICES.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -29,7 +31,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "prepublishOnly": "npm run build",
-    "bench": "tsx scripts/run-benchmarks.ts",
+    "bench": "node scripts/bench/run.mjs",
     "generate:large-repo": "tsx tools/generate-large-repo.ts"
   },
   "engines": {
@@ -50,7 +52,7 @@
   "author": "Siddhartha Katiyar",
   "license": "MIT",
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
+    "@huggingface/transformers": "4.3.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "better-sqlite3": "^12.10.0",
     "chalk": "^5.6.2",
@@ -59,6 +61,7 @@
     "commander": "^15.0.0",
     "glob": "^13.0.6",
     "gpt-tokenizer": "^3.4.0",
+    "ignore": "7.0.9",
     "minimatch": "^10.2.6",
     "ora": "^9.4.0",
     "sqlite-vec": "^0.1.9",
@@ -67,18 +70,27 @@
     "web-tree-sitter": "^0.22.6",
     "zod": "^4.4.3"
   },
+  "overrides": {
+    "baseline-browser-mapping": "2.11.25",
+    "browserslist": "4.29.0",
+    "fast-uri": "3.1.8",
+    "hono": "4.13.8",
+    "js-yaml": "4.3.2",
+    "nanoid": "3.3.19",
+    "qs": "6.16.0"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cli-progress": "^3.11.6",
     "@types/node": "^25.9.2",
     "@types/update-notifier": "^6.0.8",
-    "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^10.4.1",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "9.39.5",
     "prettier": "^3.9.5",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.64.0",
-    "vitest": "^4.1.8"
+    "vitest": "4.1.11"
   }
 }

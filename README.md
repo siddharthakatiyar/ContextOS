@@ -36,14 +36,26 @@ cd my-project
 contextos init
 ```
 
+On Linux x64, `onnxruntime-node` may try to fetch its optional CUDA provider
+files during installation. ContextOS works with the bundled CPU runtime, so a
+CPU-only installation can skip that optional download:
+
+```bash
+ONNXRUNTIME_NODE_INSTALL=skip npm install -g @siddharthakatiyar/contextos
+```
+
+This setting only affects the install-time CUDA provider download; it does not
+download or disable the local embedding model. Omit it when CUDA execution is
+required.
+
 > **Note:** You do **not** need to run `contextos serve` manually. 
 > The `serve` command is designed to be called by MCP clients (like any AI Agent) in the background over `stdio`. If you run it manually in your terminal, it will appear to hang as it waits for JSON-RPC messages.
 
 Open your preferred AI Agent and start asking questions! That's it.
 
-After upgrading, restart your MCP client. The daemon automatically rebuilds the
-index when the indexer format changes; use `contextos reindex` only when you
-explicitly want to force a fresh rebuild.
+After upgrading, restart your MCP client. The daemon automatically schedules a
+background rebuild when the indexer format changes; use `contextos reindex` only
+when you explicitly want to clear and rebuild the local index.
 
 ## The Problem: Traditional vs. ContextOS
 
@@ -64,7 +76,7 @@ explicitly want to force a fresh rebuild.
 
 ### 100-Query Retrieval Benchmark (Redis 7.x Codebase)
 
-A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries) on the Redis 7.x C codebase (799 files). "Accuracy" here is file-level recall among the retrieved candidates.
+A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries) on a Redis 7.x C checkout. "Accuracy" here is file-level recall among retrieved candidates. The figures below are a recorded run, not a release guarantee; reproduce it with the benchmark instructions in [`scripts/bench/`](scripts/bench/) and record the checkout and commit used.
 
 | Metric | ContextOS |
 |--------|-----------|
@@ -74,15 +86,31 @@ A 100-query benchmark (50 targeted function queries, 50 broad conceptual queries
 | **Avg tokens / query** | **589** |
 | **Total tokens** (100 queries) | **58,880** |
 
+This is a recorded Redis checkout run. Reproduce the 100-query harness after
+building the CLI by supplying your own checkout; the harness keeps its SQLite
+state and report outside that checkout:
+
+```bash
+npm run build
+CONTEXTOS_EMBEDDINGS=0 CONTEXTOS_REDIS_REPO=/path/to/redis \
+  node scripts/bench/run-redis-bench.mjs --output-dir "$TMPDIR/contextos-redis-results"
+```
+
+The Redis report writes `redis-results.json` and records aggregate
+`expectedFileRecallPercent` (all expected files found divided by all expected
+files), `anyHitRatePercent` (queries with at least one expected file), and
+targeted/generic token averages. These are file-level retrieval metrics for the
+specified checkout and query corpus, not model quality guarantees.
+
 
 **Key Takeaways:**
 - **Surgical Precision:** ContextOS achieves 97% file-level accuracy while using **up to 99% fewer tokens** than traditional multi-file keyword chunking.
 - **Near-Flawless Targeted Retrieval:** ContextOS's AST-aware matcher reliably zeroes in on exact function implementations (98% hit rate).
 - **Strong Conceptual Retrieval:** ContextOS successfully resolves broad queries (e.g. "How does Redis start up?") to core implementation files 96% of the time, avoiding noise from dependencies or test scripts.
 
-### Real-World Repository Benchmark
+### Real-World Repository Benchmark (recorded run)
 
-A 25-query end-to-end benchmark measuring the ability of an AI agent to independently explore and answer complex architectural queries across 5 massive open-source repositories (5 queries each).
+A 25-query end-to-end benchmark measuring an agent's retrieval workflow across five open-source repositories (five queries each). The result is corpus-, prompt-, and model-specific; it is included as a reproducible reference rather than a promise of perfect accuracy.
 
 | Repository | Agent Resolution Accuracy | Avg Tokens / Query |
 |------------|---------------------------|--------------------|
@@ -94,8 +122,14 @@ A 25-query end-to-end benchmark measuring the ability of an AI agent to independ
 | **Overall** | 100% (25/25) | **~278** |
 
 **Key Takeaways:**
-- **Reliable Resolution:** ContextOS consistently provided the necessary semantic context for the agent to correctly resolve all 25 complex architectural queries.
-- **Deep Search Capability:** In highly complex repositories like Supabase that force the agent into long multi-turn explorations, ContextOS maintains perfect resolution accuracy while severely undercutting traditional token consumption (averaging just 278 tokens across all repos).
+- The recorded run resolved the listed queries with the corpus and evaluation procedure used at that time.
+- Results will vary with repository revisions, query sets, model behavior, and configuration; use the scripts and checked-in fixtures to compare runs.
+
+For the smaller checked-in fixture harness, `npm run bench -- --json` indexes
+temporary copies of `retrieval-examples/` and emits JSON with
+`passRatePercent`, `averageRecallPercent`, `expectedFileRecallPercent`, and
+`anyHitRatePercent`. It does not require a Redis checkout. Set
+`CONTEXTOS_EMBEDDINGS=0` for deterministic keyword-only fixture comparisons.
 
 ## Real Retrieval Example
 
@@ -108,6 +142,11 @@ A 25-query end-to-end benchmark measuring the ability of an AI agent to independ
 - ✓ Graph-linked helpers / types when relevant
 
 **Total tokens:** typically under the default **1,200** budget *(instead of multi-file Reads totaling thousands)*
+
+The MCP `get_context` tool defaults to `tier: "stub"`, which returns compact
+signatures and locations. Use `tier: "full"` when you need implementation
+bodies. `output_format` accepts `"markdown"` (the default) or `"xml"`; both
+formats are budgeted and returned by the tool.
 
 ## Architecture
 
@@ -187,7 +226,7 @@ Agents can rate chunks; feedback adjusts future scores (including implicit signa
 Facts learned via `learn_fact` / knowledge tools persist across sessions and can appear in `get_context`.
 
 **Backup & Recovery**  
-ContextOS's SQLite database is fundamentally an ephemeral index. If corruption occurs, the daemon auto-detects it via `quick_check` and transparently self-heals by rebuilding the index. No manual backups are required unless you heavily rely on manual `knowledge_facts` which you can backup by simply copying `~/.contextos/index.db`.
+ContextOS can rebuild source-derived chunks, but the SQLite files can also contain manual knowledge, feedback, and session history. Back up both the repository database (`<repo>/.contextos/index.db`) and the shared global database (`~/.contextos/index.db`) when that data matters; copy the database together with its `-wal` and `-shm` sidecars after stopping the relevant daemon. On corruption, a repository database may be rebuilt automatically when no live daemon is using it, which loses database-resident knowledge and feedback. Stop the daemon and make a copy before deleting or rebuilding a shared/global database; shared-state recovery deliberately refuses destructive cleanup while another daemon may still be connected.
 
 ### Developer Experience
 
@@ -227,6 +266,7 @@ Array keys in config use a `!` **suffix** to override (replace rather than merge
 | `diversityDecay` | `0.7` | Penalty for many chunks from one file |
 | `diversityPenaltyStart` | `3` | Start applying diversity decay after N chunks/file |
 | `embeddingsEnabled` | `true` | Index-time local embeddings (`CONTEXTOS_EMBEDDINGS=0` to disable) |
+| `execAllowRepoScripts` | `false` | Permit `ctx_execute` to run repository scripts; enable only for trusted repositories |
 
 ### Pipeline Configurations
 
@@ -246,13 +286,14 @@ The optional `pipeline` object in config enables toggling specific query-time pi
 | `prompt` | required | Task or question |
 | `max_tokens` | `maxTokenBudget` (1200) | Compile budget; max 8000 |
 | `layers` | `session`, `workspace`, `repo` | Add `global` only when you need shared/third-party context |
+| `tier` | `stub` | Use `full` when implementation bodies are required |
 | `output_format` | `markdown` | Or `xml` |
 
 ## CLI cheatsheet
 
 ```bash
 contextos init                 # Index + MCP config (preserves existing contextos MCP entry)
-contextos reindex              # Wipe local DB and re-init (needed after upgrades)
+contextos reindex              # Stop daemon, wipe local DB, and schedule a fresh init
 contextos reindex --embeddings # Backfill vectors without wiping the DB
 contextos serve                # MCP stdio server (Run automatically by your AI client. Do not run manually.)
 contextos query "..."          # Test retrieval locally
@@ -268,7 +309,11 @@ ContextOS leverages Tree-sitter for robust parsing. Supported out of the box:
 - ✓ Python
 - ✓ Java
 - ✓ C / C++
+- ✓ C#
 - ✓ Rust
+- ✓ Ruby
+- ✓ Swift
+- ✓ Kotlin
 - ✓ Markdown
 - ✓ Common config formats (JSON, YAML, TOML, …)
 

@@ -26,7 +26,7 @@ export default function StabilityPage() {
           <ul>
             <li><strong>MAJOR (<code>v2.0.0</code>):</strong> Incompatible, breaking changes (e.g., removing deprecated CLI flags, breaking MCP tool signatures).</li>
             <li><strong>MINOR (<code>v1.1.0</code>):</strong> Backwards-compatible new features (e.g., adding a new LLM provider, introducing new configuration keys).</li>
-            <li><strong>PATCH (<code>v1.0.1</code>):</strong> Backwards-compatible bug fixes, performance improvements, and security patches.</li>
+            <li><strong>PATCH (<code>v1.0.2</code>):</strong> Backwards-compatible bug fixes, performance improvements, and security patches.</li>
           </ul>
         </div>
       </section>
@@ -70,7 +70,7 @@ export default function StabilityPage() {
           </p>
           <ol>
             <li><strong>Announcement:</strong> The deprecation is announced in a MINOR release. A warning will be logged to the console/daemon when the deprecated feature is used.</li>
-            <li><strong>Grace Period:</strong> The feature will remain fully functional for at least <strong>6 months</strong> or until the next MAJOR release (whichever is longer).</li>
+            <li><strong>Grace Period:</strong> The feature remains functional for at least one subsequent MINOR release where practical, or until the next MAJOR release.</li>
             <li><strong>Removal:</strong> The feature is completely removed in a MAJOR release.</li>
           </ol>
         </div>

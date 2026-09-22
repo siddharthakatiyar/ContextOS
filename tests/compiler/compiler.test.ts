@@ -89,4 +89,20 @@ describe('Compiler', () => {
     expect(compiled.output).toContain('<![CDATA[');
     expect(compiled.output).toContain('</contextos_context>');
   });
+
+  it('keeps XML output within a strict budget by dropping whole elements', () => {
+    const result: RetrievalResult = {
+      chunks: Array.from({ length: 100 }, (_, index) =>
+        makeChunk(`xml-${index}`, `export const value${index} = ${index};`, 100 - index)
+      ),
+      expandedEntities: [],
+      intent,
+      latencyMs: 2
+    };
+
+    const compiled = compile(result, { maxTokens: 400, outputFormat: 'xml' });
+
+    expect(compiled.tokenCount).toBeLessThanOrEqual(400);
+    expect(compiled.output).toMatch(/^<contextos_context>[\s\S]*<\/contextos_context>\n$/);
+  });
 });

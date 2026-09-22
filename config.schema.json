@@ -115,7 +115,7 @@
     },
     "execAllowRepoScripts": {
       "type": "boolean",
-      "description": "Allow ctx_execute to run the repo's own scripts (npm/npx). Default true; disable for untrusted repositories."
+      "description": "Allow ctx_execute to run the repository's own scripts (npm/npx). Default false; enable only for trusted repositories."
     },
     "pipeline": {
       "type": "object",

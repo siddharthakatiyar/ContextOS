@@ -16,21 +16,11 @@ import { DB } from '../core/storage/database.js';
 import { checkForUpdates } from '../core/updater/index.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getWorkspaceRoot } from '../utils/fs-guard.js';
+import { preparePrivateStateFile, writePrivateStateFile } from '../utils/secure-state.js';
+import { getPackageVersion } from '../utils/version.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-let version = '1.0.0';
-try {
-  let pkgPath = path.join(__dirname, '../../package.json');
-  if (!fs.existsSync(pkgPath)) {
-    pkgPath = path.join(__dirname, '../../../package.json');
-  }
-  version = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
-} catch {
-  // fallback
-}
+const version = getPackageVersion();
 
 /**
  * Check if we should run the auto-updater.
@@ -38,7 +28,9 @@ try {
  */
 function shouldCheckForUpdates(): boolean {
   try {
-    const markerPath = path.join(process.cwd(), '.contextos', 'last-update-check');
+    const markerPath = preparePrivateStateFile(
+      path.join(getWorkspaceRoot(), '.contextos', 'last-update-check')
+    );
     const oneDayMs = 24 * 60 * 60 * 1000;
     if (fs.existsSync(markerPath)) {
       const lastCheck = parseInt(fs.readFileSync(markerPath, 'utf8').trim(), 10);
@@ -47,9 +39,7 @@ function shouldCheckForUpdates(): boolean {
       }
     }
     // Write current timestamp
-    const dir = path.dirname(markerPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(markerPath, String(Date.now()));
+    writePrivateStateFile(markerPath, String(Date.now()));
     return true;
   } catch {
     return false;

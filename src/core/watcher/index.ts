@@ -7,6 +7,8 @@ import { Indexer } from '../indexer/index.js';
 import { loadConfig } from '../../config/index.js';
 import { pLimit } from '../../utils/async.js';
 import { BackgroundIndexer } from '../daemon/background-indexer.js';
+import { canonicalPathForComparison, createIndexIgnore } from '../indexer/ignore.js';
+import { canonicalDirectory } from '../../utils/secure-state.js';
 
 /** Dotfile/dir paths that should still be watched (B8). */
 const ALLOWED_DOT_SEGMENTS = new Set(['.cursor']);
@@ -28,7 +30,10 @@ function isIgnoredDotPath(filePath: string): boolean {
 }
 
 function matchesIndexablePatterns(filePath: string, patterns: string[], cwd: string): boolean {
-  const relative = path.relative(cwd, filePath).split(path.sep).join('/');
+  const relative = path
+    .relative(canonicalPathForComparison(cwd), canonicalPathForComparison(filePath))
+    .split(path.sep)
+    .join('/');
   if (!relative || relative.startsWith('..')) return false;
   return patterns.some((pattern) =>
     minimatch(relative, pattern, { dot: true, nocase: process.platform === 'win32' })
@@ -59,12 +64,13 @@ export function startWatcher(
   projectDir?: string,
   options?: WatcherOptions
 ): ContextOSWatcher {
-  const config = loadConfig();
   // Watch and index against the daemon's project directory explicitly — using
   // process.cwd() here broke every path when the daemon was started elsewhere
   // (e.g. CONTEXTOS_REPO_ROOT set by an MCP client).
-  const root = projectDir ? path.resolve(projectDir) : process.cwd();
-  const indexer = new Indexer(db, root);
+  const root = canonicalDirectory(projectDir || process.cwd());
+  const config = loadConfig({ cwd: root });
+  const indexIgnore = createIndexIgnore(root, config.ignorePatterns);
+  const indexer = new Indexer(db, indexIgnore.root, config.ignorePatterns);
   const limit = pLimit(5); // Throttle concurrent parses during massive file changes
 
   // Note: Initial sync is intentionally NOT done here (the background full index
@@ -135,12 +141,21 @@ export function startWatcher(
   };
 
   const handleEvent = (filePath: string, type: 'add' | 'change' | 'unlink') => {
-    const ext = path.extname(filePath);
+    const comparisonPath = canonicalPathForComparison(filePath);
+    const ext = path.extname(comparisonPath);
     if (type !== 'unlink' && !ext && !filePath.includes('.cursor/rules')) return;
 
-    if (type !== 'unlink' && !matchesIndexablePatterns(filePath, config.indexablePatterns, root)) {
+    if (
+      type !== 'unlink' &&
+      !matchesIndexablePatterns(comparisonPath, config.indexablePatterns, root)
+    ) {
       return;
     }
+
+    // Ignore policy applies to files entering the index. Always process unlink
+    // events so a file that becomes ignored (or is removed after a rule change)
+    // cannot leave stale rows behind.
+    if (type !== 'unlink' && indexIgnore.ignores(comparisonPath)) return;
 
     if (buffering) {
       if (buffer.length >= BUFFER_CAP) {
@@ -183,27 +198,10 @@ export function startWatcher(
   };
 
   const watcher = chokidar.watch(root, {
-    ignored: [
-      (p: string) => isIgnoredDotPath(p),
-      (p: string) => {
-        const normalized = p.replace(/\\/g, '/');
-        return (
-          normalized.includes('/node_modules/') ||
-          normalized.endsWith('/node_modules') ||
-          normalized.includes('/.git/') ||
-          normalized.endsWith('/.git') ||
-          normalized.includes('/.next/') ||
-          normalized.endsWith('/.next') ||
-          normalized.includes('/dist/') ||
-          normalized.endsWith('/dist') ||
-          normalized.includes('/build/') ||
-          normalized.endsWith('/build') ||
-          normalized.includes('/coverage/') ||
-          normalized.endsWith('/coverage')
-        );
-      },
-      ...config.ignorePatterns.map((p) => `**/${p}`)
-    ],
+    // Chokidar does not provide stats for unlink events. Let those events
+    // through so handleEvent can remove rows even after an ignore rule changes.
+    ignored: (p: string, stats?: import('node:fs').Stats) =>
+      isIgnoredDotPath(p) || (stats !== undefined && indexIgnore.ignores(p)),
     persistent: true,
     ignoreInitial: true,
     ignorePermissionErrors: true,

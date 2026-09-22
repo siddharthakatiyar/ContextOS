@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { detectLanguage, parseCode } from '../../src/core/parser/code-parser.js';
+import { chunkCode } from '../../src/core/chunker/code-chunker.js';
 
 describe('code-parser', () => {
   it('should detect language from extension', () => {
@@ -34,5 +35,19 @@ describe('code-parser', () => {
     const clazz = doc.symbols.find((s) => s.kind === 'class');
     expect(clazz).toBeDefined();
     expect(clazz?.name).toBe('Calculator');
+  });
+
+  it('extracts Rust use paths for graph imports', async () => {
+    const doc = await parseCode('lib.rs', 'use crate::foo::Bar;\n\npub fn run() {}');
+
+    expect(doc.imports).toContain('crate::foo::Bar');
+    expect(doc.symbols.some((symbol) => symbol.kind === 'import')).toBe(true);
+  });
+
+  it('does not lose a one-line parsed Rust function during chunking', async () => {
+    const doc = await parseCode('small.rs', 'pub fn temp_func() { return_value(); }');
+    const chunks = chunkCode(doc, { layer: 'repo' });
+
+    expect(chunks.some((chunk) => chunk.symbolName === 'temp_func')).toBe(true);
   });
 });

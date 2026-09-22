@@ -1,6 +1,11 @@
-import fs from 'fs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const data = JSON.parse(fs.readFileSync('scripts/bench/redis-results.json', 'utf8'));
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const inputPath = process.env.CONTEXTOS_REDIS_RESULTS || path.join(scriptDir, 'redis-results.json');
+const data = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
 const results = data.results;
 
 // Map query keywords to expected files for evaluation
@@ -115,13 +120,16 @@ let correctGeneric = 0;
 
 let md = `# ContextOS: Redis 100-Query Benchmark Report (Detailed)
 
-This report details the execution, token cost, and absolute accuracy of ContextOS against the \`redis/redis\` C repository for 100 benchmark questions.
+This report details the execution, token cost, and file-level accuracy of ContextOS against the supplied Redis C checkout for ${results.length} benchmark questions.
 
 ## Summary Stats
 - **Specific Accuracy:** {SPECIFIC_ACCURACY}
 - **Generic Accuracy:** {GENERIC_ACCURACY}
 - **Total Accuracy:** {TOTAL_ACCURACY}
-- **Total Tokens Used:** 140,433
+- **Total Tokens Used:** ${results.reduce((sum, result) => sum + (result.tokens || 0), 0)}
+- **Expected-file recall:** ${data.expectedFileRecallPercent ?? 'unknown'}%
+- **Any-hit rate:** ${data.anyHitRatePercent ?? 'unknown'}%
+- **Repository:** ${data.repository ?? process.env.CONTEXTOS_REPO_LABEL ?? 'checkout supplied at run time'}
 
 ---
 
@@ -167,9 +175,12 @@ for (const res of results) {
   }
 }
 
-const specAcc = `${correctSpecific}/50 (${((correctSpecific/50)*100).toFixed(1)}%)`;
-const genAcc = `${correctGeneric}/50 (${((correctGeneric/50)*100).toFixed(1)}%)`;
-const totAcc = `${correctSpecific + correctGeneric}/100 (${(((correctSpecific + correctGeneric)/100)*100).toFixed(1)}%)`;
+const specificTotal = results.filter((result) => result.type === 'specific').length;
+const genericTotal = results.filter((result) => result.type !== 'specific').length;
+const total = specificTotal + genericTotal;
+const specAcc = `${correctSpecific}/${specificTotal} (${specificTotal ? ((correctSpecific / specificTotal) * 100).toFixed(1) : '0.0'}%)`;
+const genAcc = `${correctGeneric}/${genericTotal} (${genericTotal ? ((correctGeneric / genericTotal) * 100).toFixed(1) : '0.0'}%)`;
+const totAcc = `${correctSpecific + correctGeneric}/${total} (${total ? (((correctSpecific + correctGeneric) / total) * 100).toFixed(1) : '0.0'}%)`;
 
 md = md.replace('{SPECIFIC_ACCURACY}', specAcc);
 md = md.replace('{GENERIC_ACCURACY}', genAcc);
@@ -177,5 +188,7 @@ md = md.replace('{TOTAL_ACCURACY}', totAcc);
 
 md += genericMd;
 
-fs.writeFileSync('/Users/siddhartha/.gemini/antigravity/brain/d21a6a7c-1c29-483b-b38e-d440935a6d98/redis_detailed_benchmark_report.md', md, 'utf8');
-console.log('Report generated.');
+const outputPath = process.env.CONTEXTOS_REDIS_REPORT_OUTPUT ||
+  path.join(os.tmpdir(), `contextos-redis-detailed-${Date.now()}.md`);
+fs.writeFileSync(outputPath, md, 'utf8');
+console.log('Report generated:', outputPath);

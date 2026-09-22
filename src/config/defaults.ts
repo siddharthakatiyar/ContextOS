@@ -100,9 +100,9 @@ export const defaultConfig: ContextOSConfig = {
   tokenCalibration: 1.0,
   framingReserve: 48,
   adaptiveResponse: true,
-  // ctx_execute may run the indexed repo's own scripts (npm/npx) by default;
-  // disable on untrusted repos via this flag or env CONTEXTOS_EXEC_ALLOW_SCRIPTS=0.
-  execAllowRepoScripts: true,
+  // Repository scripts execute package-controlled code. Keep them opt-in;
+  // enable for a trusted repository via config or CONTEXTOS_EXEC_ALLOW_SCRIPTS=1.
+  execAllowRepoScripts: false,
   pipeline: {
     graphExpansion: true,
     // embeddingFusion intentionally omitted: undefined lets retrieval follow

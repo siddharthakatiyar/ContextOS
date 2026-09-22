@@ -6,11 +6,29 @@ import { getContextOSHome } from '../core/storage/database.js';
 
 export * from './types.js';
 
-let cachedConfig: ContextOSConfig | null = null;
+// A daemon can serve more than one repository in the same process (for example
+// through tests or an embedding host).  Keep one cache entry per canonical
+// repository root so a config loaded for repository A cannot silently bleed into
+// repository B.
+const cachedConfigs = new Map<string, ContextOSConfig>();
+
+function configCacheKey(cwd: string): string {
+  const resolved = path.resolve(cwd);
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    // The caller may be preparing a repository directory that does not exist
+    // yet.  The lexical path is still stable and keeps those contexts isolated.
+    return resolved;
+  }
+}
 
 export function loadConfig(opts?: { forceReload?: boolean; cwd?: string }): ContextOSConfig {
-  if (cachedConfig && !opts?.forceReload) {
-    return cachedConfig;
+  const cwd = opts?.cwd || process.cwd();
+  const cacheKey = configCacheKey(cwd);
+  if (!opts?.forceReload) {
+    const cached = cachedConfigs.get(cacheKey);
+    if (cached) return cached;
   }
 
   let config = structuredClone(defaultConfig);
@@ -28,7 +46,6 @@ export function loadConfig(opts?: { forceReload?: boolean; cwd?: string }): Cont
     }
   }
 
-  const cwd = opts?.cwd || process.cwd();
   const repoConfigPath = path.join(cwd, '.contextos', 'config.json');
   if (fs.existsSync(repoConfigPath)) {
     try {
@@ -42,7 +59,7 @@ export function loadConfig(opts?: { forceReload?: boolean; cwd?: string }): Cont
     }
   }
 
-  cachedConfig = config;
+  cachedConfigs.set(cacheKey, config);
   return config;
 }
 

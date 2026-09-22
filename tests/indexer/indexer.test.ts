@@ -26,7 +26,7 @@ describe('Indexer', () => {
     db = new DB(dbPath);
 
     // Create an Indexer
-    indexer = new Indexer(db);
+    indexer = new Indexer(db, tmpdir);
   });
 
   afterEach(() => {
@@ -47,7 +47,7 @@ describe('Indexer', () => {
         return;
       }
 
-      const result = await indexer.indexFile(symlink, 'repo', tmpdir);
+      const result = await indexer.indexFile(symlink, 'repo');
       expect(result.filesProcessed).toBe(0);
     });
 
@@ -57,7 +57,7 @@ describe('Indexer', () => {
       buf.fill(0);
       fs.writeFileSync(binFile, buf);
 
-      const result = await indexer.indexFile(binFile, 'repo', tmpdir);
+      const result = await indexer.indexFile(binFile, 'repo');
       expect(result.filesProcessed).toBe(0);
     });
 
@@ -65,7 +65,7 @@ describe('Indexer', () => {
       const genFile = path.join(tmpdir, 'package-lock.json');
       fs.writeFileSync(genFile, '{}');
 
-      const result = await indexer.indexFile(genFile, 'repo', tmpdir);
+      const result = await indexer.indexFile(genFile, 'repo');
       expect(result.filesProcessed).toBe(0);
     });
 
@@ -73,10 +73,10 @@ describe('Indexer', () => {
       const file = path.join(tmpdir, 'test.ts');
       fs.writeFileSync(file, 'const a = 1;');
 
-      const result1 = await indexer.indexFile(file, 'repo', tmpdir);
+      const result1 = await indexer.indexFile(file, 'repo');
       expect(result1.filesProcessed).toBe(1);
 
-      const result2 = await indexer.indexFile(file, 'repo', tmpdir);
+      const result2 = await indexer.indexFile(file, 'repo');
       expect(result2.filesProcessed).toBe(0);
     });
 
@@ -84,7 +84,7 @@ describe('Indexer', () => {
       const file = path.join(tmpdir, 'code.ts');
       fs.writeFileSync(file, 'export function add(a: number, b: number) { return a + b; }');
 
-      const result = await indexer.indexFile(file, 'repo', tmpdir);
+      const result = await indexer.indexFile(file, 'repo');
       expect(result.filesProcessed).toBe(1);
 
       const chunks = db
@@ -101,7 +101,7 @@ describe('Indexer', () => {
       const controller = new AbortController();
       controller.abort();
 
-      await expect(indexer.indexFile(file, 'repo', tmpdir, controller.signal)).rejects.toThrow(
+      await expect(indexer.indexFile(file, 'repo', undefined, controller.signal)).rejects.toThrow(
         'This operation was aborted'
       );
     });
