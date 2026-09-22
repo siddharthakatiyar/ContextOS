@@ -52,6 +52,16 @@ describe('private ContextOS state paths', () => {
     }
   });
 
+  it('accepts a state path rooted at macOS /tmp alias', () => {
+    const root = fs.mkdtempSync('/tmp/contextos-private-state-tmp-alias-');
+    try {
+      const stateDir = ensurePrivateStateDir(path.join(root, '.contextos'));
+      expect(fs.lstatSync(stateDir).isSymbolicLink()).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a symlinked state directory without touching its target', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-private-state-'));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-private-target-'));
