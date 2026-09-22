@@ -30,6 +30,28 @@ describe('private ContextOS state paths', () => {
     }
   });
 
+  it('allows the OS temp alias while rejecting a user-owned descendant symlink', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-private-state-alias-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-private-target-'));
+    try {
+      // On macOS, root is commonly spelled through /var -> /private/var. That
+      // system alias is safe to traverse; the state directory itself must still
+      // be a real, owner-private directory.
+      const stateDir = ensurePrivateStateDir(path.join(root, '.contextos'));
+      expect(fs.lstatSync(stateDir).isSymbolicLink()).toBe(false);
+
+      // A symlink introduced below the trusted OS alias remains untrusted and
+      // must not redirect state creation into an arbitrary directory.
+      const redirect = path.join(root, 'redirect');
+      fs.symlinkSync(outside, redirect, 'dir');
+      expect(() => ensurePrivateStateDir(path.join(redirect, 'state'))).toThrow(/symlink/);
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a symlinked state directory without touching its target', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-private-state-'));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-private-target-'));

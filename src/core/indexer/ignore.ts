@@ -106,8 +106,31 @@ function configuredPatternMatches(
   return ignored;
 }
 
+/**
+ * Resolve the existing portion of a path while preserving a nonexistent leaf.
+ * This keeps lexical event paths under canonical roots on systems such as
+ * macOS, where `/var` is an alias for `/private/var`.
+ */
+export function canonicalPathForComparison(inputPath: string): string {
+  const resolved = path.resolve(inputPath);
+  const suffix: string[] = [];
+  let current = resolved;
+  while (true) {
+    try {
+      const canonical = fs.realpathSync(current);
+      return path.join(canonical, ...suffix.reverse());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') return resolved;
+      const parent = path.dirname(current);
+      if (parent === current) return resolved;
+      suffix.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
 function relativePath(root: string, absolutePath: string): string | null {
-  const resolved = path.resolve(absolutePath);
+  const resolved = canonicalPathForComparison(absolutePath);
   const relative = path.relative(root, resolved).split(path.sep).join('/');
   if (!relative || relative === '.') return '';
   if (relative === '..' || relative.startsWith('../')) return null;
@@ -124,12 +147,7 @@ export function createIndexIgnore(
   configuredPatterns: readonly string[] = []
 ): IndexIgnore {
   const lexicalRoot = path.resolve(rootInput);
-  let root = lexicalRoot;
-  try {
-    root = fs.realpathSync(lexicalRoot);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error;
-  }
+  const root = canonicalPathForComparison(lexicalRoot);
   const safety = ignore();
   addPatterns(safety, SAFETY_IGNORE_PATTERNS, 'built-in safety rules');
 

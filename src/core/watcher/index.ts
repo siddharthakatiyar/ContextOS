@@ -7,7 +7,7 @@ import { Indexer } from '../indexer/index.js';
 import { loadConfig } from '../../config/index.js';
 import { pLimit } from '../../utils/async.js';
 import { BackgroundIndexer } from '../daemon/background-indexer.js';
-import { createIndexIgnore } from '../indexer/ignore.js';
+import { canonicalPathForComparison, createIndexIgnore } from '../indexer/ignore.js';
 import { canonicalDirectory } from '../../utils/secure-state.js';
 
 /** Dotfile/dir paths that should still be watched (B8). */
@@ -30,7 +30,10 @@ function isIgnoredDotPath(filePath: string): boolean {
 }
 
 function matchesIndexablePatterns(filePath: string, patterns: string[], cwd: string): boolean {
-  const relative = path.relative(cwd, filePath).split(path.sep).join('/');
+  const relative = path
+    .relative(canonicalPathForComparison(cwd), canonicalPathForComparison(filePath))
+    .split(path.sep)
+    .join('/');
   if (!relative || relative.startsWith('..')) return false;
   return patterns.some((pattern) =>
     minimatch(relative, pattern, { dot: true, nocase: process.platform === 'win32' })
@@ -138,17 +141,21 @@ export function startWatcher(
   };
 
   const handleEvent = (filePath: string, type: 'add' | 'change' | 'unlink') => {
-    const ext = path.extname(filePath);
+    const comparisonPath = canonicalPathForComparison(filePath);
+    const ext = path.extname(comparisonPath);
     if (type !== 'unlink' && !ext && !filePath.includes('.cursor/rules')) return;
 
-    if (type !== 'unlink' && !matchesIndexablePatterns(filePath, config.indexablePatterns, root)) {
+    if (
+      type !== 'unlink' &&
+      !matchesIndexablePatterns(comparisonPath, config.indexablePatterns, root)
+    ) {
       return;
     }
 
     // Ignore policy applies to files entering the index. Always process unlink
     // events so a file that becomes ignored (or is removed after a rule change)
     // cannot leave stale rows behind.
-    if (type !== 'unlink' && indexIgnore.ignores(filePath)) return;
+    if (type !== 'unlink' && indexIgnore.ignores(comparisonPath)) return;
 
     if (buffering) {
       if (buffer.length >= BUFFER_CAP) {

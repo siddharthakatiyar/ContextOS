@@ -165,6 +165,7 @@ describe('BackgroundIndexer', () => {
     fs.symlinkSync(realRoot, symlinkRoot, 'dir');
 
     const canonicalDb = new DB(path.join(realRoot, '.contextos', 'index.db'));
+    const canonicalSource = fs.realpathSync(source);
     try {
       const indexer = new BackgroundIndexer(canonicalDb, symlinkRoot);
       await indexer.startFullIndex({ indexablePatterns: ['**/*.ts'], ignorePatterns: [] });
@@ -173,13 +174,16 @@ describe('BackgroundIndexer', () => {
           canonicalDb.getInstance().prepare('SELECT path FROM files WHERE path = ?').get(source) as
             { path: string } | undefined
         )?.path
-      ).toBe(source);
+      ).toBe(canonicalSource);
 
       fs.unlinkSync(source);
       fs.symlinkSync(outside, source, 'file');
       await indexer.startFullIndex({ indexablePatterns: ['**/*.ts'], ignorePatterns: [] });
       expect(
-        canonicalDb.getInstance().prepare('SELECT path FROM files WHERE path = ?').get(source)
+        canonicalDb
+          .getInstance()
+          .prepare('SELECT path FROM files WHERE path = ?')
+          .get(canonicalSource)
       ).toBeUndefined();
     } finally {
       canonicalDb.close();
