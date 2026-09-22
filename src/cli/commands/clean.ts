@@ -3,7 +3,7 @@ import { DB, getContextOSHome } from '../../core/storage/database.js';
 import { EmbeddingsStore } from '../../core/embeddings/embeddings-store.js';
 import chalk from 'chalk';
 import path from 'path';
-import fs from 'fs';
+import { canonicalDirectory, removePrivateStateFile } from '../../utils/secure-state.js';
 
 interface CountRow {
   c: number;
@@ -19,18 +19,22 @@ export const cleanCommand = new Command('clean')
   .option('--rebuild', 'Delete and rebuild the database from scratch')
   .option('--global', 'Also clean the global database at ~/.contextos/')
   .action(async (opts) => {
-    const dbs = DB.resolveDatabases();
+    const cwd = canonicalDirectory(process.cwd());
+    const dbs = DB.resolveDatabases(cwd);
 
     console.log(chalk.bold('\nContextOS Clean\n'));
 
     if (opts.rebuild) {
+      // Close all handles before unlinking SQLite files, then validate every
+      // state path so a symlinked .contextos directory cannot redirect cleanup.
+      for (const db of dbs) db.close();
+
       // Nuclear option: delete the local DB and re-init
-      const localDbPath = path.join(process.cwd(), '.contextos', 'index.db');
-      if (fs.existsSync(localDbPath)) {
-        fs.unlinkSync(localDbPath);
-        // Also remove WAL/SHM files
-        if (fs.existsSync(localDbPath + '-wal')) fs.unlinkSync(localDbPath + '-wal');
-        if (fs.existsSync(localDbPath + '-shm')) fs.unlinkSync(localDbPath + '-shm');
+      const localDbPath = path.join(cwd, '.contextos', 'index.db');
+      const localDbDeleted = removePrivateStateFile(localDbPath);
+      const localWalDeleted = removePrivateStateFile(localDbPath + '-wal');
+      const localShmDeleted = removePrivateStateFile(localDbPath + '-shm');
+      if (localDbDeleted || localWalDeleted || localShmDeleted) {
         console.log(chalk.yellow(`Deleted local database: ${localDbPath}`));
         console.log(chalk.blue('Run `contextos init` to rebuild the index.'));
       } else {
@@ -39,10 +43,10 @@ export const cleanCommand = new Command('clean')
 
       if (opts.global) {
         const globalDbPath = path.join(getContextOSHome(), 'index.db');
-        if (fs.existsSync(globalDbPath)) {
-          fs.unlinkSync(globalDbPath);
-          if (fs.existsSync(globalDbPath + '-wal')) fs.unlinkSync(globalDbPath + '-wal');
-          if (fs.existsSync(globalDbPath + '-shm')) fs.unlinkSync(globalDbPath + '-shm');
+        const globalDbDeleted = removePrivateStateFile(globalDbPath);
+        const globalWalDeleted = removePrivateStateFile(globalDbPath + '-wal');
+        const globalShmDeleted = removePrivateStateFile(globalDbPath + '-shm');
+        if (globalDbDeleted || globalWalDeleted || globalShmDeleted) {
           console.log(chalk.yellow(`Deleted global database: ${globalDbPath}`));
         }
       }

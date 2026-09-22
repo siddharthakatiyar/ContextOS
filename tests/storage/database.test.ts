@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DB } from '../../src/core/storage/database.js';
 import os from 'os';
+import fs from 'fs';
+import path from 'path';
 
 describe('database', () => {
   it('should initialize an in-memory database', () => {
@@ -44,6 +46,33 @@ describe('database', () => {
     expect(row.sql).toContain('porter unicode61');
     expect(row.sql).toContain("prefix='2 3'");
     db.close();
+  });
+
+  it('keeps project state directories and databases private', () => {
+    const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-private-db-'));
+    const ctxDir = path.join(tmpdir, '.contextos');
+    const dbPath = path.join(ctxDir, 'index.db');
+    try {
+      const db = new DB(dbPath);
+      db.close();
+      expect(fs.statSync(ctxDir).mode & 0o777).toBe(0o700);
+      expect(fs.statSync(dbPath).mode & 0o777).toBe(0o600);
+    } finally {
+      fs.rmSync(tmpdir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a symlinked project state directory', () => {
+    const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-symlink-db-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-symlink-target-'));
+    try {
+      fs.symlinkSync(outside, path.join(tmpdir, '.contextos'), 'dir');
+      expect(() => new DB(path.join(tmpdir, '.contextos', 'index.db'))).toThrow(/symlink/);
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(tmpdir, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it('should resolve hierarchical databases', () => {

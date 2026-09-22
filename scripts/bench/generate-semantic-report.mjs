@@ -1,15 +1,19 @@
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const data = JSON.parse(fs.readFileSync('scripts/bench/redis-results.json', 'utf8'));
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const data = JSON.parse(fs.readFileSync(
+  process.env.CONTEXTOS_REDIS_RESULTS || path.join(scriptDir, 'redis-results.json'),
+  'utf8'
+));
 const results = data.results;
 
-const eval1 = JSON.parse(fs.readFileSync('scripts/bench/eval_0_19.json', 'utf8'));
-const eval2 = JSON.parse(fs.readFileSync('scripts/bench/eval_20_39.json', 'utf8'));
-const eval3 = JSON.parse(fs.readFileSync('scripts/bench/eval_40_59.json', 'utf8'));
-const eval4 = JSON.parse(fs.readFileSync('scripts/bench/eval_60_79.json', 'utf8'));
-const eval5 = JSON.parse(fs.readFileSync('scripts/bench/eval_80_99.json', 'utf8'));
+const evalFiles = ['eval_0_19.json', 'eval_20_39.json', 'eval_40_59.json', 'eval_60_79.json', 'eval_80_99.json'];
+const evaluations = evalFiles.map(file => JSON.parse(fs.readFileSync(path.join(scriptDir, file), 'utf8')));
 
-const allEvals = [...eval1, ...eval2, ...eval3, ...eval4, ...eval5];
+const allEvals = evaluations.flat();
 const evalMap = {};
 allEvals.forEach(e => {
   evalMap[e.id] = e;
@@ -20,14 +24,14 @@ let correctGeneric = 0;
 
 let md = `# ContextOS: Redis 100-Query Semantic Accuracy Report
 
-This report details the execution and **qualitative, semantic accuracy** of ContextOS against the \`redis/redis\` C repository for 100 benchmark questions.
+This report details the execution and **qualitative, semantic accuracy** of ContextOS against a Redis C checkout for the supplied benchmark questions.
 Accuracy in this report is graded by 5 parallel AI evaluator subagents. Each evaluator read the raw C context returned by ContextOS and judged whether the actual content returned contained sufficient information to accurately answer the user's query.
 
 ## Summary Stats
 - **Specific Accuracy:** {SPECIFIC_ACCURACY}
 - **Generic Accuracy:** {GENERIC_ACCURACY}
 - **Total Accuracy:** {TOTAL_ACCURACY}
-- **Total Tokens Used:** 140,433
+- **Total Tokens Used:** ${results.reduce((sum, result) => sum + (result.tokens || 0), 0)}
 
 ---
 
@@ -73,5 +77,7 @@ md = md.replace('{TOTAL_ACCURACY}', totAcc);
 
 md += genericMd;
 
-fs.writeFileSync('/Users/siddhartha/.gemini/antigravity/brain/d21a6a7c-1c29-483b-b38e-d440935a6d98/redis_semantic_benchmark_report.md', md, 'utf8');
-console.log('Report generated.');
+const outputPath = process.env.CONTEXTOS_SEMANTIC_OUTPUT ||
+  path.join(os.tmpdir(), `contextos-redis-semantic-${Date.now()}.md`);
+fs.writeFileSync(outputPath, md, 'utf8');
+console.log('Report generated:', outputPath);

@@ -27,7 +27,10 @@ vi.mock('net', () => ({
           // Do nothing
         }
       }),
-      listen: vi.fn((path, cb) => {
+      listen: vi.fn((socketPath, cb) => {
+        if (typeof socketPath === 'string' && process.platform !== 'win32') {
+          fs.writeFileSync(socketPath, '');
+        }
         if (cb) cb();
       }),
       close: vi.fn()
@@ -88,6 +91,9 @@ describe('ContextOSDaemon Lifecycle', () => {
       // It should have overwritten the PID file with our own PID
       const currentPidStr = fs.readFileSync(pidPath, 'utf-8');
       expect(parseInt(currentPidStr)).toBe(process.pid);
+      expect(fs.statSync(ctxDir).mode & 0o777).toBe(0o700);
+      expect(fs.statSync(pidPath).mode & 0o777).toBe(0o600);
+      expect(fs.statSync(shortSocket).mode & 0o777).toBe(0o600);
       await startPromise;
     } finally {
       process.kill = originalKill;

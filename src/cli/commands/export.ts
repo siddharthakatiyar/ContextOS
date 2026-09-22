@@ -5,6 +5,7 @@ import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { getErrorMessage } from '../../utils/errors.js';
+import { getPackageVersion } from '../../utils/version.js';
 
 export const exportCommand = new Command('export')
   .description('Export the ContextOS graph to a JSON file for sharing')
@@ -21,7 +22,7 @@ export const exportCommand = new Command('export')
       const files = dbInstance.prepare('SELECT * FROM files').all();
 
       const exportData = {
-        version: '1.0.0',
+        version: getPackageVersion(),
         exportedAt: Date.now(),
         data: {
           chunks,

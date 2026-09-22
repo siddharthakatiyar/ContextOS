@@ -6,11 +6,17 @@ import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
 import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 import chalk from 'chalk';
 import { mergeContextosMcpConfig, validateJsonConfigs } from '../utils/mcp-config.js';
+import {
+  canonicalDirectory,
+  ensurePrivateStateDir,
+  preparePrivateStateFile,
+  writePrivateStateFile
+} from '../../utils/secure-state.js';
 
 export const initCommand = new Command('init')
   .description('Initialize ContextOS in the current repository')
   .action(async () => {
-    const cwd = process.cwd();
+    const cwd = canonicalDirectory(process.cwd());
     const repoContextDir = path.join(cwd, '.contextos');
     const globalContextDir = path.join(getContextOSHome(), 'global');
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
@@ -32,17 +38,20 @@ export const initCommand = new Command('init')
     // invalid existing config must never be silently replaced.
     validateJsonConfigs(jsonConfigPaths);
 
-    // Create directories
-    if (!fs.existsSync(repoContextDir)) fs.mkdirSync(repoContextDir, { recursive: true });
-    if (!fs.existsSync(globalContextDir)) fs.mkdirSync(globalContextDir, { recursive: true });
+    // Create owner-private state directories. A symlinked state path is
+    // rejected before any fixed-name file can be redirected outside the repo.
+    ensurePrivateStateDir(repoContextDir);
+    ensurePrivateStateDir(globalContextDir);
 
     // Create default global template if not exists
     const defaultGlobalDoc = path.join(globalContextDir, 'engineering.md');
     if (!fs.existsSync(defaultGlobalDoc)) {
-      fs.writeFileSync(
+      writePrivateStateFile(
         defaultGlobalDoc,
         '# Global Engineering Rules\n\nAdd your organization-wide engineering rules here.\n'
       );
+    } else {
+      preparePrivateStateFile(defaultGlobalDoc);
     }
 
     console.log(`Initialized ContextOS in ${cwd}`);
@@ -55,7 +64,7 @@ export const initCommand = new Command('init')
 
       // Mark repo as needing a full index so the daemon will pick it up
       const statusPath = path.join(repoContextDir, 'status.json');
-      fs.writeFileSync(statusPath, JSON.stringify({ fullIndexCompleted: false }));
+      writePrivateStateFile(statusPath, JSON.stringify({ fullIndexCompleted: false }));
 
       const elapsedMs = Date.now() - startTime;
       console.log(

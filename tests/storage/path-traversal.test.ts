@@ -7,7 +7,6 @@ import os from 'os';
 
 describe('Path Traversal Guard', () => {
   let db: DB;
-  let indexer: Indexer;
   let tempDir: string;
   let previousEmbeddings: string | undefined;
 
@@ -16,7 +15,6 @@ describe('Path Traversal Guard', () => {
     process.env.CONTEXTOS_EMBEDDINGS = '0';
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-test-'));
     db = new DB(path.join(tempDir, 'test.db'));
-    indexer = new Indexer(db);
   });
 
   afterEach(() => {
@@ -34,8 +32,10 @@ describe('Path Traversal Guard', () => {
     const secretFilePath = path.join(tempDir, 'secret.txt');
     fs.writeFileSync(secretFilePath, 'secret data');
 
-    // Attempt to index it passing the workspaceRoot as the boundary
-    await expect(indexer.indexFile(secretFilePath, 'workspace', workspaceRoot)).rejects.toThrow(
+    // A workspace label is metadata; the configured repository root remains
+    // the filesystem boundary.
+    const workspaceIndexer = new Indexer(db, workspaceRoot);
+    await expect(workspaceIndexer.indexFile(secretFilePath, 'workspace', 'team-a')).rejects.toThrow(
       /Path traversal blocked/
     );
   });
@@ -47,8 +47,16 @@ describe('Path Traversal Guard', () => {
     const safeFilePath = path.join(workspaceRoot, 'safe.txt');
     fs.writeFileSync(safeFilePath, 'safe data');
 
-    const stats = await indexer.indexFile(safeFilePath, 'workspace', workspaceRoot);
+    const workspaceIndexer = new Indexer(db, workspaceRoot);
+    const stats = await workspaceIndexer.indexFile(safeFilePath, 'workspace', 'team-a');
     expect(stats.filesProcessed).toBe(1);
     expect(stats.chunksCreated).toBeGreaterThan(0);
+    const storedWorkspace = (
+      db
+        .getInstance()
+        .prepare('SELECT workspace_name FROM files WHERE path = ?')
+        .get(safeFilePath) as { workspace_name: string | null } | undefined
+    )?.workspace_name;
+    expect(storedWorkspace).toBe('team-a');
   });
 });

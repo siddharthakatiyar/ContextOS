@@ -30,8 +30,8 @@ Run `contextos reindex` once after upgrading so schema/chunking refinements take
 { "pipeline": { "embeddingFusion": true } }
 ```
 
-### 3. ctx_execute on untrusted repositories
-`ctx_execute` can run a repository's own `npm`/`npx` scripts. When indexing untrusted repos, disable this with `execAllowRepoScripts: false` (or `CONTEXTOS_EXEC_ALLOW_SCRIPTS=0`).
+### 3. ctx_execute repository scripts are opt-in
+Current releases leave `ctx_execute` repository scripts disabled by default. To run a repository's own `npm`/`npx` scripts, set `execAllowRepoScripts: true` or `CONTEXTOS_EXEC_ALLOW_SCRIPTS=1` only for a trusted repository. `CONTEXTOS_EXEC_ALLOW_SCRIPTS=0` explicitly keeps them disabled.
 
 ## 0.7.x to 0.8.x
 

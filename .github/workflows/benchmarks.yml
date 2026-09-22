@@ -32,17 +32,19 @@ jobs:
 
       - name: Run E2E Retrieval Benchmarks
         run: |
-          npm run bench | tee benchmark_out.txt
-          
-          # Enforce 95% Recall (fail if below)
-          # Grep the average recall line: "Average Recall: 98.5%"
-          RECALL=$(grep -oP 'Average Recall: \K[0-9.]+' benchmark_out.txt || echo "0")
-          echo "Measured Recall: $RECALL%"
-          
-          if (( $(echo "$RECALL < 95.0" | bc -l) )); then
-            echo "::error::Recall $RECALL% is below the required 95.0% threshold."
-            exit 1
-          fi
+          set -euo pipefail
+          metrics_file="$RUNNER_TEMP/contextos-benchmark-metrics.json"
+          node scripts/bench/run.mjs --json > "$metrics_file"
+          node - "$metrics_file" <<'NODE'
+          const fs = require('node:fs');
+          const metrics = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const recall = Number(metrics.averageRecallPercent);
+          console.log(`Measured recall: ${recall.toFixed(1)}%`);
+          if (metrics.failed || !Number.isFinite(recall) || recall < 95) {
+            console.error(`Benchmark gate failed: recall=${recall}%, failed=${metrics.failed}`);
+            process.exit(1);
+          }
+          NODE
       - name: Verify benchmarks leave tracked files unchanged
         if: always()
         run: git diff --exit-code

@@ -3,6 +3,11 @@ import { ContextOSDaemon } from '../../core/daemon/daemon.js';
 import fs from 'fs';
 import path from 'path';
 import { getErrorMessage } from '../../utils/errors.js';
+import {
+  assertNoSymlinkInPath,
+  canonicalDirectory,
+  removePrivateStateFile
+} from '../../utils/secure-state.js';
 
 export const daemonCommand = new Command('daemon').description(
   'Manage the ContextOS background daemon'
@@ -32,20 +37,21 @@ daemonCommand
   .command('stop')
   .description('Stop the ContextOS daemon for the current project')
   .action(async () => {
-    const projectDir = process.cwd();
+    const projectDir = canonicalDirectory(process.cwd());
     const pidPath = path.join(projectDir, '.contextos', 'daemon.pid');
 
-    if (fs.existsSync(pidPath)) {
-      try {
+    try {
+      assertNoSymlinkInPath(pidPath);
+      if (fs.existsSync(pidPath)) {
         const pid = parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);
         process.kill(pid, 'SIGTERM');
         console.log(`Daemon (PID ${pid}) stopped.`);
-        fs.unlinkSync(pidPath);
-      } catch (error) {
-        console.error(`Failed to stop daemon: ${getErrorMessage(error)}`);
+        removePrivateStateFile(pidPath);
+      } else {
+        console.log('No daemon is currently running for this project.');
       }
-    } else {
-      console.log('No daemon is currently running for this project.');
+    } catch (error) {
+      console.error(`Failed to stop daemon: ${getErrorMessage(error)}`);
     }
   });
 
@@ -53,18 +59,19 @@ daemonCommand
   .command('status')
   .description('Check the status of the ContextOS daemon')
   .action(async () => {
-    const projectDir = process.cwd();
+    const projectDir = canonicalDirectory(process.cwd());
     const pidPath = path.join(projectDir, '.contextos', 'daemon.pid');
 
-    if (fs.existsSync(pidPath)) {
-      try {
+    try {
+      assertNoSymlinkInPath(pidPath);
+      if (fs.existsSync(pidPath)) {
         const pid = parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);
         process.kill(pid, 0); // test if alive
         console.log(`Daemon is RUNNING (PID ${pid})`);
-      } catch {
-        console.log(`Daemon is NOT RUNNING (stale PID file found)`);
+      } else {
+        console.log('Daemon is NOT RUNNING.');
       }
-    } else {
-      console.log('Daemon is NOT RUNNING.');
+    } catch {
+      console.log('Daemon is NOT RUNNING (state path is unavailable or unsafe).');
     }
   });

@@ -11,11 +11,17 @@ export function BenchmarksContent() {
       prev={{ title: "Architecture", href: "/docs/architecture" }}
       next={{ title: "Algorithms", href: "/docs/algorithms/retrieval-pipeline" }}
     >
-      <SourceLink path="tests/benchmarks" />
+      <SourceLink path="scripts/run-benchmarks.ts" />
 
       <h2>Compression Benchmarks</h2>
       <p>
         ContextOS solves this by aggressively stripping out noise: omitting unchanged imports, stripping documentation strings, and extracting only the exact code blocks necessary to satisfy the query.
+      </p>
+
+      <p className="text-sm text-neutral-400">
+        The figures below are from a recorded Redis 7.x checkout run. They are
+        corpus-, query-, and configuration-specific measurements rather than
+        release guarantees.
       </p>
 
       <div className="my-12 p-8 bg-[#050505] border border-neutral-800 rounded-xl overflow-hidden relative">
@@ -55,6 +61,25 @@ export function BenchmarksContent() {
           </div>
         </div>
       </div>
+
+      <h2>Reproduce the recorded harness</h2>
+      <p>
+        Build the CLI, provide a Redis checkout, and keep embedding downloads
+        out of the fixture comparison when you want deterministic keyword-only
+        results:
+      </p>
+      <pre><code>{`npm run build
+CONTEXTOS_EMBEDDINGS=0 CONTEXTOS_REDIS_REPO=/path/to/redis \\
+  node scripts/bench/run-redis-bench.mjs --output-dir "$TMPDIR/contextos-redis-results"`}</code></pre>
+      <p>
+        The generated <code>redis-results.json</code> reports aggregate
+        <code>expectedFileRecallPercent</code>, <code>anyHitRatePercent</code>,
+        and targeted/generic token averages. The checked-in fixture runner is
+        separate: <code>npm run bench -- --json</code> copies the
+        <code>retrieval-examples/</code> fixtures into temporary projects and
+        reports <code>passRatePercent</code>, <code>averageRecallPercent</code>,
+        <code>expectedFileRecallPercent</code>, and <code>anyHitRatePercent</code>.
+      </p>
 
       <h2>Throughput & Scalability</h2>
       

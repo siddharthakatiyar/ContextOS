@@ -95,8 +95,8 @@ describe('Vector garbage collection', () => {
     const file = path.join(tmpdir, 'app.ts');
     fs.writeFileSync(file, V1);
 
-    const indexer = new Indexer(db);
-    await indexer.indexFile(file, 'repo', tmpdir);
+    const indexer = new Indexer(db, tmpdir);
+    await indexer.indexFile(file, 'repo');
 
     expect(chunkIdsBySymbol('alpha').length).toBe(1);
     seedVectors();
@@ -105,7 +105,7 @@ describe('Vector garbage collection', () => {
     if (vecBefore !== null) expect(vecBefore).toBeGreaterThan(0);
 
     fs.writeFileSync(file, V2);
-    await indexer.indexFile(file, 'repo', tmpdir);
+    await indexer.indexFile(file, 'repo');
 
     // New chunks receive no embeddings (model disabled): every stale vector
     // must have been garbage-collected, leaving none behind.
@@ -120,8 +120,8 @@ describe('Vector garbage collection', () => {
     const file = path.join(tmpdir, 'app.ts');
     fs.writeFileSync(file, V1);
 
-    const indexer = new Indexer(db);
-    await indexer.indexFile(file, 'repo', tmpdir);
+    const indexer = new Indexer(db, tmpdir);
+    await indexer.indexFile(file, 'repo');
 
     seedVectors();
     expect(count('chunk_embeddings')).toBeGreaterThan(0);
@@ -146,8 +146,8 @@ describe('Vector garbage collection', () => {
     const file = path.join(tmpdir, 'app.ts');
     fs.writeFileSync(file, V1);
 
-    const indexer = new Indexer(db);
-    await indexer.indexFile(file, 'repo', tmpdir);
+    const indexer = new Indexer(db, tmpdir);
+    await indexer.indexFile(file, 'repo');
     seedVectors();
 
     await indexer.removeFile(file);

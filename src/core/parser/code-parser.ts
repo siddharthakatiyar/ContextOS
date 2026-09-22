@@ -192,6 +192,24 @@ function extractImportTargets(node: Parser.SyntaxNode): string[] {
     }
   }
 
+  // Rust's `use` grammar stores the imported path in an `argument` node
+  // (usually a scoped_identifier/use_list), rather than a string/path field.
+  // Capture the complete path before walking children; walking each identifier
+  // independently loses the relationship target entirely.
+  if (node.type === 'use_declaration') {
+    const argument =
+      node.childForFieldName?.('argument') ||
+      node.childForFieldName?.('path') ||
+      node.children.find((child) =>
+        ['scoped_identifier', 'identifier', 'use_list', 'use_as_clause', 'use_wildcard'].includes(
+          child.type
+        )
+      );
+    const raw = argument?.text || node.text.replace(/^\s*use\s+/, '').replace(/;\s*$/, '');
+    add(raw);
+    return targets;
+  }
+
   // Also collect named imports as secondary targets (e.g. { ChunksRepo })
   // Prefer field-named source/path when available
   const sourceField =

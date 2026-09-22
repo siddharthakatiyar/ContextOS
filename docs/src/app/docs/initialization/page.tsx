@@ -21,9 +21,7 @@ export default function InitializationDocs() {
 
       <h2>Purpose</h2>
       <p>
-        The <code>contextos init</code> command is the entrypoint to the system. It delegates immediately to the <code>Indexer</code> class, which is responsible for scanning the repository, 
-        parsing all source code into an AST, chunking it, building the dependency graph, generating embeddings, and seeding the local 
-        SQLite database. It effectively acts as the "compiler" phase of ContextOS.
+        The <code>contextos init</code> command prepares the repository and schedules the <code>Indexer</code> in the background. The indexer scans the repository, parses source code into an AST, chunks it, builds dependency edges, generates embeddings when available, and writes the local SQLite database. Initialization can return while a large repository is still being indexed; use <code>contextos status</code> to observe <code>fullIndexCompleted</code>.
       </p>
 
       <h2>The Indexer Pipeline</h2>
@@ -75,15 +73,18 @@ if (!this.filesRepo.isChanged(filePath, hash)) {
 
       <h3>4. Database Transaction</h3>
       <p>
-        All state updates run in a highly-optimized SQLite transaction to preserve foreign keys. If a file changed, we first execute an <code>ON DELETE CASCADE</code> purge of its old chunks and relationships, then bulk insert the new ones.
+        State updates run in SQLite transactions. If a file changed, old chunks and relationships are removed before the new chunks are inserted. The vector table is maintained separately because sqlite-vec does not provide foreign-key cascades, so stale vectors are explicitly deleted during replacement and cleanup.
       </p>
       <pre>
         <code className="language-typescript">
 {`// Update file record first for FK constraints
 this.filesRepo.upsert({ path: filePath, hash, ... });
 
-// Cleanup old chunks (cascades to relationships)
+// Cleanup old chunks and their relationships
 this.chunksRepo.deleteBySource(filePath);
+
+// Remove vectors explicitly (vec0 has no FK cascade)
+embeddingsStore.deleteByChunkIds(oldChunkIds);
 
 // Bulk insert new chunks
 this.chunksRepo.bulkUpsert(chunks);`}

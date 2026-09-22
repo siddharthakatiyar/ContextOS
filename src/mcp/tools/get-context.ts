@@ -91,7 +91,12 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         .describe(
           'Use "stub" (default) to receive lightweight summaries (like grep) to save tokens. Use "full" only if you already know exactly what you are looking for and need the entire function bodies.'
         ),
-      output_format: z.enum(['markdown', 'xml']).optional().describe('Legacy parameter (ignored).')
+      output_format: z
+        .enum(['markdown', 'xml'])
+        .optional()
+        .describe(
+          'Output format. Markdown is the default; XML is useful for clients that parse tags.'
+        )
     },
     async ({ prompt, max_tokens, layers, tier, output_format }) => {
       try {

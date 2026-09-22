@@ -57,7 +57,7 @@ export interface ContextOSConfig {
   /**
    * Allow ctx_execute to run the target repository's own scripts (npm test /
    * npm run build|lint / npx vitest|jest). These execute repo-controlled code,
-   * so disable on untrusted repositories. Default: true. Env
+   * so disable on untrusted repositories. Default: false. Env
    * CONTEXTOS_EXEC_ALLOW_SCRIPTS overrides this.
    */
   execAllowRepoScripts?: boolean;

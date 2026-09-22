@@ -17,7 +17,7 @@ export default function CompressionDocs() {
       prev={{ title: "Graph Expansion", href: "/docs/algorithms/graph-expansion" }}
       next={{ title: "SQLite Schema", href: "/docs/database/schema" }}
     >
-      <SourceLink path="src/core/compiler/compiler.ts" />
+      <SourceLink path="src/core/compiler/index.ts" />
 
       <h2>The Context Window Problem</h2>
       <p>

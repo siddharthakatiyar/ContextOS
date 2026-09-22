@@ -4,6 +4,7 @@ import path from 'path';
 import chalk from 'chalk';
 import { DB, getContextOSHome } from '../../core/storage/database.js';
 import { getErrorCode } from '../../utils/errors.js';
+import { canonicalDirectory } from '../../utils/secure-state.js';
 
 interface CountRow {
   count: number;
@@ -20,7 +21,7 @@ export const statusCommand = new Command('status')
   .description('Show the status of the local ContextOS index')
   .option('--json', 'Output in JSON format')
   .action(async (options) => {
-    const cwd = process.cwd();
+    const cwd = canonicalDirectory(process.cwd());
     const dbs = DB.resolveDatabases(cwd);
 
     // Check daemon status

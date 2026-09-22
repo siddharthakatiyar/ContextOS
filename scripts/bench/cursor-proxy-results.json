@@ -21,14 +21,14 @@
       "tokens": 7231,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/tracking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sds.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rio.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c"
+        "<redis-root>/src/tracking.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/sds.c",
+        "<redis-root>/src/rio.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/config.c"
       ],
       "terms": [
         "sds.c",
@@ -47,14 +47,14 @@
       "tokens": 5397,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/sds.h",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/entry.h",
-        "/Volumes/ExtremeSSD/code/redis/src/chk.h",
-        "/Volumes/ExtremeSSD/code/redis/src/ziplist.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c"
+        "<redis-root>/src/sds.h",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/entry.h",
+        "<redis-root>/src/chk.h",
+        "<redis-root>/src/ziplist.c",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/hyperloglog.c"
       ],
       "terms": [
         "sds.h",
@@ -73,14 +73,14 @@
       "tokens": 6197,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c"
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/dict.c"
       ],
       "terms": [
         "dict.c",
@@ -99,14 +99,14 @@
       "tokens": 6273,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.h",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/kvstore.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/expire.c"
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/dict.h",
+        "<redis-root>/src/dict.c",
+        "<redis-root>/src/kvstore.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/expire.c"
       ],
       "terms": [
         "triggers",
@@ -123,14 +123,14 @@
       "tokens": 6864,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.h",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/dict.h",
+        "<redis-root>/src/dict.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/sentinel.c"
       ],
       "terms": [
         "does",
@@ -148,14 +148,14 @@
       "tokens": 5030,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae.h",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae_select.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae_kqueue.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae_evport.c"
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/ae.c",
+        "<redis-root>/src/ae.h",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/ae_select.c",
+        "<redis-root>/src/ae_kqueue.c",
+        "<redis-root>/src/ae_evport.c"
       ],
       "terms": [
         "ae.c",
@@ -173,14 +173,14 @@
       "tokens": 5912,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/evict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae.h",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-benchmark.c"
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/evict.c",
+        "<redis-root>/src/ae.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/ae.h",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/redis-benchmark.c"
       ],
       "terms": [
         "are",
@@ -198,14 +198,14 @@
       "tokens": 6401,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/ae.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae_kqueue.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae_epoll.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ae_evport.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c"
+        "<redis-root>/src/ae.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/ae_kqueue.c",
+        "<redis-root>/src/ae_epoll.c",
+        "<redis-root>/src/ae_evport.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/cluster.c"
       ],
       "terms": [
         "does",
@@ -224,14 +224,14 @@
       "tokens": 6524,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_slot_stats.c",
-        "/Volumes/ExtremeSSD/code/redis/src/socket.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c"
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/cluster_slot_stats.c",
+        "<redis-root>/src/socket.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/networking.c"
       ],
       "terms": [
         "networking.c",
@@ -250,14 +250,14 @@
       "tokens": 7240,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/memory_prefetch.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c"
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/memory_prefetch.c",
+        "<redis-root>/src/cluster_legacy.c"
       ],
       "terms": [
         "does",
@@ -275,14 +275,14 @@
       "tokens": 6096,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c"
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/eval.c"
       ],
       "terms": [
         "the",
@@ -298,14 +298,14 @@
       "tokens": 6667,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c"
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/iothread.c"
       ],
       "terms": [
         "server.c",
@@ -324,14 +324,14 @@
       "tokens": 6498,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/latency.h",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/latency.h",
+        "<redis-root>/src/debug.c"
       ],
       "terms": [
         "the",
@@ -350,14 +350,14 @@
       "tokens": 5711,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tls.c",
-        "/Volumes/ExtremeSSD/code/redis/src/expire.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c"
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/tls.c",
+        "<redis-root>/src/expire.c",
+        "<redis-root>/src/acl.c"
       ],
       "terms": [
         "server.c",
@@ -375,14 +375,14 @@
       "tokens": 6971,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/stream.h"
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/stream.h"
       ],
       "terms": [
         "t_string.c",
@@ -401,14 +401,14 @@
       "tokens": 6098,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/t_string.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c"
+        "<redis-root>/src/t_string.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/replication.c"
       ],
       "terms": [
         "does",
@@ -426,14 +426,14 @@
       "tokens": 6987,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.h",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_array.c"
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/ebuckets.c",
+        "<redis-root>/src/object.h",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/hyperloglog.c",
+        "<redis-root>/src/t_array.c"
       ],
       "terms": [
         "t_hash.c",
@@ -452,14 +452,14 @@
       "tokens": 6763,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sort.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/connection.h",
-        "/Volumes/ExtremeSSD/code/redis/src/keymeta.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/sort.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/connection.h",
+        "<redis-root>/src/keymeta.c",
+        "<redis-root>/src/t_hash.c"
       ],
       "terms": [
         "does",
@@ -478,14 +478,14 @@
       "tokens": 7201,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/t_list.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/ziplist.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.h",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c"
+        "<redis-root>/src/t_list.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/ziplist.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/ebuckets.h",
+        "<redis-root>/src/debug.c"
       ],
       "terms": [
         "t_list.c",
@@ -504,14 +504,14 @@
       "tokens": 6479,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/t_list.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c"
+        "<redis-root>/src/t_list.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/debug.c"
       ],
       "terms": [
         "Explain",
@@ -529,14 +529,14 @@
       "tokens": 5840,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/t_set.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_zset.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c"
+        "<redis-root>/src/t_set.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/t_zset.c",
+        "<redis-root>/src/server.c"
       ],
       "terms": [
         "t_set.c",
@@ -555,14 +555,14 @@
       "tokens": 6386,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/t_zset.c",
-        "/Volumes/ExtremeSSD/code/redis/src/geo.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c"
+        "<redis-root>/src/t_zset.c",
+        "<redis-root>/src/geo.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/object.c"
       ],
       "terms": [
         "t_zset.c",
@@ -580,14 +580,14 @@
       "tokens": 6960,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/t_zset.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/geo.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/expire.c"
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/t_zset.c",
+        "<redis-root>/src/hyperloglog.c",
+        "<redis-root>/src/dict.c",
+        "<redis-root>/src/geo.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/expire.c"
       ],
       "terms": [
         "does",
@@ -606,14 +606,14 @@
       "tokens": 6528,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c"
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/cluster.c"
       ],
       "terms": [
         "rdb.c",
@@ -632,14 +632,14 @@
       "tokens": 7230,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/bitops.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/memory_prefetch.c"
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/bitops.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/memory_prefetch.c"
       ],
       "terms": [
         "Explain",
@@ -658,14 +658,14 @@
       "tokens": 6705,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c"
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/cluster_legacy.c"
       ],
       "terms": [
         "aof.c",
@@ -684,14 +684,14 @@
       "tokens": 6144,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_zset.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c"
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/t_zset.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/cluster_asm.c"
       ],
       "terms": [
         "does",
@@ -709,14 +709,14 @@
       "tokens": 6362,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c"
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/sentinel.c"
       ],
       "terms": [
         "replication.c",
@@ -735,14 +735,14 @@
       "tokens": 6634,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c"
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster.c"
       ],
       "terms": [
         "the",
@@ -758,14 +758,14 @@
       "tokens": 5208,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/server.c"
       ],
       "terms": [
         "cluster.c",
@@ -784,14 +784,14 @@
       "tokens": 7058,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_slot_stats.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/kvstore.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/dict.c",
+        "<redis-root>/src/cluster_slot_stats.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/kvstore.c"
       ],
       "terms": [
         "does",
@@ -809,14 +809,14 @@
       "tokens": 7026,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/keymeta.h",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c"
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/keymeta.h",
+        "<redis-root>/src/aof.c"
       ],
       "terms": [
         "sentinel.c",
@@ -835,14 +835,14 @@
       "tokens": 6082,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h"
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/server.h"
       ],
       "terms": [
         "does",
@@ -860,14 +860,14 @@
       "tokens": 6548,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/rdb.c"
       ],
       "terms": [
         "module.c",
@@ -886,14 +886,14 @@
       "tokens": 6273,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/multi.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/multi.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster_legacy.c"
       ],
       "terms": [
         "are",
@@ -912,14 +912,14 @@
       "tokens": 6870,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/evict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c"
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/evict.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/dict.c"
       ],
       "terms": [
         "evict.c",
@@ -938,14 +938,14 @@
       "tokens": 5902,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/evict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c"
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/evict.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/cluster.c"
       ],
       "terms": [
         "Explain",
@@ -963,14 +963,14 @@
       "tokens": 7343,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/lazyfree.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_zset.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_string.c"
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/lazyfree.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/t_zset.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/t_string.c"
       ],
       "terms": [
         "lazyfree.c",
@@ -989,14 +989,14 @@
       "tokens": 6503,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/bio.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/lazyfree.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c"
+        "<redis-root>/src/bio.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/lazyfree.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/cluster.c"
       ],
       "terms": [
         "bio.c",
@@ -1015,14 +1015,14 @@
       "tokens": 6567,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/rax.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rax.h",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tracking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c"
+        "<redis-root>/src/rax.c",
+        "<redis-root>/src/rax.h",
+        "<redis-root>/src/ebuckets.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/tracking.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/acl.c"
       ],
       "terms": [
         "rax.c",
@@ -1041,14 +1041,14 @@
       "tokens": 6570,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/listpack.c",
-        "/Volumes/ExtremeSSD/code/redis/src/quicklist.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_list.c",
-        "/Volumes/ExtremeSSD/code/redis/src/stream.h",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.h",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c"
+        "<redis-root>/src/listpack.c",
+        "<redis-root>/src/quicklist.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/t_list.c",
+        "<redis-root>/src/stream.h",
+        "<redis-root>/src/ebuckets.h",
+        "<redis-root>/src/debug.c"
       ],
       "terms": [
         "listpack.c",
@@ -1067,14 +1067,14 @@
       "tokens": 5897,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/quicklist.c",
-        "/Volumes/ExtremeSSD/code/redis/src/quicklist.h",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_list.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c"
+        "<redis-root>/src/quicklist.c",
+        "<redis-root>/src/quicklist.h",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/t_list.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/object.c"
       ],
       "terms": [
         "quicklist.c",
@@ -1093,14 +1093,14 @@
       "tokens": 6197,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/bitops.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c"
+        "<redis-root>/src/bitops.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/hyperloglog.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/acl.c"
       ],
       "terms": [
         "object.c",
@@ -1119,14 +1119,14 @@
       "tokens": 7254,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/expire.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c"
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/expire.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/defrag.c"
       ],
       "terms": [
         "db.c",
@@ -1145,14 +1145,14 @@
       "tokens": 6962,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/stream.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/bitops.c",
-        "/Volumes/ExtremeSSD/code/redis/src/anet.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/stream.h",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/bitops.c",
+        "<redis-root>/src/anet.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/blocked.c"
       ],
       "terms": [
         "t_stream.c",
@@ -1171,14 +1171,14 @@
       "tokens": 6479,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/stream.h",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sparsearray.h"
+        "<redis-root>/src/stream.h",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/sparsearray.h"
       ],
       "terms": [
         "are",
@@ -1196,14 +1196,14 @@
       "tokens": 6615,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/notify.c",
-        "/Volumes/ExtremeSSD/code/redis/src/pubsub.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/notify.c",
+        "<redis-root>/src/pubsub.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/redis-cli.c"
       ],
       "terms": [
         "pubsub.c",
@@ -1222,14 +1222,14 @@
       "tokens": 6532,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/script_lua.c",
-        "/Volumes/ExtremeSSD/code/redis/src/functions.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h"
+        "<redis-root>/src/script_lua.c",
+        "<redis-root>/src/functions.c",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/server.h"
       ],
       "terms": [
         "script.c",
@@ -1248,14 +1248,14 @@
       "tokens": 6346,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/tls.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c"
+        "<redis-root>/src/tls.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/sentinel.c"
       ],
       "terms": [
         "tls.c",
@@ -1274,14 +1274,14 @@
       "tokens": 6439,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tracking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hotkeys.c"
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/tracking.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/hotkeys.c"
       ],
       "terms": [
         "tracking.c",
@@ -1300,14 +1300,14 @@
       "tokens": 6491,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/bio.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/keymeta.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/bio.c",
+        "<redis-root>/src/hyperloglog.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/keymeta.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/iothread.c"
       ],
       "terms": [
         "does",
@@ -1326,14 +1326,14 @@
       "tokens": 6603,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/geo.c",
-        "/Volumes/ExtremeSSD/code/redis/src/kvstore.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/estore.c",
-        "/Volumes/ExtremeSSD/code/redis/src/keymeta.h",
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c",
-        "/Volumes/ExtremeSSD/code/redis/src/keymeta.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/geo.c",
+        "<redis-root>/src/kvstore.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/estore.c",
+        "<redis-root>/src/keymeta.h",
+        "<redis-root>/src/hyperloglog.c",
+        "<redis-root>/src/keymeta.c"
       ],
       "terms": [
         "the",
@@ -1352,14 +1352,14 @@
       "tokens": 6561,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/connection.h",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/connection.h",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/rdb.c"
       ],
       "terms": [
         "does",
@@ -1377,14 +1377,14 @@
       "tokens": 6659,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hotkeys.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/expire.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_slot_stats.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c"
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/hotkeys.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/expire.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/cluster_slot_stats.c",
+        "<redis-root>/src/module.c"
       ],
       "terms": [
         "are",
@@ -1403,14 +1403,14 @@
       "tokens": 6373,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_slot_stats.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/function_lua.c",
-        "/Volumes/ExtremeSSD/code/redis/src/evict.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/cluster_slot_stats.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/function_lua.c",
+        "<redis-root>/src/evict.c"
       ],
       "terms": [
         "the",
@@ -1429,14 +1429,14 @@
       "tokens": 6101,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rio.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/connection.h",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/call_reply.c"
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/rio.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/connection.h",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/call_reply.c"
       ],
       "terms": [
         "are",
@@ -1455,14 +1455,14 @@
       "tokens": 6174,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/geo.c",
-        "/Volumes/ExtremeSSD/code/redis/src/lazyfree.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/functions.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c"
+        "<redis-root>/src/geo.c",
+        "<redis-root>/src/lazyfree.c",
+        "<redis-root>/src/hyperloglog.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/functions.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/redis-cli.c"
       ],
       "terms": [
         "the",
@@ -1481,14 +1481,14 @@
       "tokens": 5458,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/crccombine.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/bitops.c",
-        "/Volumes/ExtremeSSD/code/redis/src/zipmap.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.h",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c"
+        "<redis-root>/src/crccombine.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/bitops.c",
+        "<redis-root>/src/zipmap.c",
+        "<redis-root>/src/dict.h",
+        "<redis-root>/src/dict.c"
       ],
       "terms": [
         "does",
@@ -1507,14 +1507,14 @@
       "tokens": 6428,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/geo.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.h",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c"
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/geo.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/cluster_legacy.h",
+        "<redis-root>/src/db.c"
       ],
       "terms": [
         "data",
@@ -1533,14 +1533,14 @@
       "tokens": 5526,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/zmalloc.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/listpack.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rax.h"
+        "<redis-root>/src/zmalloc.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/listpack.c",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/rax.h"
       ],
       "terms": [
         "are",
@@ -1559,14 +1559,14 @@
       "tokens": 5913,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/zmalloc.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/listpack.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sparsearray.h",
-        "/Volumes/ExtremeSSD/code/redis/src/sds.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/zmalloc.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/listpack.c",
+        "<redis-root>/src/sparsearray.h",
+        "<redis-root>/src/sds.c",
+        "<redis-root>/src/server.c"
       ],
       "terms": [
         "are",
@@ -1585,14 +1585,14 @@
       "tokens": 6608,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/t_zset.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/quicklist.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c"
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/t_zset.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/quicklist.c",
+        "<redis-root>/src/redis-cli.c"
       ],
       "terms": [
         "the",
@@ -1611,14 +1611,14 @@
       "tokens": 6136,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.h",
-        "/Volumes/ExtremeSSD/code/redis/src/listpack.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.h",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_zset.c"
+        "<redis-root>/src/hyperloglog.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster.h",
+        "<redis-root>/src/listpack.c",
+        "<redis-root>/src/ebuckets.h",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/t_zset.c"
       ],
       "terms": [
         "Streams",
@@ -1635,14 +1635,14 @@
       "tokens": 6566,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.c"
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/t_hash.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/ebuckets.c"
       ],
       "terms": [
         "does",
@@ -1660,14 +1660,14 @@
       "tokens": 7761,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/evict.c"
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/evict.c"
       ],
       "terms": [
         "happens",
@@ -1684,14 +1684,14 @@
       "tokens": 6474,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/evict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h"
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/evict.c",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/server.h"
       ],
       "terms": [
         "are",
@@ -1710,14 +1710,14 @@
       "tokens": 6415,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_string.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c"
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/t_string.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/redis-cli.c"
       ],
       "terms": [
         "does",
@@ -1736,14 +1736,14 @@
       "tokens": 6460,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c"
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/rdb.c"
       ],
       "terms": [
         "does",
@@ -1762,14 +1762,14 @@
       "tokens": 7349,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/latency.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c"
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/latency.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/module.c"
       ],
       "terms": [
         "does",
@@ -1788,14 +1788,14 @@
       "tokens": 6789,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c"
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/db.c"
       ],
       "terms": [
         "fork",
@@ -1814,14 +1814,14 @@
       "tokens": 6381,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/evict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/evict.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/cluster.c"
       ],
       "terms": [
         "does",
@@ -1840,14 +1840,14 @@
       "tokens": 6091,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c"
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/cluster_asm.c"
       ],
       "terms": [
         "PSYNC",
@@ -1866,14 +1866,14 @@
       "tokens": 6344,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/expire.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h"
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/expire.c",
+        "<redis-root>/src/server.h"
       ],
       "terms": [
         "does",
@@ -1892,14 +1892,14 @@
       "tokens": 7091,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c"
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c"
       ],
       "terms": [
         "does",
@@ -1917,14 +1917,14 @@
       "tokens": 6852,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c"
+        "<redis-root>/src/sentinel.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/replication.c"
       ],
       "terms": [
         "failover",
@@ -1942,14 +1942,14 @@
       "tokens": 6313,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/ebuckets.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/networking.c"
       ],
       "terms": [
         "does",
@@ -1968,14 +1968,14 @@
       "tokens": 7719,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/cluster_asm.c"
       ],
       "terms": [
         "cluster",
@@ -1994,14 +1994,14 @@
       "tokens": 6330,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tls.c"
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/tls.c"
       ],
       "terms": [
         "happens",
@@ -2020,14 +2020,14 @@
       "tokens": 6789,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.h",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c"
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster.h",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/module.c"
       ],
       "terms": [
         "are",
@@ -2046,14 +2046,14 @@
       "tokens": 7681,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c"
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/replication.c"
       ],
       "terms": [
         "does",
@@ -2072,14 +2072,14 @@
       "tokens": 6796,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_stream.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c"
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/t_stream.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster_asm.c"
       ],
       "terms": [
         "can",
@@ -2098,14 +2098,14 @@
       "tokens": 6838,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c"
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/debug.c",
+        "<redis-root>/src/sentinel.c"
       ],
       "terms": [
         "are",
@@ -2123,14 +2123,14 @@
       "tokens": 7173,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/call_reply.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/latency.c",
-        "/Volumes/ExtremeSSD/code/redis/src/object.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/functions.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c"
+        "<redis-root>/src/call_reply.c",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/latency.c",
+        "<redis-root>/src/object.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/functions.c",
+        "<redis-root>/src/db.c"
       ],
       "terms": [
         "does",
@@ -2149,14 +2149,14 @@
       "tokens": 6522,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_slot_stats.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tracking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/bio.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster_slot_stats.c",
+        "<redis-root>/src/tracking.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/bio.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/dict.c",
+        "<redis-root>/src/aof.c"
       ],
       "terms": [
         "does",
@@ -2174,14 +2174,14 @@
       "tokens": 6671,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c"
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/t_hash.c"
       ],
       "terms": [
         "are",
@@ -2200,14 +2200,14 @@
       "tokens": 6836,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-check-aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hotkeys.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c"
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/redis-check-aof.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/hotkeys.c",
+        "<redis-root>/src/cluster.c"
       ],
       "terms": [
         "does",
@@ -2225,14 +2225,14 @@
       "tokens": 6876,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-check-aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redismodule.h"
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/redis-check-aof.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/redismodule.h"
       ],
       "terms": [
         "the",
@@ -2250,14 +2250,14 @@
       "tokens": 6437,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_string.c",
-        "/Volumes/ExtremeSSD/code/redis/src/eval.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/lazyfree.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_zset.c",
-        "/Volumes/ExtremeSSD/code/redis/src/t_hash.c"
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/t_string.c",
+        "<redis-root>/src/eval.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/lazyfree.c",
+        "<redis-root>/src/t_zset.c",
+        "<redis-root>/src/t_hash.c"
       ],
       "terms": [
         "does",
@@ -2276,14 +2276,14 @@
       "tokens": 6686,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/bio.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/iothread.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c"
+        "<redis-root>/src/bio.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/iothread.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/config.c"
       ],
       "terms": [
         "bio.c",
@@ -2302,14 +2302,14 @@
       "tokens": 6335,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/dict.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ziplist.c",
-        "/Volumes/ExtremeSSD/code/redis/src/listpack.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sds.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rax.c"
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/dict.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/ziplist.c",
+        "<redis-root>/src/listpack.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/sds.c",
+        "<redis-root>/src/rax.c"
       ],
       "terms": [
         "does",
@@ -2327,14 +2327,14 @@
       "tokens": 6135,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/rdb.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tracking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c"
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/rdb.c",
+        "<redis-root>/src/tracking.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/server.c"
       ],
       "terms": [
         "does",
@@ -2353,14 +2353,14 @@
       "tokens": 6208,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tracking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/multi.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/sentinel.c"
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/tracking.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/multi.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/sentinel.c"
       ],
       "terms": [
         "are",
@@ -2379,14 +2379,14 @@
       "tokens": 5646,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/zmalloc.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/zmalloc.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/cluster.c"
       ],
       "terms": [
         "does",
@@ -2404,14 +2404,14 @@
       "tokens": 6241,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tls.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c"
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/tls.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/module.c"
       ],
       "terms": [
         "happens",
@@ -2428,14 +2428,14 @@
       "tokens": 7169,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.h",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster.c",
-        "/Volumes/ExtremeSSD/code/redis/src/hyperloglog.c",
-        "/Volumes/ExtremeSSD/code/redis/src/db.c",
-        "/Volumes/ExtremeSSD/code/redis/src/expire.c",
-        "/Volumes/ExtremeSSD/code/redis/src/debug.c"
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/ebuckets.h",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/cluster.c",
+        "<redis-root>/src/hyperloglog.c",
+        "<redis-root>/src/db.c",
+        "<redis-root>/src/expire.c",
+        "<redis-root>/src/debug.c"
       ],
       "terms": [
         "does",
@@ -2454,14 +2454,14 @@
       "tokens": 7733,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/blocked.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/latency.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c"
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/blocked.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/latency.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/module.c"
       ],
       "terms": [
         "does",
@@ -2480,14 +2480,14 @@
       "tokens": 6480,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c",
-        "/Volumes/ExtremeSSD/code/redis/src/replication.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h"
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/networking.c",
+        "<redis-root>/src/replication.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/server.h"
       ],
       "terms": [
         "does",
@@ -2506,14 +2506,14 @@
       "tokens": 6570,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/atomicvar.h",
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/aof.c",
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c"
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/atomicvar.h",
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/aof.c",
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/cluster_legacy.c"
       ],
       "terms": [
         "are",
@@ -2532,14 +2532,14 @@
       "tokens": 6980,
       "accurate": true,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/acl.c",
-        "/Volumes/ExtremeSSD/code/redis/src/redis-cli.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.c",
-        "/Volumes/ExtremeSSD/code/redis/src/tls.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_legacy.c",
-        "/Volumes/ExtremeSSD/code/redis/src/cluster_asm.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/networking.c"
+        "<redis-root>/src/acl.c",
+        "<redis-root>/src/redis-cli.c",
+        "<redis-root>/src/server.c",
+        "<redis-root>/src/tls.c",
+        "<redis-root>/src/cluster_legacy.c",
+        "<redis-root>/src/cluster_asm.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/networking.c"
       ],
       "terms": [
         "does",
@@ -2558,14 +2558,14 @@
       "tokens": 6633,
       "accurate": false,
       "matchedFiles": [
-        "/Volumes/ExtremeSSD/code/redis/src/defrag.c",
-        "/Volumes/ExtremeSSD/code/redis/src/ebuckets.c",
-        "/Volumes/ExtremeSSD/code/redis/src/kvstore.c",
-        "/Volumes/ExtremeSSD/code/redis/src/module.c",
-        "/Volumes/ExtremeSSD/code/redis/src/server.h",
-        "/Volumes/ExtremeSSD/code/redis/src/zmalloc.c",
-        "/Volumes/ExtremeSSD/code/redis/src/config.c",
-        "/Volumes/ExtremeSSD/code/redis/src/keymeta.h"
+        "<redis-root>/src/defrag.c",
+        "<redis-root>/src/ebuckets.c",
+        "<redis-root>/src/kvstore.c",
+        "<redis-root>/src/module.c",
+        "<redis-root>/src/server.h",
+        "<redis-root>/src/zmalloc.c",
+        "<redis-root>/src/config.c",
+        "<redis-root>/src/keymeta.h"
       ],
       "terms": [
         "are",

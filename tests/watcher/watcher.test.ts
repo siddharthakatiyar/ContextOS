@@ -4,6 +4,9 @@ import { DB } from '../../src/core/storage/database.js';
 import { Indexer } from '../../src/core/indexer/index.js';
 import { BackgroundIndexer } from '../../src/core/daemon/background-indexer.js';
 import chokidar from 'chokidar';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 vi.mock('chokidar', () => ({
   default: {
@@ -59,7 +62,8 @@ describe('Watcher', () => {
       .spyOn(BackgroundIndexer.prototype, 'startFullIndex')
       .mockReturnValue(bulkRun);
 
-    startWatcher(db, '/repo');
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-watcher-root-'));
+    startWatcher(db, repoRoot);
     const watcher = vi.mocked(chokidar.watch).mock.results[0].value as {
       on: ReturnType<typeof vi.fn>;
     };
@@ -67,10 +71,10 @@ describe('Watcher', () => {
       ((filePath: string) => void) | undefined;
     expect(changeHandler).toBeDefined();
 
-    for (let i = 0; i < 100; i++) changeHandler?.(`/repo/file-${i}.ts`);
+    for (let i = 0; i < 100; i++) changeHandler?.(path.join(repoRoot, `file-${i}.ts`));
     expect(startFullIndex).toHaveBeenCalledOnce();
 
-    const duringBulk = '/repo/edited-during-bulk.ts';
+    const duringBulk = path.join(repoRoot, 'edited-during-bulk.ts');
     changeHandler?.(duringBulk);
     expect(indexFile).not.toHaveBeenCalledWith(duringBulk, 'repo');
 
@@ -79,7 +83,8 @@ describe('Watcher', () => {
       expect(indexFile).toHaveBeenCalledWith(duringBulk, 'repo');
       // The event that triggered the bulk pass is also reconciled afterward,
       // preventing pre-bulk queued/in-flight work from winning with stale data.
-      expect(indexFile).toHaveBeenCalledWith('/repo/file-99.ts', 'repo');
+      expect(indexFile).toHaveBeenCalledWith(path.join(repoRoot, 'file-99.ts'), 'repo');
     });
+    fs.rmSync(repoRoot, { recursive: true, force: true });
   });
 });

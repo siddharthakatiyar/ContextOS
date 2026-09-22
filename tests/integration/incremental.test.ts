@@ -42,8 +42,8 @@ describe('Incremental Indexing Integration', () => {
     // 1. Initial write
     fs.writeFileSync(file, 'export function oldFunc() { return "old"; }');
 
-    const indexer = new Indexer(db);
-    await indexer.indexFile(file, 'repo', tmpdir);
+    const indexer = new Indexer(db, tmpdir);
+    await indexer.indexFile(file, 'repo');
 
     const initialChunks = db
       .getInstance()
@@ -58,7 +58,7 @@ describe('Incremental Indexing Integration', () => {
     // 2. Modify file
     fs.writeFileSync(file, 'export function newFunc() { return "new"; }');
 
-    await indexer.indexFile(file, 'repo', tmpdir);
+    await indexer.indexFile(file, 'repo');
 
     const updatedChunks = db
       .getInstance()

@@ -1,7 +1,5 @@
 import net from 'net';
 import fs from 'fs';
-import os from 'os';
-import crypto from 'crypto';
 import path from 'path';
 import { DB } from '../storage/database.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -19,23 +17,22 @@ import { startWatcher, type ContextOSWatcher } from '../watcher/index.js';
 import { SessionStore } from '../session/session-store.js';
 import { BackgroundIndexer } from './background-indexer.js';
 
-import { fileURLToPath } from 'url';
 import type { FSWatcher } from 'chokidar';
 import { getErrorCode, getErrorMessage } from '../../utils/errors.js';
+import { getPackageVersion } from '../../utils/version.js';
+import {
+  assertNoSymlinkInPath,
+  canonicalDirectory,
+  ensurePrivateStateDir,
+  getDaemonSocketPath,
+  preparePrivateStateFile,
+  removePrivateStateFile,
+  secureBoundSocket,
+  tightenPrivateStateFile,
+  writePrivateStateFile
+} from '../../utils/secure-state.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-let version = '1.0.0';
-try {
-  let pkgPath = path.join(__dirname, '../../../../package.json');
-  if (!fs.existsSync(pkgPath)) {
-    pkgPath = path.join(__dirname, '../../../../../package.json');
-  }
-  version = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
-} catch {
-  // fallback
-}
+const version = getPackageVersion();
 
 export class ContextOSDaemon {
   private server: net.Server;
@@ -49,24 +46,12 @@ export class ContextOSDaemon {
   public backgroundIndexer?: BackgroundIndexer;
 
   constructor(projectDir: string) {
-    this.projectDir = projectDir;
-    const ctxDir = path.join(projectDir, '.contextos');
-    if (!fs.existsSync(ctxDir)) {
-      fs.mkdirSync(ctxDir, { recursive: true });
-    }
-    // On Windows, named pipes must be in \\.\pipe\ prefix. So we handle that conditionally.
-    const isWin = process.platform === 'win32';
-    if (isWin) {
-      const nameHash = Buffer.from(projectDir).toString('hex');
-      this.socketPath = path.join('\\\\?\\pipe', `contextos-${nameHash}`);
-    } else {
-      const runDir = path.join(os.homedir(), '.contextos', 'run');
-      if (!fs.existsSync(runDir)) fs.mkdirSync(runDir, { recursive: true });
-      const shortHash = crypto.createHash('md5').update(projectDir).digest('hex').substring(0, 12);
-      this.socketPath = path.join(runDir, `d-${shortHash}.sock`);
-    }
+    this.projectDir = canonicalDirectory(projectDir);
+    const ctxDir = ensurePrivateStateDir(path.join(this.projectDir, '.contextos'));
+    this.socketPath = getDaemonSocketPath(this.projectDir);
 
     this.pidPath = path.join(ctxDir, 'daemon.pid');
+    preparePrivateStateFile(this.pidPath);
 
     this.server = net.createServer((socket) => {
       this.handleConnection(socket);
@@ -78,6 +63,7 @@ export class ContextOSDaemon {
   }
 
   public async start(): Promise<void> {
+    preparePrivateStateFile(this.pidPath);
     // Check if another daemon is already running
     if (fs.existsSync(this.pidPath)) {
       const pid = parseInt(fs.readFileSync(this.pidPath, 'utf8').trim(), 10);
@@ -94,13 +80,14 @@ export class ContextOSDaemon {
           }
           // Stale PID file, clean it up
           console.warn(`[ContextOS] Cleaning up stale PID file ${this.pidPath}`);
-          fs.unlinkSync(this.pidPath);
+          removePrivateStateFile(this.pidPath);
         }
       }
     }
 
     // Clean up stale socket (Unix only)
     if (process.platform !== 'win32' && fs.existsSync(this.socketPath)) {
+      assertNoSymlinkInPath(this.socketPath);
       fs.unlinkSync(this.socketPath);
     }
 
@@ -128,12 +115,30 @@ export class ContextOSDaemon {
       });
 
       this.server.listen(this.socketPath, async () => {
-        fs.writeFileSync(this.pidPath, String(process.pid));
+        try {
+          // The private run directory blocks traversal before this chmod, and
+          // the socket itself is tightened before any daemon work begins.
+          secureBoundSocket(this.socketPath);
+          writePrivateStateFile(this.pidPath, String(process.pid));
+        } catch (error) {
+          this.server.close();
+          reject(error);
+          return;
+        }
 
         // Override console.log and console.error to write to a log file instead
         // since the daemon is fully detached and stdio is ignored
         const logPath = path.join(path.dirname(this.pidPath), 'daemon.log');
-        const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+        let logStream: ReturnType<typeof fs.createWriteStream>;
+        try {
+          preparePrivateStateFile(logPath);
+          logStream = fs.createWriteStream(logPath, { flags: 'a', mode: 0o600 });
+          tightenPrivateStateFile(logPath);
+        } catch (error) {
+          this.server.close();
+          reject(error);
+          return;
+        }
 
         const logWithTime = (level: string, ...args: unknown[]) => {
           const msg = args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ');
@@ -222,9 +227,11 @@ export class ContextOSDaemon {
 
   public stop() {
     try {
-      if (fs.existsSync(this.pidPath)) fs.unlinkSync(this.pidPath);
-      if (process.platform !== 'win32' && fs.existsSync(this.socketPath))
+      removePrivateStateFile(this.pidPath);
+      if (process.platform !== 'win32' && fs.existsSync(this.socketPath)) {
+        assertNoSymlinkInPath(this.socketPath);
         fs.unlinkSync(this.socketPath);
+      }
       for (const db of this.dbs) {
         db.close();
       }

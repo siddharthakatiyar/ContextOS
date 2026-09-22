@@ -12,8 +12,8 @@ describe('v1 config defaults', () => {
     expect(defaultConfig.embeddingsRetrieval).toBe(false);
   });
 
-  it('execAllowRepoScripts defaults to true (opt-out, not opt-in)', () => {
-    expect(defaultConfig.execAllowRepoScripts).toBe(true);
+  it('execAllowRepoScripts defaults to false (opt-in for trusted repositories)', () => {
+    expect(defaultConfig.execAllowRepoScripts).toBe(false);
   });
 
   it('maxRetrievalResults default matches the documented value', () => {
