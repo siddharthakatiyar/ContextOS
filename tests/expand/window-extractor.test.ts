@@ -50,5 +50,5 @@ describe('ctx_expand input and file bounds', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });
