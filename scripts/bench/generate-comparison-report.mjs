@@ -1,12 +1,15 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const expectedFilesMap = JSON.parse(fs.readFileSync(path.join(__dirname, 'expected-files-map.json'), 'utf8'));
 
-const ctxData = JSON.parse(fs.readFileSync(path.join(__dirname, 'redis-results.json'), 'utf8'));
-const cursorData = JSON.parse(fs.readFileSync(path.join(__dirname, 'cursor-proxy-results.json'), 'utf8'));
+const ctxInput = process.env.CONTEXTOS_REDIS_RESULTS || path.join(__dirname, 'redis-results.json');
+const cursorInput = process.env.CONTEXTOS_CURSOR_RESULTS || path.join(__dirname, 'cursor-proxy-results.json');
+const ctxData = JSON.parse(fs.readFileSync(ctxInput, 'utf8'));
+const cursorData = JSON.parse(fs.readFileSync(cursorInput, 'utf8'));
 
 function ctxAccurate(res) {
   const expected = expectedFilesMap[res.id] || [];
@@ -55,9 +58,9 @@ for (const res of order) {
 
 const md = `# ContextOS vs Cursor — Redis 100-Query Benchmark
 
-**Date:** ${new Date().toISOString().slice(0, 10)}  
-**Redis repo:** \`/Volumes/ExtremeSSD/code/redis\` (799 files indexed, \`deps/**\` excluded)  
-**ContextOS DB:** \`/Volumes/ExtremeSSD/code/redis/.contextos/index.db\`
+**Date:** ${new Date().toISOString().slice(0, 10)}<br>
+**Redis repo:** ${process.env.CONTEXTOS_REPO_LABEL || 'checkout supplied at run time'}<br>
+**ContextOS DB:** temporary per-run benchmark state (the checkout is not modified)
 
 > **Note on Cursor column:** Cursor's \`@codebase\` search has no programmatic API from within an agent session. The Cursor column uses a **ripgrep keyword proxy** (identifier + filename extraction, top-8 files × ~80 lines each). Real \`@codebase\` uses semantic embeddings and typically returns fewer, more focused chunks — actual Cursor token counts would likely be lower than shown here.
 
@@ -101,11 +104,10 @@ const md = `# ContextOS vs Cursor — Redis 100-Query Benchmark
 
 ## Observations
 
-1. **Post-fix ContextOS hit 96% file-level accuracy** (49/50 targeted, 47/50 generic) — well above the 84-88% overall target. The isolated Redis DB path and \`deps/**\` exclusion fixed the cross-contamination and jemalloc noise issues.
-2. **Only 4 ContextOS misses:** \`targeted_48\` (luaRedisGenericCommand → got commands.c/script_lua.c), \`generic_8\` (strings → script_lua.c), \`generic_13\` (streams → tracking.c), \`generic_50\` (active defrag → defrag.c not active-defrag.c).
-3. **ContextOS is dramatically more token-efficient** — ~668 tokens/query avg vs ~6,500 for the ripgrep proxy (which over-fetches raw file snippets).
-4. **Targeted queries:** ContextOS's FTS + symbol anchoring on named functions gives near-perfect file retrieval (98%).
-5. **Generic queries:** ContextOS improved from 48% → 94% after the fix; broad conceptual queries now land on core C files instead of TypeScript contextOS chunks or deps/ internals.
+1. **This run's file-level accuracy:** ${ctxTargetAcc + ctxGenAcc}/100 overall (${(((ctxTargetAcc + ctxGenAcc) / 100) * 100).toFixed(1)}%), with ${ctxTargetAcc}/50 targeted and ${ctxGenAcc}/50 generic queries accurate.
+2. **Misses are listed in the table above.** Re-run with the same checkout, expected-file map, and query set before comparing revisions.
+3. **Token totals are corpus and configuration measurements.** The report records the ContextOS and proxy totals without treating them as guarantees for other repositories.
+4. **The benchmark excludes \`deps/**\` and keeps its database in temporary state.** Supply a repository path through \`CONTEXTOS_REDIS_REPO\` when running the Redis indexer.
 
 ---
 
@@ -115,6 +117,7 @@ const md = `# ContextOS vs Cursor — Redis 100-Query Benchmark
 |----|-------------------|-------------------|-----------------|----------------|--------------|
 ${rows}`;
 
-const outPath = '/Users/siddhartha/.gemini/antigravity/brain/d21a6a7c-1c29-483b-b38e-d440935a6d98/redis_comparison_report.md';
+const outPath = process.env.CONTEXTOS_COMPARISON_OUTPUT ||
+  path.join(os.tmpdir(), `contextos-redis-comparison-${Date.now()}.md`);
 fs.writeFileSync(outPath, md);
 console.log('Report written to', outPath);

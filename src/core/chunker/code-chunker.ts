@@ -28,12 +28,10 @@ function stableChunkId(filePath: string, symbolPathOrTitle: string): string {
 }
 
 function isJunkSymbol(symbol: CodeSymbol): boolean {
-  // Anonymous / trivial lambdas pollute ranking (e.g. function c, function w)
+  // Anonymous / one-character lambdas pollute ranking (e.g. function c), but
+  // named helpers remain useful even when their body is a single line.  Size
+  // thresholds here used to make real functions disappear from the index.
   if (!symbol.name || symbol.name.length <= 2) return true;
-  const lines = symbol.body.split('\n').filter((l) => l.trim().length > 0);
-  // Require both tiny line count AND tiny token count to drop — avoids
-  // discarding short-but-real helpers that are still useful to retrieve.
-  if (lines.length < 3 && estimateTokens(symbol.body) < 30) return true;
   return false;
 }
 

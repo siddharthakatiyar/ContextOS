@@ -42,8 +42,8 @@ describe('Transactional file indexing', () => {
     ].join('\n');
 
     fs.writeFileSync(file, v1);
-    const indexer = new Indexer(db);
-    await indexer.indexFile(file, 'repo', tmpdir);
+    const indexer = new Indexer(db, tmpdir);
+    await indexer.indexFile(file, 'repo');
 
     const before = (
       db.getInstance().prepare('SELECT hash FROM files WHERE path = ?').get(file) as {
@@ -59,7 +59,7 @@ describe('Transactional file indexing', () => {
 
     const v2 = v1.replace('v1', 'v2');
     fs.writeFileSync(file, v2);
-    await expect(indexer.indexFile(file, 'repo', tmpdir)).rejects.toThrow('boom mid-transaction');
+    await expect(indexer.indexFile(file, 'repo')).rejects.toThrow('boom mid-transaction');
     spy.mockRestore();
 
     // Nothing may have leaked through: old chunks intact, file hash unchanged,
@@ -81,7 +81,7 @@ describe('Transactional file indexing', () => {
     expect(contents).toContain('oldFunc');
 
     // And a retry without the fault converges to the new state
-    await indexer.indexFile(file, 'repo', tmpdir);
+    await indexer.indexFile(file, 'repo');
     const retryContents = (
       db.getInstance().prepare('SELECT content FROM chunks WHERE source_file = ?').all(file) as {
         content: string;
@@ -101,8 +101,8 @@ describe('Transactional file indexing', () => {
       '}'
     ].join('\n');
     fs.writeFileSync(file, v1);
-    const indexer = new Indexer(db);
-    await indexer.indexFile(file, 'repo', tmpdir);
+    const indexer = new Indexer(db, tmpdir);
+    await indexer.indexFile(file, 'repo');
 
     const beforeHash = (
       db.getInstance().prepare('SELECT hash FROM files WHERE path = ?').get(file) as {
@@ -120,9 +120,7 @@ describe('Transactional file indexing', () => {
         throw new Error('relationship write failed');
       });
     fs.writeFileSync(file, v1.replace('v1', 'v2'));
-    await expect(indexer.indexFile(file, 'repo', tmpdir)).rejects.toThrow(
-      'relationship write failed'
-    );
+    await expect(indexer.indexFile(file, 'repo')).rejects.toThrow('relationship write failed');
     relationshipFailure.mockRestore();
 
     const afterHash = (
@@ -137,7 +135,7 @@ describe('Transactional file indexing', () => {
     expect(afterHash).toBe(beforeHash);
     expect(afterChunks).toEqual(beforeChunks);
 
-    await indexer.indexFile(file, 'repo', tmpdir);
+    await indexer.indexFile(file, 'repo');
     const retryContent = (
       db.getInstance().prepare('SELECT content FROM chunks WHERE source_file = ?').all(file) as {
         content: string;

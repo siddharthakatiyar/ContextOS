@@ -1,27 +1,16 @@
 import net from 'net';
 import path from 'path';
-import os from 'os';
-import crypto from 'crypto';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { getErrorCode, getErrorMessage } from '../../utils/errors.js';
+import { canonicalDirectory, getDaemonSocketPath } from '../../utils/secure-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function getSocketPath(projectDir: string): string {
-  const isWin = process.platform === 'win32';
-  const nameHash = Buffer.from(projectDir).toString('hex');
-  if (isWin) {
-    return path.join('\\\\?\\pipe', `contextos-${nameHash}`);
-  } else {
-    const runDir = path.join(os.homedir(), '.contextos', 'run');
-    if (!fs.existsSync(runDir)) fs.mkdirSync(runDir, { recursive: true });
-    // Use a hash of the project path to ensure uniqueness but stay within max socket path length limit (104 chars)
-    const shortHash = crypto.createHash('md5').update(projectDir).digest('hex').substring(0, 12);
-    return path.join(runDir, `d-${shortHash}.sock`);
-  }
+  return getDaemonSocketPath(canonicalDirectory(projectDir));
 }
 
 function connectToDaemon(socketPath: string): Promise<net.Socket> {

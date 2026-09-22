@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mergeDeep, validateConfigJson } from '../../src/config/index.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { loadConfig, mergeDeep, validateConfigJson } from '../../src/config/index.js';
 
 describe('config mergeDeep', () => {
   it('union-merges arrays by default', () => {
@@ -89,5 +92,32 @@ describe('validateConfigJson', () => {
     const result = mergeDeep(structuredClone(target), source);
     expect(result.pipeline.graphExpansion).toBe(false);
     expect(result.pipeline.diversityFilter).toBe(true); // untouched
+  });
+});
+
+describe('loadConfig cache isolation', () => {
+  it('keeps repository-specific settings separate within one process', () => {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-config-cache-'));
+    const repoA = path.join(parent, 'repo-a');
+    const repoB = path.join(parent, 'repo-b');
+    fs.mkdirSync(path.join(repoA, '.contextos'), { recursive: true });
+    fs.mkdirSync(path.join(repoB, '.contextos'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoA, '.contextos', 'config.json'),
+      JSON.stringify({ maxChunkTokens: 1111 })
+    );
+    fs.writeFileSync(
+      path.join(repoB, '.contextos', 'config.json'),
+      JSON.stringify({ maxChunkTokens: 2222 })
+    );
+
+    try {
+      expect(loadConfig({ cwd: repoA }).maxChunkTokens).toBe(1111);
+      expect(loadConfig({ cwd: repoB }).maxChunkTokens).toBe(2222);
+      // A second read of A must not inherit B's repository override.
+      expect(loadConfig({ cwd: repoA }).maxChunkTokens).toBe(1111);
+    } finally {
+      fs.rmSync(parent, { recursive: true, force: true });
+    }
   });
 });

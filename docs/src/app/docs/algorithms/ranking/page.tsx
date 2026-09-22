@@ -38,7 +38,7 @@ function rrfScore(rank: number): number {
 
       <h2>The Determinism Problem</h2>
       <p>
-        Standard sorting in V8 is unstable if scores are identical. If a query produces identical scores for two files across multiple executions, the sort order could flip unpredictably. This creates non-deterministic context windows, confusing the LLM across multi-turn chats.
+        ContextOS adds an explicit identifier tie-breaker when scores are equal, so output ordering does not depend on incidental input order. This keeps repeated queries stable across multi-turn chats.
       </p>
       <p>
         ContextOS enforces strict determinism via a stable tie-breaker:
@@ -68,8 +68,8 @@ function rrfScore(rank: number): number {
         Scores are aggressively modified by deterministic heuristics:
       </p>
       <ul>
-        <li><strong>Layer Promotion:</strong> Workspace-local entities are multiplied by <code>10.0x</code> to override Global cache conflicts.</li>
-        <li><strong>Intent Detection:</strong> If the query specifies an intent (e.g. "definition" vs "usage"), exact AST type matches (e.g., <code>interface</code>) receive a <code>1.5x</code> boost.</li>
+        <li><strong>Layer Promotion:</strong> Session, repository, workspace, and global layers use the configured multipliers; the default workspace multiplier is <code>1.1x</code>.</li>
+        <li><strong>Intent Detection:</strong> Intent signals affect matching and query terms. There is no separate default AST type multiplier.</li>
         <li><strong>File Extensions:</strong> Binary and unreadable files are hard-capped at <code>score = 0</code>.</li>
       </ul>
 

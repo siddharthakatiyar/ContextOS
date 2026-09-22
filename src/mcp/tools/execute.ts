@@ -2,8 +2,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import path from 'path';
+import path from 'node:path';
 import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
+import { validateCommandArguments } from '../../utils/command-guard.js';
 import { loadConfig } from '../../config/index.js';
 import { getErrorMessage } from '../../utils/errors.js';
 
@@ -12,8 +13,8 @@ const execFileAsync = promisify(execFile);
 /**
  * Whether ctx_execute may run the target repository's own scripts (npm/npx),
  * which execute attacker-controlled package.json scripts / test files on a
- * hostile repo. Default ON (preserves prior behavior); disable via config
- * `execAllowRepoScripts: false` or env `CONTEXTOS_EXEC_ALLOW_SCRIPTS=0`.
+ * hostile repo. Default OFF; enable via config `execAllowRepoScripts: true`
+ * or env `CONTEXTOS_EXEC_ALLOW_SCRIPTS=1` for trusted repositories.
  */
 export function repoScriptsAllowed(): boolean {
   const env = process.env.CONTEXTOS_EXEC_ALLOW_SCRIPTS;
@@ -21,10 +22,49 @@ export function repoScriptsAllowed(): boolean {
     return env !== '0' && env.toLowerCase() !== 'false';
   }
   try {
-    return loadConfig().execAllowRepoScripts !== false;
+    return loadConfig({ cwd: getWorkspaceRoot() }).execAllowRepoScripts !== false;
   } catch {
-    return true;
+    return false;
   }
+}
+
+/**
+ * Keep child processes useful for local builds while excluding ambient secrets
+ * and runtime redirection knobs such as NODE_OPTIONS and npm_config_prefix.
+ * This is an environment filter, not a process sandbox.
+ */
+export function buildExecutionEnv(cwd?: string): NodeJS.ProcessEnv {
+  const allowedExact = new Set([
+    'PATH',
+    'Path',
+    'HOME',
+    'USERPROFILE',
+    'TMPDIR',
+    'TMP',
+    'TEMP',
+    'SystemRoot',
+    'ComSpec',
+    'CI',
+    'NODE_ENV',
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'LC_COLLATE'
+  ]);
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of allowedExact) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+  if (cwd) {
+    // Force npm/npx writes and package resolution back under the validated cwd;
+    // ambient npm_config_* values and user-level .npmrc files are untrusted.
+    env.npm_config_prefix = cwd;
+    env.npm_config_global = 'false';
+    env.npm_config_cache = path.join(cwd, '.contextos', 'npm-cache');
+    env.npm_config_userconfig = process.platform === 'win32' ? 'NUL' : '/dev/null';
+  }
+  return env;
 }
 
 /** Dangerous find(1) predicates that can execute commands or delete files. */
@@ -48,6 +88,53 @@ function hasDangerousGitOutputFlag(args: string[]): boolean {
     }
   }
   return false;
+}
+
+function hasShortFlag(arg: string, flag: string): boolean {
+  return arg.startsWith('-') && !arg.startsWith('--') && arg.slice(1).includes(flag);
+}
+
+/** Reject options that make an allowed filesystem command follow symlinks. */
+export function validateSymlinkFollowOptions(exe: string, args: readonly string[]): string | null {
+  const command = exe.toLowerCase();
+  const lowerArgs = args.map((arg) => arg.toLowerCase());
+
+  if (
+    lowerArgs.some(
+      (arg) => arg === '--follow' || arg.startsWith('--follow=') || arg.startsWith('--dereference')
+    )
+  ) {
+    return 'Symlink-following options are not allowed for confined execution.';
+  }
+
+  if (
+    command === 'find' &&
+    args.some((arg) => arg.toLowerCase() === '-follow' || hasShortFlag(arg, 'L'))
+  ) {
+    return 'find symlink-following options (-L, -follow) are not allowed.';
+  }
+
+  if (
+    command === 'grep' &&
+    args.some((arg) => arg.toLowerCase() === '--dereference-recursive' || hasShortFlag(arg, 'R'))
+  ) {
+    return 'grep recursive symlink-following options (-R, --dereference-recursive) are not allowed.';
+  }
+
+  if (
+    command === 'ls' &&
+    args.some((arg) => arg.toLowerCase() === '--dereference' || hasShortFlag(arg, 'L'))
+  ) {
+    return 'ls symlink-dereference options (-L, --dereference) are not allowed.';
+  }
+
+  // `tree -l` treats links to directories as directories; combined short
+  // forms such as -al must be rejected as well.
+  if (command === 'tree' && args.some((arg) => hasShortFlag(arg, 'l'))) {
+    return 'tree symlink-following option (-l) is not allowed.';
+  }
+
+  return null;
 }
 
 export function registerExecuteTool(server: McpServer) {
@@ -102,6 +189,14 @@ export function registerExecuteTool(server: McpServer) {
                 text: `Command not allowed. Allowed executables are: ${allowedCommands.join(', ')}`
               }
             ],
+            isError: true
+          };
+        }
+
+        const symlinkOptionError = validateSymlinkFollowOptions(exe, args);
+        if (symlinkOptionError) {
+          return {
+            content: [{ type: 'text', text: symlinkOptionError }],
             isError: true
           };
         }
@@ -205,27 +300,19 @@ export function registerExecuteTool(server: McpServer) {
           };
         }
 
-        // Reject any argument that escapes the workspace root. Resolving each arg
-        // against the (validated) cwd catches absolute paths, '../' sequences, and a
-        // bare '..' segment (which the old substring-only check missed), and follows
-        // symlinks via realpath.
-        for (const arg of args) {
-          if (path.isAbsolute(arg) || arg.startsWith('/')) {
-            return {
-              content: [{ type: 'text', text: 'Absolute paths are not allowed in arguments.' }],
-              isError: true
-            };
-          }
-          if (resolveWithinWorkspace(root, path.resolve(resolvedCwd, arg)) === null) {
-            return {
-              content: [{ type: 'text', text: 'Directory traversal is not allowed in arguments.' }],
-              isError: true
-            };
-          }
+        // Validate ordinary operands and the values hidden inside command
+        // options such as npm's --prefix=../outside form.
+        const argumentError = validateCommandArguments(root, resolvedCwd, args);
+        if (argumentError) {
+          return {
+            content: [{ type: 'text', text: argumentError }],
+            isError: true
+          };
         }
 
         const { stdout, stderr } = await execFileAsync(exe, args, {
           cwd: resolvedCwd,
+          env: buildExecutionEnv(exe === 'npm' || exe === 'npx' ? resolvedCwd : undefined),
           timeout: 30000,
           maxBuffer: 1024 * 1024
         });

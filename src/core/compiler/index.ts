@@ -268,10 +268,163 @@ function formatStubs(stubs: ScoredChunk[]): string {
   return out;
 }
 
+function renderXmlDocument(
+  full: ScoredChunk[],
+  stubs: ScoredChunk[],
+  entities: RetrievalResult['expandedEntities'],
+  pathDisplay: Map<string, string>,
+  legend: string,
+  repoRoot?: string
+): string {
+  const byLayer: Record<string, ScoredChunk[]> = {
+    session: [],
+    repo: [],
+    workspace: [],
+    global: []
+  };
+  for (const chunk of full) byLayer[chunk.layer]?.push(chunk);
+
+  const formatXmlChunk = (chunk: ScoredChunk): string => {
+    let src = pathDisplay.get(chunk.sourceFile) || path.basename(chunk.sourceFile);
+    if (repoRoot && chunk.sourceFile.startsWith(repoRoot)) {
+      const rel = chunk.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
+      if (rel) src = rel;
+    }
+    let out = `<chunk id="${escapeXml(chunk.id)}" layer="${escapeXml(chunk.layer)}" source="${escapeXml(src)}"`;
+    if (chunk.symbolName) {
+      out += ` symbol="${escapeXml(chunk.symbolName)}" kind="${escapeXml(chunk.symbolKind)}"`;
+    }
+    if (chunk.sectionTitle) out += ` section="${escapeXml(chunk.sectionTitle)}"`;
+    if (chunk.startLine != null) out += ` start="${chunk.startLine}"`;
+    if (chunk.endLine != null) out += ` end="${chunk.endLine}"`;
+    out += `>\n<![CDATA[\n${escapeCdata(chunk.content.trim())}\n]]>\n</chunk>\n`;
+    return out;
+  };
+
+  const formatXmlStub = (chunk: ScoredChunk): string => {
+    let src = stubLocLabel(chunk);
+    if (repoRoot && chunk.sourceFile.startsWith(repoRoot)) {
+      const rel = chunk.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
+      if (rel) {
+        src =
+          rel +
+          (chunk.startLine != null && chunk.endLine != null
+            ? `:${chunk.startLine}-${chunk.endLine}`
+            : '');
+      }
+    }
+    let out = `  <stub source="${escapeXml(src)}" symbol="${escapeXml(chunk.symbolName || '')}"`;
+    if (chunk.startLine != null) out += ` start="${chunk.startLine}"`;
+    if (chunk.endLine != null) out += ` end="${chunk.endLine}"`;
+    return `${out} />\n`;
+  };
+
+  let output = `<contextos_context>\n`;
+  if (legend) output += `<path_alias>${escapeXml(legend.trim())}</path_alias>\n`;
+
+  for (const layer of ['session', 'repo', 'workspace', 'global'] as const) {
+    if (byLayer[layer].length === 0) continue;
+    output += `<layer name="${layer}">\n`;
+    for (const chunk of byLayer[layer]) output += formatXmlChunk(chunk);
+    output += `</layer>\n`;
+  }
+
+  if (stubs.length > 0) {
+    output += `<stubs>\n`;
+    for (const stub of stubs) output += formatXmlStub(stub);
+    output += `</stubs>\n`;
+  }
+
+  if (entities.length > 0) {
+    output += `<related>\n`;
+    for (const entity of entities) {
+      output += `  <entity name="${escapeXml(entity.entity)}" rel="${escapeXml(entity.relationshipType)}" />\n`;
+    }
+    output += `</related>\n`;
+  }
+  return `${output}</contextos_context>\n`;
+}
+
+/**
+ * Render complete XML elements greedily under the requested budget.  XML cannot
+ * be cut at an arbitrary character boundary without risking malformed output,
+ * so optional chunks/stubs/relationships are omitted as whole elements.  A
+ * budget smaller than the empty document's framing returns a valid empty XML
+ * document and reports its unavoidable framing cost.
+ */
+function renderXmlWithinBudget(
+  full: ScoredChunk[],
+  stubs: ScoredChunk[],
+  entities: RetrievalResult['expandedEntities'],
+  pathDisplay: Map<string, string>,
+  legend: string,
+  repoRoot: string | undefined,
+  maxTokens: number
+): { output: string; tokenCount: number } {
+  const selectedFull: ScoredChunk[] = [];
+  const fits = (
+    candidateFull: ScoredChunk[],
+    candidateStubs: ScoredChunk[],
+    candidateEntities: RetrievalResult['expandedEntities']
+  ) =>
+    renderXmlDocument(
+      candidateFull,
+      candidateStubs,
+      candidateEntities,
+      pathDisplay,
+      legend,
+      repoRoot
+    );
+
+  for (const chunk of full) {
+    const candidate = [...selectedFull, chunk];
+    if (estimateTokens(fits(candidate, [], [])) <= maxTokens) selectedFull.push(chunk);
+  }
+
+  const selectedStubs: ScoredChunk[] = [];
+  for (const stub of stubs) {
+    const candidate = [...selectedStubs, stub];
+    if (estimateTokens(fits(selectedFull, candidate, [])) <= maxTokens) selectedStubs.push(stub);
+  }
+
+  const selectedEntities: RetrievalResult['expandedEntities'] = [];
+  for (const entity of entities) {
+    const candidate = [...selectedEntities, entity];
+    if (estimateTokens(fits(selectedFull, selectedStubs, candidate)) <= maxTokens) {
+      selectedEntities.push(entity);
+    }
+  }
+
+  let output = fits(selectedFull, selectedStubs, selectedEntities);
+  let tokenCount = estimateTokens(output);
+  if (tokenCount > maxTokens && legend) {
+    // An alias legend is optional.  If it is the only reason the complete
+    // document misses the budget, retry with basename paths and no legend.
+    const basenameDisplay = new Map<string, string>();
+    for (const chunk of full)
+      basenameDisplay.set(chunk.sourceFile, path.basename(chunk.sourceFile));
+    output = renderXmlDocument(
+      selectedFull,
+      selectedStubs,
+      selectedEntities,
+      basenameDisplay,
+      '',
+      repoRoot
+    );
+    tokenCount = estimateTokens(output);
+  }
+  if (tokenCount > maxTokens) {
+    output = '<contextos_context />';
+    tokenCount = estimateTokens(output);
+  }
+  return { output, tokenCount };
+}
+
 function renderPass(
   compressedChunks: ScoredChunk[],
   result: RetrievalResult,
-  opts: CompilerOptions
+  opts: CompilerOptions,
+  maxTokens: number
 ): { output: string; tokenCount: number; stubs: ScoredChunk[] } {
   const full = compressedChunks.filter((c) => !isStub(c));
   const stubs = compressedChunks.filter((c) => isStub(c));
@@ -293,67 +446,19 @@ function renderPass(
   const { display: pathDisplay, legend } = buildPathAliases(full);
 
   if (opts.outputFormat === 'xml') {
-    let xmlOutput = `<contextos_context>\n`;
-
-    const formatXmlChunk = (chunk: ScoredChunk) => {
-      let src = pathDisplay.get(chunk.sourceFile) || path.basename(chunk.sourceFile);
-      if (repoRoot && chunk.sourceFile.startsWith(repoRoot)) {
-        const rel = chunk.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
-        if (rel) src = rel;
-      }
-      let out = `<chunk id="${escapeXml(chunk.id)}" layer="${escapeXml(chunk.layer)}" source="${escapeXml(src)}"`;
-      if (chunk.symbolName)
-        out += ` symbol="${escapeXml(chunk.symbolName)}" kind="${escapeXml(chunk.symbolKind)}"`;
-      if (chunk.sectionTitle) out += ` section="${escapeXml(chunk.sectionTitle)}"`;
-      if (chunk.startLine != null) out += ` start="${chunk.startLine}"`;
-      if (chunk.endLine != null) out += ` end="${chunk.endLine}"`;
-      out += `>\n`;
-      out += `<![CDATA[\n${escapeCdata(chunk.content.trim())}\n]]>\n`;
-      out += `</chunk>\n`;
-      return out;
-    };
-
-    if (legend) {
-      xmlOutput += `<path_alias>${escapeXml(legend.trim())}</path_alias>\n`;
-    }
-
-    for (const layer of ['session', 'repo', 'workspace', 'global'] as const) {
-      if (byLayer[layer].length > 0) {
-        xmlOutput += `<layer name="${layer}">\n`;
-        byLayer[layer].forEach((c) => (xmlOutput += formatXmlChunk(c)));
-        xmlOutput += `</layer>\n`;
-      }
-    }
-    if (stubs.length > 0) {
-      xmlOutput += `<stubs>\n`;
-      for (const s of stubs) {
-        let src = stubLocLabel(s);
-        if (repoRoot && s.sourceFile.startsWith(repoRoot)) {
-          const rel = s.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
-          if (rel)
-            src =
-              rel +
-              (s.startLine != null && s.endLine != null ? `:${s.startLine}-${s.endLine}` : '');
-        }
-        xmlOutput += `  <stub source="${escapeXml(src)}" symbol="${escapeXml(s.symbolName || '')}"`;
-        if (s.startLine != null) xmlOutput += ` start="${s.startLine}"`;
-        if (s.endLine != null) xmlOutput += ` end="${s.endLine}"`;
-        xmlOutput += ` />\n`;
-      }
-      xmlOutput += `</stubs>\n`;
-    }
-    if (entities.length > 0) {
-      xmlOutput += `<related>\n`;
-      for (const e of entities) {
-        xmlOutput += `  <entity name="${escapeXml(e.entity)}" rel="${escapeXml(e.relationshipType)}" />\n`;
-      }
-      xmlOutput += `</related>\n`;
-    }
-    xmlOutput += `</contextos_context>\n`;
+    const xml = renderXmlWithinBudget(
+      full,
+      stubs,
+      entities,
+      pathDisplay,
+      legend,
+      repoRoot,
+      maxTokens
+    );
 
     return {
-      output: xmlOutput,
-      tokenCount: estimateTokens(xmlOutput),
+      output: xml.output,
+      tokenCount: xml.tokenCount,
       stubs
     };
   }
@@ -413,13 +518,13 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
   const firstPassBudget = Math.max(380, activeMaxTokens - framingFloor);
 
   let compressedChunks = compressChunks(result.chunks, firstPassBudget, ctxOpts);
-  let renderResult = renderPass(compressedChunks, result, opts);
+  let renderResult = renderPass(compressedChunks, result, opts, activeMaxTokens);
 
   if (renderResult.tokenCount > activeMaxTokens) {
     const deficit = renderResult.tokenCount - activeMaxTokens;
     const repackBudget = Math.max(380, firstPassBudget - deficit - 15);
     compressedChunks = compressChunks(result.chunks, repackBudget, ctxOpts);
-    renderResult = renderPass(compressedChunks, result, opts);
+    renderResult = renderPass(compressedChunks, result, opts, activeMaxTokens);
   }
 
   let { output, tokenCount } = renderResult;

@@ -1,6 +1,10 @@
-import fs from 'fs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const data = JSON.parse(fs.readFileSync('scripts/bench/redis-results.json', 'utf8'));
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const resultsPath = process.env.CONTEXTOS_REDIS_RESULTS || path.join(scriptDir, 'redis-results.json');
+const data = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
 const results = data.results;
 
 let correct = 0;
@@ -25,4 +29,5 @@ for (const res of results) {
   }
 }
 
-console.log(`\nAccuracy (on ${totalTargeted} explicit file targets): ${correct}/${totalTargeted} (${((correct / totalTargeted) * 100).toFixed(2)}%)`);
+const accuracy = totalTargeted ? (correct / totalTargeted) * 100 : 0;
+console.log(`\nAccuracy (on ${totalTargeted} explicit file targets): ${correct}/${totalTargeted} (${accuracy.toFixed(2)}%)`);

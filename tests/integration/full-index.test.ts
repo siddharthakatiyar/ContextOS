@@ -53,11 +53,11 @@ describe('Full Index and Retrieve Integration', () => {
     fs.writeFileSync(file3, 'export const completelyUnrelated = 42;');
 
     // 2. Index Files
-    const indexer = new Indexer(db);
+    const indexer = new Indexer(db, tmpdir);
 
-    await indexer.indexFile(file1, 'repo', tmpdir);
-    await indexer.indexFile(file2, 'repo', tmpdir);
-    await indexer.indexFile(file3, 'repo', tmpdir);
+    await indexer.indexFile(file1, 'repo');
+    await indexer.indexFile(file2, 'repo');
+    await indexer.indexFile(file3, 'repo');
 
     // Wait for the async parser queues to drain (if any background indexing happens)
     // In our synchronous test setup with mock embeddings, indexFile handles DB insertion directly.

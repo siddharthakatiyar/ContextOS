@@ -36,7 +36,7 @@ export default function DesignDecisionsDocs() {
         Global indexing tools dump all your repositories into a single massive index. If you have five different projects using a <code>User</code> class, asking an LLM to "fix the User authentication" will retrieve <code>User</code> files from all five projects, destroying the context window with irrelevant noise.
       </p>
       <p>
-        ContextOS uses <code>.contextos/index.db</code> files stored directly inside each repository. When you query within a project, it heavily boosts (or exclusively restricts) results to that specific workspace layer, guaranteeing perfect isolation.
+        ContextOS uses <code>.contextos/index.db</code> files stored directly inside each repository. A normal query opens the local project database and may also open the shared <code>~/.contextos/index.db</code> for global memory, with configured layer boosts and foreign-workspace demotion. Use the <code>layers</code> option when a query must be restricted to a particular layer; local project state is isolated by its database path, while global context is intentionally shared.
       </p>
 
       <h2>Why BM25 over Embeddings?</h2>

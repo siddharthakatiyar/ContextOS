@@ -72,7 +72,7 @@ export default function ConfigurationDocs() {
 
       <h3>Embeddings</h3>
       <p>
-        ContextOS uses a local MiniLM model (<code>@xenova/transformers</code>) — there
+        ContextOS uses a local MiniLM model (<code>@huggingface/transformers</code>) — there
         is no external/OpenAI provider and no API key.
       </p>
       <ul>
@@ -93,9 +93,9 @@ export default function ConfigurationDocs() {
       <p>
         Whether the <code>ctx_execute</code> tool may run the indexed repository&apos;s own
         scripts (<code>npm test</code>, <code>npm run build|lint</code>,{" "}
-        <code>npx vitest|jest</code>). Default <code>true</code>. Set to <code>false</code>{" "}
-        (or export <code>CONTEXTOS_EXEC_ALLOW_SCRIPTS=0</code>) when indexing untrusted
-        repositories, since those scripts execute repo-controlled code.
+        <code>npx vitest|jest</code>). Default <code>false</code>. Set to <code>true</code>{" "}
+        only for trusted repositories (or export <code>CONTEXTOS_EXEC_ALLOW_SCRIPTS=1</code>),
+        since those scripts execute repo-controlled code.
       </p>
 
       <h2>Environment variables</h2>
@@ -105,6 +105,7 @@ export default function ConfigurationDocs() {
         <li><code>CONTEXTOS_EXEC_ALLOW_SCRIPTS=0</code>: disable <code>ctx_execute</code> script execution.</li>
         <li><code>CONTEXTOS_REPO_ROOT</code>: the repository root the MCP server operates on.</li>
         <li><code>CONTEXTOS_WORKSPACE</code>: workspace name for multi-project isolation.</li>
+        <li><code>ONNXRUNTIME_NODE_INSTALL=skip</code>: install-time option for CPU-only Linux x64 hosts; skips optional CUDA provider files while retaining the bundled CPU runtime.</li>
       </ul>
     </DocPage>
   );

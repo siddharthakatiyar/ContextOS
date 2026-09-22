@@ -64,13 +64,13 @@ export async function buildFixtureDb(): Promise<string> {
   process.env.CONTEXTOS_EMBEDDINGS = '1'; // enable embeddings for semantic backfills in generic queries
 
   const db = new DB(dbPath);
-  const indexer = new Indexer(db);
+  const indexer = new Indexer(db, cwd);
 
   for (const file of allRepoFiles) {
     try {
       const fileStat = fs.statSync(file);
       if (fileStat.size <= 100 * 1024) {
-        await indexer.indexFile(file, 'repo', cwd);
+        await indexer.indexFile(file, 'repo');
       }
     } catch {}
   }

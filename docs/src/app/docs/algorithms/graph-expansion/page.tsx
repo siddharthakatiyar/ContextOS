@@ -114,7 +114,7 @@ function isQualityEntity(entity: string): boolean {
 
         for (const rel of directNeighbors) {
           // Weight threshold: only traverse meaningful edges
-          if (rel.weight < 0.9 /* MIN_EDGE_WEIGHT */) continue;
+          if (rel.weight < 0.5 /* MIN_EDGE_WEIGHT */) continue;
 
           const neighbor = rel.source === current.entity ? rel.target : rel.source;
           if (!visited.has(neighbor) && isQualityEntity(neighbor)) {

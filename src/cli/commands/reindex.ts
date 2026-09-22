@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import { initCommand } from './init.js';
 import { DB } from '../../core/storage/database.js';
 import { backfillAllEmbeddings, isEmbeddingsAvailable } from '../../core/embeddings/index.js';
+import { canonicalDirectory, removePrivateStateFile } from '../../utils/secure-state.js';
 
 export const reindexCommand = new Command('reindex')
   .description('Force a complete re-index of the repository by clearing the local database')
@@ -13,7 +14,7 @@ export const reindexCommand = new Command('reindex')
     'Backfill chunk embeddings without wiping the DB (or after a full reindex)'
   )
   .action(async (opts: { embeddings?: boolean }) => {
-    const cwd = process.cwd();
+    const cwd = canonicalDirectory(process.cwd());
     const repoContextDir = path.join(cwd, '.contextos');
     const dbPath = path.join(repoContextDir, 'index.db');
     const walPath = path.join(repoContextDir, 'index.db-wal');
@@ -61,9 +62,9 @@ export const reindexCommand = new Command('reindex')
         // ignore if no daemon is running
       }
 
-      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+      removePrivateStateFile(dbPath);
+      removePrivateStateFile(walPath);
+      removePrivateStateFile(shmPath);
 
       console.log(chalk.green('Database cleared. Starting fresh initialization...'));
       console.log(chalk.dim('Embeddings are built automatically during indexFile when available.'));

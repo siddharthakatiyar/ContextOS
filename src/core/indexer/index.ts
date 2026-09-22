@@ -20,6 +20,7 @@ import { isBinaryFile, isGeneratedFile } from '../../utils/file-heuristics.js';
 import { Layer, Chunk, Relationship } from '../storage/types.js';
 import { indexChunkEmbeddings } from '../embeddings/index.js';
 import { EmbeddingsStore } from '../embeddings/embeddings-store.js';
+import { createIndexIgnore, IndexIgnore } from './ignore.js';
 
 /** Skip files larger than this before reading (B25). Shared by bulk + watcher paths. */
 export const MAX_INDEXABLE_FILE_BYTES = 2 * 1024 * 1024; // 2MB
@@ -42,8 +43,9 @@ export class Indexer {
   private filesRepo: FilesRepo;
   private relsRepo: RelationshipsRepo;
   private rootDir: string;
+  private indexIgnore: IndexIgnore;
 
-  constructor(db: DB, rootDir?: string) {
+  constructor(db: DB, rootDir?: string, configuredIgnorePatterns: readonly string[] = []) {
     this.chunksRepo = new ChunksRepo(db.getInstance());
     this.filesRepo = new FilesRepo(db.getInstance());
     this.relsRepo = new RelationshipsRepo(db.getInstance());
@@ -51,7 +53,14 @@ export class Indexer {
     // long-lived callers (daemon/watcher) pass their project dir explicitly so
     // indexing never breaks when the process was started from another directory
     // (e.g. via CONTEXTOS_REPO_ROOT).
-    this.rootDir = rootDir ? path.resolve(rootDir) : process.cwd();
+    const lexicalRoot = rootDir ? path.resolve(rootDir) : process.cwd();
+    this.rootDir = fs.existsSync(lexicalRoot) ? fs.realpathSync(lexicalRoot) : lexicalRoot;
+    this.indexIgnore = createIndexIgnore(this.rootDir, configuredIgnorePatterns);
+  }
+
+  /** Filesystem boundary used for every index operation. */
+  public getRootDir(): string {
+    return this.rootDir;
   }
 
   public async indexFile(
@@ -68,11 +77,32 @@ export class Indexer {
       throw new Error(`File not found: ${filePath}`);
     }
 
-    // Path traversal guard
-    const root = workspaceName ? path.resolve(workspaceName) : this.rootDir;
+    // Path traversal guard.  `workspaceName` is an identity stored on chunks;
+    // it is deliberately not a filesystem path.  The constructor owns the
+    // canonical repository boundary so labels such as "team-a" cannot change
+    // the security root or make valid workspace indexing fail.
+    const root = this.rootDir;
     const resolvedPath = path.resolve(filePath);
-    if (!isInsideWorkspace(resolvedPath, root)) {
+    let canonicalPath = resolvedPath;
+    try {
+      canonicalPath = fs.realpathSync(resolvedPath);
+    } catch {
+      // The existence check above makes this unlikely; retain the lexical path
+      // so the resulting error still names the requested file.
+    }
+    if (!isInsideWorkspace(canonicalPath, root)) {
       throw new Error(`Path traversal blocked: ${filePath} is outside workspace root (${root})`);
+    }
+
+    // Apply the same built-in and repository/configured ignore policy used by
+    // bulk and watch traversal. Explicit reindex requests must not bypass it.
+    if (this.indexIgnore.ignores(canonicalPath)) {
+      return {
+        filesProcessed: 0,
+        chunksCreated: 0,
+        relationshipsFound: 0,
+        durationMs: Date.now() - startTime
+      };
     }
 
     signal?.throwIfAborted();
@@ -239,13 +269,37 @@ export class Indexer {
     };
   }
 
-  public async removeFile(filePath: string): Promise<void> {
-    // Clean embedding vectors before the cascade — vec0 table has no FK support
-    const staleChunkIds = this.chunksRepo.getIdsBySource(filePath);
-    if (staleChunkIds.length > 0) {
-      new EmbeddingsStore(this.chunksRepo.getDatabase()).deleteByChunkIds(staleChunkIds);
+  public async removeFile(filePath: string, expectedLayer?: Layer): Promise<boolean> {
+    const db = this.chunksRepo.getDatabase();
+    // Take the write lock before checking the row. A full scan can race with a
+    // watcher or MCP index request that reassigns the same path to another
+    // layer; the layer predicate must cover both the check and all cascades.
+    const remove = db.transaction(() => {
+      const record = this.filesRepo.getByPath(filePath);
+      if (!record || (expectedLayer && record.layer !== expectedLayer)) return false;
+
+      // Clean embedding vectors before the cascade — vec0 has no FK support.
+      const staleChunkIds = this.chunksRepo.getIdsBySource(filePath);
+      if (staleChunkIds.length > 0) {
+        new EmbeddingsStore(db).deleteByChunkIds(staleChunkIds);
+      }
+      // Delete the file record, which cascades to chunks and relationships.
+      this.filesRepo.deleteByPath(filePath);
+      return true;
+    }).immediate;
+    return remove();
+  }
+
+  /** Remove files from a layer that were absent from a completed full scan. */
+  public async removeFilesNotIn(paths: Iterable<string>, layer: Layer = 'repo'): Promise<number> {
+    const current = new Set(Array.from(paths, (filePath) => path.resolve(filePath)));
+    const stale = this.filesRepo
+      .listByLayer(layer)
+      .filter((record) => !current.has(path.resolve(record.path)));
+    let removed = 0;
+    for (const record of stale) {
+      if (await this.removeFile(record.path, layer)) removed++;
     }
-    // Delete file record, which cascades to chunks and relationships due to SQLite foreign keys
-    this.filesRepo.deleteByPath(filePath);
+    return removed;
   }
 }

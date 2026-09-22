@@ -3,7 +3,10 @@ import path from 'path';
 import { glob } from 'glob';
 import { DB } from '../storage/database.js';
 import { Indexer, MAX_INDEXABLE_FILE_BYTES } from '../indexer/index.js';
+import { createIndexIgnore } from '../indexer/ignore.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import { canonicalDirectory, writePrivateStateFile } from '../../utils/secure-state.js';
+import { isGeneratedFile } from '../../utils/file-heuristics.js';
 
 interface IndexConfig {
   ignorePatterns: string[];
@@ -19,14 +22,14 @@ let activeFullIndex: Promise<void> | null = null;
 
 /** Write JSON atomically (tmp + rename) so readers never see torn files. */
 function writeJsonAtomic(filePath: string, data: unknown): void {
-  const tmp = `${filePath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data));
-  fs.renameSync(tmp, filePath);
+  // Status is auxiliary state but can contain indexing progress and paths. Use
+  // the same owner-only, symlink-resistant writer as daemon state files.
+  writePrivateStateFile(filePath, JSON.stringify(data));
 }
 
 export class BackgroundIndexer {
   private db: DB;
-  private indexer: Indexer;
+  private indexer?: Indexer;
   private isIndexing = false;
   private projectDir: string;
 
@@ -37,9 +40,9 @@ export class BackgroundIndexer {
 
   constructor(db: DB, projectDir: string) {
     this.db = db;
-    // Explicit traversal root — never depend on process.cwd() matching projectDir
-    this.indexer = new Indexer(db, projectDir);
-    this.projectDir = projectDir;
+    // Explicit canonical traversal root — never depend on process.cwd() or a
+    // symlink spelling matching the daemon's project directory.
+    this.projectDir = canonicalDirectory(projectDir);
   }
 
   public startFullIndex(config: IndexConfig): Promise<void> {
@@ -66,36 +69,68 @@ export class BackgroundIndexer {
     console.log('[BackgroundIndexer] Starting full repository index...');
 
     try {
-      const SAFETY_IGNORE = [
-        '**/node_modules/**',
-        '**/.git/**',
-        '**/dist/**',
-        '**/build/**',
-        '**/.next/**',
-        '**/coverage/**',
-        '**/__pycache__/**',
-        '**/target/**',
-        '**/*.min.js',
-        '**/*.min.css',
-        '**/*.map',
-        '**/*.lock',
-        '**/vendor/**',
-        // Never index our own internal state directory
-        '**/.contextos/**'
-      ];
-      const userIgnore = config.ignorePatterns || [];
-      const ignore = [...new Set([...SAFETY_IGNORE, ...userIgnore])];
+      const indexIgnore = createIndexIgnore(this.projectDir, config.ignorePatterns || []);
+      this.indexer = new Indexer(this.db, this.projectDir, config.ignorePatterns || []);
 
       const allRepoFiles = new Set<string>();
       for (const pattern of config.indexablePatterns) {
         const files = await glob(pattern, {
           cwd: this.projectDir,
-          ignore,
+          ignore: [...indexIgnore.globIgnore],
           absolute: true,
           nodir: true,
           follow: false
         });
-        for (const f of files) allRepoFiles.add(f);
+        for (const f of files) {
+          const lexicalPath = path.resolve(f);
+          let stat: fs.Stats;
+          try {
+            // Do not let a glob's symlink entry become authoritative. Indexer
+            // intentionally refuses symlinks, and retaining one here would
+            // preserve stale rows forever during reconciliation.
+            stat = fs.lstatSync(lexicalPath);
+            if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_INDEXABLE_FILE_BYTES) {
+              continue;
+            }
+          } catch (error) {
+            // An entry disappearing during a scan is absent. Other read
+            // failures are transient: keep the existing row until indexing
+            // gets a chance to retry it.
+            if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') continue;
+            allRepoFiles.add(lexicalPath);
+            continue;
+          }
+
+          let canonicalPath: string;
+          try {
+            canonicalPath = fs.realpathSync(lexicalPath);
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') continue;
+            allRepoFiles.add(lexicalPath);
+            continue;
+          }
+          if (
+            canonicalPath !== this.projectDir &&
+            !canonicalPath.startsWith(this.projectDir + path.sep)
+          ) {
+            continue;
+          }
+          if (indexIgnore.ignores(canonicalPath) || indexIgnore.ignores(lexicalPath)) continue;
+
+          // Keep permanently non-indexable content out of the authoritative
+          // set. If a read fails for another reason, treat it as transient and
+          // retain the path so a later scan can recover it.
+          try {
+            const content = fs.readFileSync(canonicalPath, 'utf8');
+            if (content.includes('\0')) continue;
+            if (isGeneratedFile(canonicalPath, content)) continue;
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') continue;
+            allRepoFiles.add(canonicalPath);
+            continue;
+          }
+          allRepoFiles.add(canonicalPath);
+        }
       }
 
       const files = Array.from(allRepoFiles);
@@ -129,7 +164,7 @@ export class BackgroundIndexer {
               // Same size cap as the incremental/watcher path so coverage does
               // not depend on which indexing route touched a file first.
               if (fileStat.size <= MAX_INDEXABLE_FILE_BYTES) {
-                await this.indexer.indexFile(file, 'repo');
+                await this.indexer?.indexFile(file, 'repo');
               } else {
                 skippedTooLarge++;
               }
@@ -161,6 +196,11 @@ export class BackgroundIndexer {
           )}KB.`
         );
       }
+
+      // A successful scan is also a reconciliation point. Remove rows from a
+      // previous full scan when a source was deleted or became ignored. Keep
+      // other layers (manual facts/workspace/global indexes) untouched.
+      await this.indexer?.removeFilesNotIn(files, 'repo');
 
       // Mark full index as complete
       writeJsonAtomic(statusFile, {

@@ -34,7 +34,7 @@ export default function CliDocs() {
 
       <h3><code>init</code></h3>
       <p>
-        Initializes ContextOS in the current repository. This creates the local <code>.contextos</code> SQLite database, parses all supported files, generates AST chunks, extracts relationship edges, and computes embeddings (if configured).
+        Initializes ContextOS in the current repository, creates the local <code>.contextos</code> state directory, writes missing MCP configuration entries, and schedules indexing in the background. The command returns before a large repository has necessarily finished indexing; use <code>contextos status</code> to check readiness.
       </p>
       <pre>
         <code className="language-bash">
@@ -53,8 +53,7 @@ export default function CliDocs() {
       </pre>
       <h4>Options</h4>
       <ul className="list-none pl-0 space-y-2">
-        <li><code>--raw</code>: Output raw JSON instead of human-readable text.</li>
-        <li><code>--depth &lt;n&gt;</code>: Set the BFS graph expansion depth (default: 2).</li>
+        <li><code>--json</code>: Output a machine-readable object containing intent, chunks, compiled context, and token count.</li>
       </ul>
 
       <h3><code>watch</code></h3>
@@ -69,21 +68,23 @@ export default function CliDocs() {
 
       <h3><code>daemon</code></h3>
       <p>
-        Starts the ContextOS HTTP / JSON-RPC server on a local port. This daemon is used by IDE extensions (like any AI Agent or IDE) to communicate with the retrieval engine over a persistent connection.
+        Manages the per-project background daemon. MCP clients normally launch <code>serve</code>, which connects to this daemon over a private local socket; the daemon does not expose an HTTP port.
       </p>
       <pre>
         <code className="language-bash">
-{`contextos daemon --port 4000`}
+{`contextos daemon start
+contextos daemon status
+contextos daemon stop`}
         </code>
       </pre>
 
       <h3><code>reindex</code></h3>
       <p>
-        Forces a hard rebuild of the <code>.contextos</code> database. Useful if the database state becomes corrupted or if you change ignore patterns in <code>contextos.json</code>.
+        Stops the project daemon, deletes the local database and its SQLite sidecars, and invokes initialization again. Use this after changing ignore rules or when you need a clean index. Back up manual knowledge first because rebuilding removes database-resident facts, feedback, and session history.
       </p>
       <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 my-6 dark:bg-blue-900/20 dark:border-blue-800">
         <p className="text-sm text-blue-800 dark:text-blue-300 m-0 leading-relaxed">
-          <strong className="font-semibold">Note:</strong> Since v0.9.4, ContextOS tracks the internal indexer schema version and will automatically trigger a background reindex if it detects you have upgraded to a newer version with schema changes. Explicit reindexing is generally not required during updates.
+          <strong className="font-semibold">Note:</strong> Normal upgrades can schedule a background rebuild when the index format changes. Explicit reindexing is for a deliberate clean rebuild, and <code>contextos reindex --embeddings</code> backfills vectors without wiping an existing database.
         </p>
       </div>
       <pre>
@@ -99,6 +100,28 @@ export default function CliDocs() {
       <pre>
         <code className="language-bash">
 {`contextos status`}
+        </code>
+      </pre>
+
+      <h3><code>serve</code></h3>
+      <p>
+        Runs the MCP stdio bridge used by an AI client. It reads and writes JSON-RPC on standard streams and connects to the project daemon; run it manually only when integrating a client that starts commands itself.
+      </p>
+      <pre>
+        <code className="language-bash">
+{`contextos serve`}
+        </code>
+      </pre>
+
+      <h3><code>clean</code></h3>
+      <p>
+        Removes indexed junk paths such as build output and <code>node_modules</code> from the local and resolved global databases. It does not stop the daemon or rebuild the index. Pass <code>--rebuild</code> for the destructive local database reset, and <code>--global</code> to include the shared global database.
+      </p>
+      <pre>
+        <code className="language-bash">
+{`contextos clean
+contextos clean --rebuild
+contextos clean --global`}
         </code>
       </pre>
 

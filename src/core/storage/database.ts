@@ -5,6 +5,14 @@ import fs from 'fs';
 import os from 'os';
 import { applyMigrations } from './schema.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import {
+  canonicalDirectory,
+  ensurePrivateStateDir,
+  preparePrivateStateFile,
+  removePrivateStateFile,
+  tightenPrivateStateFile,
+  writePrivateStateFile
+} from '../../utils/secure-state.js';
 
 export function getContextOSHome(): string {
   return path.join(os.homedir(), '.contextos');
@@ -13,6 +21,13 @@ export function getContextOSHome(): string {
 /** The global index may be open in several per-project daemon processes. */
 export function isSharedGlobalDatabasePath(dbPath: string): boolean {
   return path.resolve(dbPath) === path.resolve(getContextOSHome(), 'index.db');
+}
+
+function isContextOSStateDatabase(dbPath: string): boolean {
+  if (dbPath === ':memory:') return false;
+  const dir = path.resolve(path.dirname(dbPath));
+  const contextHome = path.resolve(getContextOSHome());
+  return path.basename(dir) === '.contextos' || dir === contextHome;
 }
 
 /**
@@ -85,17 +100,22 @@ export class DB {
     let resolvedPath = dbPath;
     if (!resolvedPath) {
       // Per-project isolation: use .contextos/index.db in current working directory
-      const localDbPath = path.join(process.cwd(), '.contextos', 'index.db');
+      const localDbPath = path.join(canonicalDirectory(process.cwd()), '.contextos', 'index.db');
       resolvedPath = localDbPath;
     }
+    const privateState = isContextOSStateDatabase(resolvedPath);
     const dir = path.dirname(resolvedPath);
-    if (!fs.existsSync(dir)) {
+    if (privateState) {
+      ensurePrivateStateDir(dir);
+      preparePrivateStateFile(resolvedPath);
+    } else if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     let dbInstance: Database.Database | undefined;
 
     try {
       dbInstance = new Database(resolvedPath);
+      if (privateState) tightenPrivateStateFile(resolvedPath);
       applyConnectionPragmas(dbInstance);
 
       // 1. Validate B-Tree structure (faster than integrity_check)
@@ -143,13 +163,22 @@ export class DB {
 
         console.error(`[ContextOS] Auto-recovering ${resolvedPath}...`);
 
-        // Delete all DB files to start fresh
-        if (fs.existsSync(resolvedPath)) fs.unlinkSync(resolvedPath);
-        if (fs.existsSync(resolvedPath + '-wal')) fs.unlinkSync(resolvedPath + '-wal');
-        if (fs.existsSync(resolvedPath + '-shm')) fs.unlinkSync(resolvedPath + '-shm');
+        // Delete all DB files to start fresh. The state-file helper rejects a
+        // symlinked parent or sidecar before unlinking, so recovery cannot
+        // redirect cleanup outside the private state directory.
+        if (privateState) {
+          removePrivateStateFile(resolvedPath);
+          removePrivateStateFile(resolvedPath + '-wal');
+          removePrivateStateFile(resolvedPath + '-shm');
+        } else {
+          if (fs.existsSync(resolvedPath)) fs.unlinkSync(resolvedPath);
+          if (fs.existsSync(resolvedPath + '-wal')) fs.unlinkSync(resolvedPath + '-wal');
+          if (fs.existsSync(resolvedPath + '-shm')) fs.unlinkSync(resolvedPath + '-shm');
+        }
 
         // Re-init
         this.db = new Database(resolvedPath);
+        if (privateState) tightenPrivateStateFile(resolvedPath);
         applyConnectionPragmas(this.db);
 
         // Re-run migrations
@@ -204,9 +233,10 @@ export class DB {
    */
   public static resolveDatabases(startDir: string = process.cwd()): DB[] {
     const dbs: DB[] = [];
+    const projectDir = canonicalDirectory(startDir);
 
     // 1. Open the local project DB (CWD)
-    const localDbPath = path.join(startDir, '.contextos', 'index.db');
+    const localDbPath = path.join(projectDir, '.contextos', 'index.db');
     try {
       dbs.push(new DB(localDbPath));
     } catch (error) {
@@ -240,11 +270,9 @@ export function acquireServerLock(projectDir: string): boolean {
       return true;
     }
 
-    const lockPath = path.join(projectDir, '.contextos', 'server.pid');
-    const lockDir = path.dirname(lockPath);
-    if (!fs.existsSync(lockDir)) {
-      fs.mkdirSync(lockDir, { recursive: true });
-    }
+    const canonicalProject = canonicalDirectory(projectDir);
+    const lockDir = ensurePrivateStateDir(path.join(canonicalProject, '.contextos'));
+    const lockPath = preparePrivateStateFile(path.join(lockDir, 'server.pid'));
 
     // Check if an existing lock exists with a live process
     if (fs.existsSync(lockPath)) {
@@ -266,7 +294,8 @@ export function acquireServerLock(projectDir: string): boolean {
     }
 
     // Write our PID
-    fs.writeFileSync(lockPath, String(process.pid));
+    // O_NOFOLLOW-backed state writing rejects a swapped-in symlink.
+    writePrivateStateFile(lockPath, String(process.pid));
     return true;
   } catch {
     // If anything fails (permissions, bad path, etc), just allow the server to start
@@ -281,11 +310,13 @@ export function acquireServerLock(projectDir: string): boolean {
 export function releaseServerLock(projectDir: string): void {
   try {
     if (!projectDir || projectDir === '/' || projectDir.length < 3) return;
-    const lockPath = path.join(projectDir, '.contextos', 'server.pid');
+    const canonicalProject = canonicalDirectory(projectDir);
+    const lockPath = path.join(canonicalProject, '.contextos', 'server.pid');
+    preparePrivateStateFile(lockPath);
     if (fs.existsSync(lockPath)) {
       const pid = parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
       if (pid === process.pid) {
-        fs.unlinkSync(lockPath);
+        removePrivateStateFile(lockPath);
       }
     }
   } catch {

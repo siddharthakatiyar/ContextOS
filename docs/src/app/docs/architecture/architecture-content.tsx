@@ -17,8 +17,7 @@ export function ArchitectureContent() {
       <h2>The Pipeline</h2>
       <p>
         ContextOS operates in two distinct phases: <strong>Compile-Time</strong> (indexing) and <strong>Runtime</strong> (retrieval). 
-        The architecture ensures that all heavy computation—parsing, graph building, and embedding generation—happens asynchronously 
-        during compilation, keeping runtime latencies strictly under 50ms.
+        Parsing, graph building, and embedding generation happen during indexing; query latency depends on repository size, storage, and the selected pipelines.
       </p>
 
       <div className="my-12 p-8 bg-[#050505] border border-neutral-800 rounded-xl font-mono text-sm flex flex-col gap-2 relative overflow-hidden">
@@ -108,7 +107,7 @@ export function ArchitectureContent() {
 
       <h3>SQLite Storage & Foreign Keys</h3>
       <p>
-        ContextOS guarantees transactional integrity through SQLite's WAL mode and cascading foreign keys. If a file is deleted, <code>this.filesRepo.deleteByPath(filePath)</code> instantly purges all associated chunks, relationships, and embeddings via <code>ON DELETE CASCADE</code>. The entire schema is defined locally in <code>.contextos/index.db</code>, which means zero network latency.
+        ContextOS uses SQLite WAL mode and transactions for local writes. Deleting a file removes its chunks and relationship rows through the relational schema; vector rows are cleaned explicitly because the sqlite-vec table does not provide a foreign-key cascade. The entire schema is defined locally in <code>.contextos/index.db</code>, which keeps the normal path offline.
       </p>
 
       <h3>Background Daemon & Concurrency</h3>
