@@ -18,17 +18,12 @@ function describe(p: string): string {
  * allow them only when they are an ancestor of the canonical OS temp tree.
  */
 function isTrustedTempAlias(inputPath: string): boolean {
-  if (process.platform !== 'darwin' || !['/tmp', '/var'].includes(inputPath)) return false;
-  const tempPath = path.resolve(os.tmpdir());
-  if (tempPath !== inputPath && !tempPath.startsWith(`${inputPath}${path.sep}`)) {
-    return false;
-  }
+  if (process.platform !== 'darwin') return false;
+  const expectedTarget =
+    inputPath === '/var' ? '/private/var' : inputPath === '/tmp' ? '/private/tmp' : undefined;
+  if (!expectedTarget) return false;
   try {
-    const canonicalInput = fs.realpathSync(inputPath);
-    const canonicalTemp = fs.realpathSync(tempPath);
-    return (
-      canonicalTemp === canonicalInput || canonicalTemp.startsWith(`${canonicalInput}${path.sep}`)
-    );
+    return fs.realpathSync(inputPath) === expectedTarget;
   } catch {
     return false;
   }
