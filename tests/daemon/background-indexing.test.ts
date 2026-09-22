@@ -171,8 +171,10 @@ describe('BackgroundIndexer', () => {
       await indexer.startFullIndex({ indexablePatterns: ['**/*.ts'], ignorePatterns: [] });
       expect(
         (
-          canonicalDb.getInstance().prepare('SELECT path FROM files WHERE path = ?').get(source) as
-            { path: string } | undefined
+          canonicalDb
+            .getInstance()
+            .prepare('SELECT path FROM files WHERE path = ?')
+            .get(canonicalSource) as { path: string } | undefined
         )?.path
       ).toBe(canonicalSource);
 
