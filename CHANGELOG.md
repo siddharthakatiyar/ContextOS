@@ -10,17 +10,23 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-22
+
 ### Fixed
 
-- **Retrieval crash**: prompts quoting fully-stripped terms (e.g. `"---"`) no longer crash FTS5 with a syntax error; malformed queries degrade gracefully.
-- **Indexing atomicity**: per-file persistence (file record, vector GC, chunk replacement) now runs in a single SQLite transaction — crashes can no longer leave a file claiming chunks it does not have.
-- **Daemon path handling**: the watcher and background indexer operate on the daemon's project directory explicitly; indexing no longer silently fails when the process is started from a different working directory (`CONTEXTOS_REPO_ROOT`).
-- **Ranking consistency**: files edited after the initial index keep their `repo` layer instead of flipping to `workspace`, so scores no longer depend on edit history.
-- **Duplicate symbols/headings**: same-named overload signatures and repeated markdown section titles now get distinct chunk IDs (`#dupN`) instead of silently overwriting each other in the index.
-- **Markdown chunking**: fenced code blocks are never split mid-fence when an oversized section is chunked, and single oversized paragraphs are hard-split so chunk budgets hold.
-- **Corruption recovery**: recognizes SQLite's "database disk image is malformed" error, and refuses destructive self-heal while a live daemon still holds the database (prevents split-brain databases).
-- **Daemon reconnect loop**: exponential backoff (100ms→8s, 10 attempts) replaces the tight respawn spin when the daemon cannot start.
-- **Watcher bursts**: full reindexes are single-flight across daemon startup and burst triggers; `.contextos/**` internal state is never indexed; burst detection uses a literal 5s rolling window; `status.json` writes are atomic.
+- **Indexing integrity**: per-file persistence is transactional, removed or ignored files are reconciled after full scans, edited files retain their repository layer, and duplicate symbols or headings receive distinct chunk IDs.
+- **Chunking and retrieval**: fenced Markdown blocks stay intact, oversized content respects token limits, fully stripped FTS terms fail safely, short symbols remain retrievable, and Rust import relationships are indexed.
+- **Daemon reliability**: indexing honors the daemon's project root, startup and watcher reindexes are single-flight with atomic status writes, reconnects use bounded backoff, and malformed database recovery avoids deleting a database held by a live daemon.
+- **Workspace isolation**: private state paths reject unsafe symlink redirects, configuration caches are scoped to canonical repositories, and `ctx_expand` enforces file, line, window, and token bounds.
+
+### Security
+
+- **Script execution is opt-in**: repository-controlled `ctx_execute` scripts stay disabled by default. Trusted repositories can enable them with `execAllowRepoScripts: true` or `CONTEXTOS_EXEC_ALLOW_SCRIPTS=1`.
+
+### Changed
+
+- **Dependencies and release records**: the dependency graph and Next.js toolchain were updated, lock and SBOM records were synchronized, and the package now ships its configuration schema and third-party notices with verified native and font license references.
+- **Documentation**: CLI, initialization, configuration, recovery, security, benchmark, ONNX CPU installation, and stability guidance now match the current behavior.
 
 ---
 
@@ -154,7 +160,7 @@ Security hardening and robust large repository support for the upcoming v1.0 rel
 - **Path Traversal Guards**: Added explicit sandbox boundaries so the indexer refuses to parse `../../` files beyond workspace roots.
 - **Malicious Repo Protection**: Implemented a hard cap (1,000,000 files) on glob limits to prevent Out-Of-Memory (OOM) crashes on massive directories (like `~/`).
 - **DOS Protection**: Throttled concurrent file watcher events with an asynchronous queue (`pLimit`), preventing daemon crashes from CPU starvation during huge `git checkout` branch swaps.
-- **`execAllowRepoScripts` opt-out**: New config flag (and `CONTEXTOS_EXEC_ALLOW_SCRIPTS` env) to disable `ctx_execute` running a repository's own npm/npx scripts on untrusted repos. Default remains enabled.
+- **`execAllowRepoScripts` opt-out**: At the time of the 0.9.0 release, this flag (and `CONTEXTOS_EXEC_ALLOW_SCRIPTS` env) disabled `ctx_execute` running a repository's own npm/npx scripts on untrusted repos. Current releases default this capability to disabled and require an explicit opt-in for trusted repos.
 - **`STABILITY.md`**: Documented the SemVer / deprecation / public-surface stability policy.
 - **CI**: macOS runners added to the test matrix; the publish workflow now verifies the pushed tag matches `package.json`.
 
