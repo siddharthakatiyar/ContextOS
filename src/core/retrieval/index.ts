@@ -2,9 +2,16 @@ import { ChunksRepo } from '../storage/chunks-repo.js';
 import { RelationshipsRepo } from '../storage/relationships-repo.js';
 import { GraphExpander, ExpandedEntity } from '../graph/expander.js';
 import { detectIntent } from './intent-detector.js';
-import { KeywordMatcher, expandMatchTokens } from './keyword-matcher.js';
+import { KeywordMatcher, KeywordTrace, expandMatchTokens } from './keyword-matcher.js';
 import { scoreChunks } from './scorer.js';
-import { RetrievalOptions, RetrievalResult, ScoredChunk } from './types.js';
+import {
+  RetrievalChunkExplanation,
+  RetrievalExplanation,
+  RetrievalOptions,
+  RetrievalResult,
+  ScoredChunk,
+  ScoringSignals
+} from './types.js';
 import { loadConfig } from '../../config/index.js';
 import { isEmbeddingsAvailable, searchEmbeddingChunks } from '../embeddings/index.js';
 
@@ -171,7 +178,22 @@ export class RetrievalEngine {
     const intent = detectIntent(prompt);
 
     // Step 2: Keyword matching (FTS + direct) → RRF-fused
-    let directMatches = this.matcher.matchChunks(intent, opts);
+    const keywordTrace: KeywordTrace | undefined = opts?.explain ? new Map() : undefined;
+    const chunkExplanations = opts?.explain
+      ? new Map<string, RetrievalChunkExplanation>()
+      : undefined;
+    let directMatches = this.matcher.matchChunks(intent, opts, keywordTrace);
+    if (opts?.explain) {
+      for (const chunk of directMatches) {
+        chunkExplanations?.set(chunk.id, {
+          keyword: {
+            rrfScore: chunk.score,
+            contributions: keywordTrace?.get(chunk.id) || []
+          },
+          finalScore: chunk.score
+        });
+      }
+    }
     directMatches.sort((a, b) => (b.score || 0) - (a.score || 0) || a.id.localeCompare(b.id));
 
     // Keyword confidence: top-score margin + hit count (gates emb fallback)
@@ -195,11 +217,23 @@ export class RetrievalEngine {
     // The pipeline.embeddingFusion flag overrides embeddingsRetrieval when explicitly set.
     const embFusionEnabled =
       pipeline.embeddingFusion !== undefined ? pipeline.embeddingFusion : undefined; // undefined → applyEmbeddingFusion uses its own logic
+    const embeddingSearch: RetrievalExplanation['embeddingSearch'] | undefined = opts?.explain
+      ? {
+          configured: false,
+          lowConfidenceFallback: lowConfidence,
+          available: false,
+          searched: false,
+          hitCount: null
+        }
+      : undefined;
     directMatches = await this.applyEmbeddingFusion(
       prompt,
       directMatches,
       lowConfidence,
-      embFusionEnabled
+      embFusionEnabled,
+      embeddingSearch && chunkExplanations
+        ? { search: embeddingSearch, chunks: chunkExplanations }
+        : undefined
     );
 
     // Step 3: Relationship expansion — ONLY use actual code identifiers as seeds
@@ -242,12 +276,35 @@ export class RetrievalEngine {
     const allChunksMap = new Map();
     for (const c of directMatches) allChunksMap.set(c.id, c);
     for (const c of expandedChunks) {
+      const chunkExplanation = chunkExplanations?.get(c.id);
       if (!allChunksMap.has(c.id)) {
         allChunksMap.set(c.id, c);
+        if (opts?.explain) {
+          chunkExplanations?.set(c.id, {
+            ...(chunkExplanation || { finalScore: c.score || 0 }),
+            graph: { ...(chunkExplanation?.graph || {}), matchScore: c.score || 0 },
+            finalScore: c.score || 0
+          });
+        }
       } else {
         // Rank Fusion graph-walk overlap: if chunk is found via keyword/semantic AND
         // relationship expansion, this is a strong relevance signal for generic queries.
-        allChunksMap.get(c.id).score = (allChunksMap.get(c.id).score || 0) + (c.score || 0) * 1.5;
+        const overlapScoreAdded = (c.score || 0) * 1.5;
+        allChunksMap.get(c.id).score = (allChunksMap.get(c.id).score || 0) + overlapScoreAdded;
+        if (opts?.explain) {
+          const existing = chunkExplanation || {
+            finalScore: allChunksMap.get(c.id).score - overlapScoreAdded
+          };
+          chunkExplanations?.set(c.id, {
+            ...existing,
+            graph: {
+              ...(existing.graph || {}),
+              matchScore: c.score || 0,
+              overlapScoreAdded
+            },
+            finalScore: allChunksMap.get(c.id).score
+          });
+        }
       }
     }
 
@@ -293,12 +350,35 @@ export class RetrievalEngine {
     ]);
 
     signal?.throwIfAborted();
+    const scoreSignals = opts?.explain ? new Map<string, ScoringSignals>() : undefined;
     let scored = scoreChunks(allChunks, expandedEntities, adjustments || {}, {
       repoRoot: opts?.repoRoot,
       matchTokens,
       identifiers: intent.identifiers,
-      diversityFilter: pipeline.diversityFilter !== false
+      diversityFilter: pipeline.diversityFilter !== false,
+      ...(scoreSignals
+        ? { onSignals: (id: string, signals: ScoringSignals) => scoreSignals.set(id, signals) }
+        : {})
     });
+    if (scoreSignals && chunkExplanations) {
+      for (const [id, signals] of scoreSignals) {
+        const existing = chunkExplanations.get(id) || { finalScore: 0 };
+        const graph = {
+          ...(existing.graph || {}),
+          ...(signals.graphKeywordBoost !== 0 ? { keywordBoost: signals.graphKeywordBoost } : {}),
+          ...(signals.matchedGraphEntities.length > 0
+            ? { matchedEntities: signals.matchedGraphEntities }
+            : {})
+        };
+        chunkExplanations.set(id, {
+          ...existing,
+          ...(Object.keys(graph).length > 0 ? { graph } : {}),
+          ...(signals.feedbackAdjustment !== undefined
+            ? { feedback: { adjustment: signals.feedbackAdjustment } }
+            : {})
+        });
+      }
+    }
     // Containment dedup after scoring so we keep the higher-scoring class or method
     if (pipeline.containmentDedup !== false) {
       scored = containmentDedup(scored, intent.identifiers);
@@ -346,12 +426,27 @@ export class RetrievalEngine {
     // Step 6: Cap and return
     const topChunks = limited;
 
-    return {
+    const result: RetrievalResult = {
       chunks: topChunks,
       intent,
       expandedEntities,
       latencyMs: Date.now() - startTime
     };
+    if (opts?.explain && embeddingSearch) {
+      const finalExplanations: Record<string, RetrievalChunkExplanation> = {};
+      for (const chunk of topChunks) {
+        finalExplanations[chunk.id] = {
+          ...(chunkExplanations?.get(chunk.id) || {}),
+          finalScore: chunk.score
+        };
+      }
+      result.explanation = {
+        embeddingSearch,
+        graphExpansionEnabled: pipeline.graphExpansion !== false,
+        chunks: finalExplanations
+      };
+    }
+    return result;
   }
 
   /**
@@ -366,7 +461,11 @@ export class RetrievalEngine {
     prompt: string,
     directMatches: ScoredChunk[],
     lowConfidence: boolean,
-    forceEnabled?: boolean
+    forceEnabled?: boolean,
+    trace?: {
+      search: RetrievalExplanation['embeddingSearch'];
+      chunks: Map<string, RetrievalChunkExplanation>;
+    }
   ): Promise<ScoredChunk[]> {
     try {
       const embRetrievalOn =
@@ -374,14 +473,18 @@ export class RetrievalEngine {
           ? forceEnabled
           : loadConfig().embeddingsRetrieval === true ||
             process.env.CONTEXTOS_EMBEDDINGS_RETRIEVAL === '1';
-      if (
-        !isEmbeddingsAvailable() ||
-        !this.primaryChunksRepo ||
-        !(embRetrievalOn || lowConfidence)
-      ) {
+      if (trace) {
+        trace.search.configured = embRetrievalOn;
+        trace.search.lowConfidenceFallback = lowConfidence;
+      }
+      const embeddingsAvailable = isEmbeddingsAvailable();
+      if (trace) trace.search.available = embeddingsAvailable;
+      if (!embeddingsAvailable || !this.primaryChunksRepo || !(embRetrievalOn || lowConfidence)) {
         return directMatches;
       }
+      if (trace) trace.search.searched = true;
       const embHits = await searchEmbeddingChunks(this.primaryChunksRepo.getDatabase(), prompt, 15);
+      if (trace) trace.search.hitCount = embHits.length;
       if (embHits.length === 0) return directMatches;
 
       const embRank = new Map(embHits.map((c, i) => [c.id, i]));
@@ -389,7 +492,23 @@ export class RetrievalEngine {
         const rank = embRank.get(c.id);
         if (rank !== undefined && rank < 10) {
           // Strong multiplicative boost for semantic + keyword overlap
-          c.score = (c.score || 0) * (1.2 + 0.5 * (1 / (1 + rank)));
+          const scoreBefore = c.score || 0;
+          const multiplier = 1.2 + 0.5 * (1 / (1 + rank));
+          c.score = scoreBefore * multiplier;
+          if (trace) {
+            const explanation = trace.chunks.get(c.id) || { finalScore: c.score };
+            trace.chunks.set(c.id, {
+              ...explanation,
+              embedding: {
+                action: 'agreement-boost',
+                rank: rank + 1,
+                scoreBefore,
+                scoreAfter: c.score,
+                multiplier
+              },
+              finalScore: c.score
+            });
+          }
         }
       }
       if (lowConfidence) {
@@ -402,11 +521,20 @@ export class RetrievalEngine {
           // Stronger base score for backfills to ensure they actually surface
           const base = Math.max(8, 14 - i * 1.5);
           directMatches.push({ ...hit, score: base });
+          if (trace) {
+            const explanation = trace.chunks.get(hit.id) || { finalScore: base };
+            trace.chunks.set(hit.id, {
+              ...explanation,
+              embedding: { action: 'fallback-insert', rank: i + 1, score: base },
+              finalScore: base
+            });
+          }
           inserted++;
         }
       }
     } catch {
       // keyword-only path must keep working
+      if (trace) trace.search.failed = true;
     }
     return directMatches;
   }

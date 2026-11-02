@@ -23,7 +23,13 @@ export function isFTSQuerySyntaxError(error: unknown): boolean {
 export interface WeightedList {
   list: ScoredChunk[];
   weight: number;
+  strategy?: string;
 }
+
+export type KeywordTrace = Map<
+  string,
+  { strategy: string; rank: number; weight: number; scoreContribution: number }[]
+>;
 
 /**
  * Reciprocal Rank Fusion across per-strategy ranked lists.
@@ -31,14 +37,25 @@ export interface WeightedList {
  */
 export function reciprocalRankFusion(
   weightedLists: WeightedList[],
-  k: number = RRF_K
+  k: number = RRF_K,
+  trace?: KeywordTrace
 ): ScoredChunk[] {
   const fused = new Map<string, ScoredChunk>();
 
-  for (const { list, weight } of weightedLists) {
+  for (const { list, weight, strategy } of weightedLists) {
     if (weight <= 0) continue;
     list.forEach((chunk, rank) => {
       const contrib = weight * (1 / (k + rank + 1));
+      if (trace) {
+        const contributions = trace.get(chunk.id) || [];
+        contributions.push({
+          strategy: strategy || 'unspecified',
+          rank,
+          weight,
+          scoreContribution: contrib * 100
+        });
+        trace.set(chunk.id, contributions);
+      }
       const existing = fused.get(chunk.id);
       if (existing) {
         existing.score += contrib;
@@ -78,10 +95,15 @@ function mergeUnique(chunks: CandidateChunk[]): CandidateChunk[] {
   return Array.from(map.values());
 }
 
-function pushList(lists: WeightedList[], hits: CandidateChunk[], weight: number = 1): void {
+function pushList(
+  lists: WeightedList[],
+  hits: CandidateChunk[],
+  weight: number = 1,
+  strategy = 'unspecified'
+): void {
   if (hits.length === 0 || weight <= 0) return;
   const ranked = rankByBm25(mergeUnique(hits));
-  lists.push({ list: ranked, weight });
+  lists.push({ list: ranked, weight, strategy });
 }
 
 function stemVariants(stem: string): string[] {
@@ -185,12 +207,12 @@ export class KeywordMatcher {
 
     const ftsQueryOr = searchTerms.map((c) => `"${c.replace(/"/g, '""')}"`).join(' OR ');
     const orHits = this.runFTS(ftsQueryOr, opts, ftsLimit);
-    pushList(lists, orHits, 2);
+    pushList(lists, orHits, 2, 'fts-or');
 
     if (searchTerms.length >= 2 && searchTerms.length <= 6) {
       const ftsQueryAnd = searchTerms.map((c) => `"${c.replace(/"/g, '""')}"`).join(' AND ');
       const andHits = this.runFTS(ftsQueryAnd, opts, ftsLimit);
-      pushList(lists, andHits, 2);
+      pushList(lists, andHits, 2, 'fts-and');
     }
 
     // Per-term FTS for longer concepts — surfaces content-only anchors (allChunksMap, etc.)
@@ -204,7 +226,7 @@ export class KeywordMatcher {
         continue;
       const limit = Math.min(ftsLimit || 30, 8);
       const hits = this.runFTS(`"${term.replace(/"/g, '""')}"`, opts, limit);
-      pushList(lists, hits, 0.4); // Reduced weight so generic unigrams don't wash out multi-term exact matches
+      pushList(lists, hits, 0.4, `fts-term:${term}`); // Reduced weight so generic unigrams don't wash out multi-term exact matches
     }
     return lists;
   }
@@ -265,8 +287,8 @@ export class KeywordMatcher {
       }
     }
 
-    pushList(lists, exactSymbolHits, 2);
-    pushList(lists, idHits, 1);
+    pushList(lists, exactSymbolHits, 2, 'identifier-symbol');
+    pushList(lists, idHits, 1, 'identifier-keyword');
     return lists;
   }
 
@@ -342,8 +364,8 @@ export class KeywordMatcher {
       }
     }
 
-    pushList(lists, exactStemHits, 2);
-    pushList(lists, stemHits, 1);
+    pushList(lists, exactStemHits, 2, 'file-stem-exact');
+    pushList(lists, stemHits, 1, 'file-stem');
 
     // From stem hits, also pull sibling symbols in the same source file (loadConfig → mergeDeep)
     const siblingHits: CandidateChunk[] = [];
@@ -362,7 +384,7 @@ export class KeywordMatcher {
         );
       }
     }
-    pushList(lists, siblingHits, 1);
+    pushList(lists, siblingHits, 1, 'file-sibling');
     return lists;
   }
 
@@ -404,17 +426,21 @@ export class KeywordMatcher {
       }
     }
 
-    pushList(lists, exactHits, 2);
-    pushList(lists, symbolHits, 1);
+    pushList(lists, exactHits, 2, 'concept-symbol-exact');
+    pushList(lists, symbolHits, 1, 'concept-symbol-fuzzy');
     return lists;
   }
 
-  public matchChunks(intent: DetectedIntent, opts?: RetrievalOptions): ScoredChunk[] {
+  public matchChunks(
+    intent: DetectedIntent,
+    opts?: RetrievalOptions,
+    trace?: KeywordTrace
+  ): ScoredChunk[] {
     const ftsLimit = opts?.limit ?? loadConfig().ftsLimit;
     const strategyLists: WeightedList[] = [];
 
     // Strategy 0: Exact match for quoted terms
-    pushList(strategyLists, this.strategyQuoted(intent, opts, ftsLimit));
+    pushList(strategyLists, this.strategyQuoted(intent, opts, ftsLimit), 1, 'quoted-term');
 
     // Strategy 1: FTS5 OR (recall) + AND (precision) — double-weighted for content markers
     strategyLists.push(...this.strategyFts(intent, opts, ftsLimit));
@@ -423,17 +449,22 @@ export class KeywordMatcher {
     strategyLists.push(...this.strategyIdentifiers(intent, opts, ftsLimit));
 
     // Strategy 3: Section title exact match (unigrams only)
-    pushList(strategyLists, this.strategyTitleMatch(intent, opts), 0.5); // reduced weight
+    pushList(strategyLists, this.strategyTitleMatch(intent, opts), 0.5, 'section-title'); // reduced weight
 
     // Strategy 4: Intent-aware boosting (intentType === 'fix' | implement | pr)
-    pushList(strategyLists, this.strategyIntentAware(intent, opts, ftsLimit), 1);
+    pushList(
+      strategyLists,
+      this.strategyIntentAware(intent, opts, ftsLimit),
+      1,
+      `intent-aware:${intent.intentType}`
+    );
 
     // Strategy 5: Filename / path stem matching via findByFileStem
     strategyLists.push(...this.strategyFileStem(intent, opts));
     strategyLists.push(...this.strategyConceptSymbols(intent, opts));
 
     if (strategyLists.length === 0) return [];
-    return reciprocalRankFusion(strategyLists);
+    return reciprocalRankFusion(strategyLists, RRF_K, trace);
   }
 
   public matchForEntities(entities: string[]): ScoredChunk[] {

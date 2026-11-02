@@ -20,6 +20,13 @@ export const INDEXER_VERSION = 1;
 // full indexes to run concurrently (duplicate work + racing status writes).
 let activeFullIndex: Promise<void> | null = null;
 
+/** Wait for the process-wide full index before closing its database. */
+export async function waitForBackgroundIndexing(): Promise<void> {
+  while (activeFullIndex) {
+    await activeFullIndex;
+  }
+}
+
 /** Write JSON atomically (tmp + rename) so readers never see torn files. */
 function writeJsonAtomic(filePath: string, data: unknown): void {
   // Status is auxiliary state but can contain indexing progress and paths. Use

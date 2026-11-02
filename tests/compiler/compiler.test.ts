@@ -105,4 +105,55 @@ describe('Compiler', () => {
     expect(compiled.tokenCount).toBeLessThanOrEqual(400);
     expect(compiled.output).toMatch(/^<contextos_context>[\s\S]*<\/contextos_context>\n$/);
   });
+
+  it('reports the effective token budget and chunks actually compiled only when requested', () => {
+    const result: RetrievalResult = {
+      chunks: [makeChunk('inspected', 'export const inspected = true;', 10)],
+      expandedEntities: [],
+      intent,
+      latencyMs: 2
+    };
+
+    const ordinary = compile(result, { maxTokens: 900 });
+    const inspected = compile(result, { maxTokens: 900, explain: true });
+
+    expect(ordinary.diagnostics).toBeUndefined();
+    expect(inspected.diagnostics).toMatchObject({
+      tier: 'explore',
+      outputFormat: 'markdown',
+      configuredMaxTokens: 900,
+      effectiveMaxTokens: 900,
+      firstPassChunkBudget: 852,
+      framingReserve: 48,
+      includedChunks: [{ id: 'inspected', representation: 'body' }],
+      omittedChunkIds: []
+    });
+  });
+
+  it('keeps generated stub provenance when trimming an earlier source heading', () => {
+    const first = makeChunk(
+      'source-heading',
+      `### Also\n${'const first = true;\n'.repeat(160)}\n### More\n${'const later = true;\n'.repeat(2)}`,
+      10
+    );
+    first.sourceFile = 'first.ts';
+    const second = makeChunk('trimmed-stub', 'const second = true;\n'.repeat(200), 9);
+    second.sourceFile = 'second.ts';
+    const result: RetrievalResult = {
+      chunks: [first, second],
+      expandedEntities: [],
+      intent,
+      latencyMs: 2
+    };
+
+    const compiled = compile(result, { maxTokens: 330, explain: true });
+
+    expect(compiled.output).toContain('### More');
+    expect(compiled.output).toContain('second.ts:1-10');
+    expect(compiled.diagnostics?.includedChunks).toContainEqual({
+      id: 'trimmed-stub',
+      representation: 'stub'
+    });
+    expect(compiled.diagnostics?.omittedChunkIds).not.toContain('trimmed-stub');
+  });
 });

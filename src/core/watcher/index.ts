@@ -6,7 +6,7 @@ import { DB } from '../storage/database.js';
 import { Indexer } from '../indexer/index.js';
 import { loadConfig } from '../../config/index.js';
 import { pLimit } from '../../utils/async.js';
-import { BackgroundIndexer } from '../daemon/background-indexer.js';
+import { BackgroundIndexer, waitForBackgroundIndexing } from '../daemon/background-indexer.js';
 import { canonicalPathForComparison, createIndexIgnore } from '../indexer/ignore.js';
 import { canonicalDirectory } from '../../utils/secure-state.js';
 
@@ -50,7 +50,10 @@ export interface WatcherOptions {
   buffered?: boolean;
 }
 
-export type ContextOSWatcher = FSWatcher & { flushBufferedEvents?: () => void };
+export type ContextOSWatcher = FSWatcher & {
+  flushBufferedEvents?: () => void;
+  waitForIdle?: () => Promise<void>;
+};
 
 interface BufferedEvent {
   filePath: string;
@@ -72,6 +75,7 @@ export function startWatcher(
   const indexIgnore = createIndexIgnore(root, config.ignorePatterns);
   const indexer = new Indexer(db, indexIgnore.root, config.ignorePatterns);
   const limit = pLimit(5); // Throttle concurrent parses during massive file changes
+  const pendingOperations = new Set<Promise<void>>();
 
   // Note: Initial sync is intentionally NOT done here (the background full index
   // owns initial state); with options.buffered we collect events meanwhile.
@@ -125,7 +129,7 @@ export function startWatcher(
   };
 
   const schedule = (filePath: string, type: 'add' | 'change' | 'unlink') => {
-    void limit(async () => {
+    const operation = limit(async () => {
       try {
         // Layer 'repo' matches the bulk/full-index path so scores don't flip-flop
         // depending on whether a file arrived via watch events or full indexing.
@@ -138,6 +142,11 @@ export function startWatcher(
         // silently ignore
       }
     });
+    pendingOperations.add(operation);
+    void operation.then(
+      () => pendingOperations.delete(operation),
+      () => pendingOperations.delete(operation)
+    );
   };
 
   const handleEvent = (filePath: string, type: 'add' | 'change' | 'unlink') => {
@@ -218,6 +227,16 @@ export function startWatcher(
     const drained = buffer.splice(0);
     console.log(`[Watcher] Replaying ${drained.length} buffered change(s) from initial index.`);
     for (const e of drained) schedule(e.filePath, e.type);
+  };
+
+  watcher.waitForIdle = async () => {
+    watcher.flushBufferedEvents?.();
+    for (;;) {
+      const current = Array.from(pendingOperations);
+      if (current.length > 0) await Promise.allSettled(current);
+      await waitForBackgroundIndexing();
+      if (pendingOperations.size === 0 && !bulkActive) return;
+    }
   };
 
   watcher

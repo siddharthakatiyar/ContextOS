@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { runDaemonClient } from '../../core/daemon/client.js';
+import { checkForUpdates, formatUpdateNotice } from '../../core/updater/index.js';
 
 export const serveCommand = new Command('serve')
   .description('Start the ContextOS MCP server (stdio)')
@@ -29,6 +30,9 @@ export const serveCommand = new Command('serve')
     process.on('unhandledRejection', (reason) => {
       process.stderr.write(`ContextOS unhandled rejection: ${reason}\n`);
     });
+
+    const updateNotice = formatUpdateNotice(await checkForUpdates());
+    if (updateNotice) process.stderr.write(updateNotice);
 
     // Serve now just connects to the daemon or spawns it
     await runDaemonClient(projectDir);

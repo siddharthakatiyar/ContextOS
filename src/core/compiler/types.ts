@@ -1,10 +1,26 @@
 export interface CompiledContext {
   output: string;
   tokenCount: number;
+  diagnostics?: CompilerDiagnostics;
+}
+
+export interface CompilerDiagnostics {
+  tier: 'exact' | 'exact-implementation' | 'file' | 'explore';
+  outputFormat: 'markdown' | 'xml';
+  configuredMaxTokens: number;
+  effectiveMaxTokens: number;
+  firstPassChunkBudget: number;
+  repackChunkBudget?: number;
+  framingReserve: number;
+  signalTerms: string[];
+  includedChunks: { id: string; representation: 'body' | 'excerpt' | 'stub' }[];
+  omittedChunkIds: string[];
 }
 
 export interface CompilerOptions {
   maxTokens: number;
+  /** Collect compile decisions for the optional retrieval inspector. */
+  explain?: boolean;
   maxExactTokens?: number;
   outputFormat?: 'markdown' | 'xml';
   /** Query intent terms used for signal-preserving truncation. */

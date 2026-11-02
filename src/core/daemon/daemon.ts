@@ -12,18 +12,21 @@ import { registerExecuteTool } from '../../mcp/tools/execute.js';
 import { registerListTopicsTool } from '../../mcp/tools/list-topics.js';
 import { registerKnowledgeTools } from '../../mcp/tools/knowledge.js';
 import { registerFeedbackTools } from '../../mcp/tools/feedback.js';
+import { registerUpdateStatusTool } from '../../mcp/tools/update-status.js';
+import { registerReadFileTool } from '../../mcp/tools/read-file.js';
+import { registerExpandTool } from '../../mcp/tools/expand.js';
 import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 import { startWatcher, type ContextOSWatcher } from '../watcher/index.js';
 import { SessionStore } from '../session/session-store.js';
-import { BackgroundIndexer } from './background-indexer.js';
+import { BackgroundIndexer, waitForBackgroundIndexing } from './background-indexer.js';
 
-import type { FSWatcher } from 'chokidar';
 import { getErrorCode, getErrorMessage } from '../../utils/errors.js';
 import { getPackageVersion } from '../../utils/version.js';
 import {
   assertNoSymlinkInPath,
   canonicalDirectory,
   ensurePrivateStateDir,
+  getDaemonControlSocketPath,
   getDaemonSocketPath,
   preparePrivateStateFile,
   removePrivateStateFile,
@@ -31,24 +34,33 @@ import {
   tightenPrivateStateFile,
   writePrivateStateFile
 } from '../../utils/secure-state.js';
+import { getActiveUpgradeToken, isUpgradeInProgress } from '../updater/upgrade-lock.js';
 
 const version = getPackageVersion();
 
 export class ContextOSDaemon {
   private server: net.Server;
+  private controlServer: net.Server;
   private dbs: DB[] = [];
   private socketPath: string;
+  private controlSocketPath: string;
   private pidPath: string;
-  private watcher?: FSWatcher;
+  private watcher?: ContextOSWatcher;
   private projectDir: string;
   private connections = 0;
+  private clientSockets = new Set<net.Socket>();
   private gcTimer?: NodeJS.Timeout;
+  private stopping = false;
+  private startupReady = false;
+  private stopPromise?: Promise<void>;
+  private upgradeDrain?: Promise<void>;
   public backgroundIndexer?: BackgroundIndexer;
 
   constructor(projectDir: string) {
     this.projectDir = canonicalDirectory(projectDir);
     const ctxDir = ensurePrivateStateDir(path.join(this.projectDir, '.contextos'));
     this.socketPath = getDaemonSocketPath(this.projectDir);
+    this.controlSocketPath = getDaemonControlSocketPath(this.projectDir);
 
     this.pidPath = path.join(ctxDir, 'daemon.pid');
     preparePrivateStateFile(this.pidPath);
@@ -56,13 +68,24 @@ export class ContextOSDaemon {
     this.server = net.createServer((socket) => {
       this.handleConnection(socket);
     });
+    this.controlServer = net.createServer((socket) => {
+      this.handleControlConnection(socket);
+    });
 
     this.server.on('error', (error) => {
       console.error(`Daemon server error: ${getErrorMessage(error)}`);
     });
+    this.controlServer.on('error', (error) => {
+      console.error(`Daemon control server error: ${getErrorMessage(error)}`);
+    });
   }
 
   public async start(): Promise<void> {
+    if (isUpgradeInProgress() && process.env.CONTEXTOS_UPGRADE_TOKEN !== getActiveUpgradeToken()) {
+      throw new Error(
+        'A ContextOS upgrade is in progress; wait for it to finish before starting a daemon.'
+      );
+    }
     preparePrivateStateFile(this.pidPath);
     // Check if another daemon is already running
     if (fs.existsSync(this.pidPath)) {
@@ -90,6 +113,10 @@ export class ContextOSDaemon {
       assertNoSymlinkInPath(this.socketPath);
       fs.unlinkSync(this.socketPath);
     }
+    if (process.platform !== 'win32' && fs.existsSync(this.controlSocketPath)) {
+      assertNoSymlinkInPath(this.controlSocketPath);
+      fs.unlinkSync(this.controlSocketPath);
+    }
 
     // Initialize core services ONCE
     this.dbs = DB.resolveDatabases(this.projectDir);
@@ -116,12 +143,24 @@ export class ContextOSDaemon {
 
       this.server.listen(this.socketPath, async () => {
         try {
+          await new Promise<void>((controlResolve, controlReject) => {
+            this.controlServer.once('error', controlReject);
+            this.controlServer.listen(this.controlSocketPath, () => {
+              try {
+                secureBoundSocket(this.controlSocketPath);
+                controlResolve();
+              } catch (error) {
+                controlReject(error);
+              }
+            });
+          });
           // The private run directory blocks traversal before this chmod, and
           // the socket itself is tightened before any daemon work begins.
           secureBoundSocket(this.socketPath);
           writePrivateStateFile(this.pidPath, String(process.pid));
         } catch (error) {
           this.server.close();
+          this.controlServer.close();
           reject(error);
           return;
         }
@@ -136,6 +175,7 @@ export class ContextOSDaemon {
           tightenPrivateStateFile(logPath);
         } catch (error) {
           this.server.close();
+          this.controlServer.close();
           reject(error);
           return;
         }
@@ -164,10 +204,11 @@ export class ContextOSDaemon {
           console.error(`Daemon unhandledRejection: ${detail}`);
         });
 
-        const cleanup = () => this.stop();
+        const cleanup = () => {
+          void this.stop();
+        };
         process.on('SIGINT', cleanup);
         process.on('SIGTERM', cleanup);
-        process.on('exit', cleanup);
 
         console.log(`ContextOS Daemon started on ${this.socketPath}`);
         this.resetGCTimer(); // Start GC timer
@@ -220,32 +261,164 @@ export class ContextOSDaemon {
           console.error(`Failed to start background index: ${getErrorMessage(error)}`);
         }
 
+        this.startupReady = true;
         resolve();
       });
     });
   }
 
-  public stop() {
+  public stop(): Promise<void> {
+    if (this.stopPromise) return this.stopPromise;
+    this.stopping = true;
+    this.stopPromise = this.finishStop();
+    return this.stopPromise;
+  }
+
+  private async finishStop(): Promise<void> {
+    if (this.gcTimer) clearTimeout(this.gcTimer);
     try {
-      removePrivateStateFile(this.pidPath);
+      if (!this.upgradeDrain) this.upgradeDrain = this.drainForUpgrade();
+      await this.upgradeDrain;
+    } catch (error) {
+      console.error(`Daemon drain failed: ${getErrorMessage(error)}`);
+      return;
+    }
+
+    for (const socket of this.clientSockets) socket.destroy();
+    this.clientSockets.clear();
+
+    try {
+      if (this.server.listening) this.server.close();
+      if (this.controlServer.listening) this.controlServer.close();
+    } catch {
+      // Ignore sockets that have already closed.
+    }
+
+    for (const db of this.dbs) {
+      try {
+        db.close();
+      } catch {
+        // Continue shutting down other databases.
+      }
+    }
+
+    try {
       if (process.platform !== 'win32' && fs.existsSync(this.socketPath)) {
         assertNoSymlinkInPath(this.socketPath);
         fs.unlinkSync(this.socketPath);
       }
-      for (const db of this.dbs) {
-        db.close();
+      if (process.platform !== 'win32' && fs.existsSync(this.controlSocketPath)) {
+        assertNoSymlinkInPath(this.controlSocketPath);
+        fs.unlinkSync(this.controlSocketPath);
       }
-      if (this.watcher) {
-        this.watcher.close();
-      }
-      this.server.close();
-    } catch {
-      // Ignore errors on shutdown
+      removePrivateStateFile(this.pidPath);
+    } catch (error) {
+      console.error(`Daemon state cleanup failed: ${getErrorMessage(error)}`);
     }
   }
 
+  private drainForUpgrade(): Promise<void> {
+    if (this.upgradeDrain) return this.upgradeDrain;
+    this.stopping = true;
+    if (this.gcTimer) clearTimeout(this.gcTimer);
+    if (this.server.listening) this.server.close();
+
+    this.upgradeDrain = (async () => {
+      if (this.watcher) {
+        await this.watcher.close();
+        await this.watcher.waitForIdle?.();
+      }
+      await waitForBackgroundIndexing();
+    })();
+    return this.upgradeDrain;
+  }
+
+  private handleControlConnection(socket: net.Socket) {
+    let answered = false;
+    let buffer = '';
+    const respond = (result: Record<string, unknown>, stopAfter = false) => {
+      if (answered) return;
+      answered = true;
+      if (requestTimer) clearTimeout(requestTimer);
+      if (socket.destroyed) {
+        if (stopAfter) void this.stop();
+        return;
+      }
+      socket.end(`${JSON.stringify(result)}\n`, () => {
+        if (stopAfter) setTimeout(() => void this.stop(), 25).unref();
+      });
+    };
+    const requestTimer = setTimeout(() => {
+      respond({ ok: false, error: 'maintenance request timed out' });
+    }, 30_000);
+
+    socket.on('data', (chunk) => {
+      if (answered) return;
+      buffer += chunk.toString('utf8');
+      if (buffer.length > 8_192) {
+        respond({ ok: false, error: 'maintenance request is too large' });
+        return;
+      }
+      const newline = buffer.indexOf('\n');
+      if (newline < 0) return;
+
+      let request: unknown;
+      try {
+        request = JSON.parse(buffer.slice(0, newline));
+      } catch {
+        respond({ ok: false, error: 'invalid maintenance request' });
+        return;
+      }
+      if (
+        request === null ||
+        typeof request !== 'object' ||
+        !('action' in request) ||
+        (request.action !== 'get-version' && request.action !== 'prepare-upgrade') ||
+        !('token' in request) ||
+        typeof request.token !== 'string' ||
+        request.token !== getActiveUpgradeToken()
+      ) {
+        respond({ ok: false, error: 'unauthorized maintenance request' });
+        return;
+      }
+      if (!this.startupReady) {
+        respond({
+          ok: false,
+          error: 'daemon startup is still in progress; retry after it is ready'
+        });
+        return;
+      }
+      if (request.action === 'get-version') {
+        respond({ ok: true, version });
+        return;
+      }
+      if (!('expectedVersion' in request) || request.expectedVersion !== version) {
+        respond({ ok: false, error: 'daemon version does not match the upgrade CLI' });
+        return;
+      }
+      if (this.connections > 0) {
+        respond({
+          ok: false,
+          error: 'daemon has active MCP connections; close ContextOS clients and retry the upgrade'
+        });
+        return;
+      }
+      clearTimeout(requestTimer);
+
+      void this.drainForUpgrade().then(
+        () => respond({ ok: true, version }, true),
+        (error: unknown) => respond({ ok: false, error: getErrorMessage(error) })
+      );
+    });
+  }
+
   private handleConnection(socket: net.Socket) {
+    if (this.stopping) {
+      socket.destroy();
+      return;
+    }
     this.connections++;
+    this.clientSockets.add(socket);
     this.resetGCTimer(); // Cancel GC since we have an active connection
 
     const mcpServer = new McpServer(
@@ -260,8 +433,11 @@ export class ContextOSDaemon {
     registerGetContextTool(mcpServer, this.dbs);
     registerIndexFilesTool(mcpServer, this.dbs[0]);
     registerGetStatusTool(mcpServer, this.dbs[0]);
+    registerUpdateStatusTool(mcpServer);
     registerGetGraphTools(mcpServer, this.dbs[0]);
     registerExecuteTool(mcpServer);
+    registerReadFileTool(mcpServer);
+    registerExpandTool(mcpServer, this.dbs);
     registerListTopicsTool(mcpServer, this.dbs[0]);
     registerKnowledgeTools(mcpServer, this.dbs);
     registerFeedbackTools(mcpServer, this.dbs);
@@ -272,6 +448,7 @@ export class ContextOSDaemon {
 
     socket.on('close', () => {
       this.connections--;
+      this.clientSockets.delete(socket);
       if (this.connections <= 0) {
         this.resetGCTimer(); // Start shutdown countdown when empty
       }
@@ -287,7 +464,7 @@ export class ContextOSDaemon {
    */
   private resetGCTimer() {
     if (this.gcTimer) clearTimeout(this.gcTimer);
-    if (this.connections <= 0) {
+    if (!this.stopping && this.connections <= 0) {
       this.gcTimer = setTimeout(
         () => {
           console.log('No connections for 30 minutes, shutting down daemon.');

@@ -171,6 +171,28 @@ export function getDaemonSocketPath(projectDir: string): string {
   return path.join(runDir, `d-${shortHash}.sock`);
 }
 
+/** Private control channel used by ContextOS maintenance commands, not MCP clients. */
+export function getDaemonControlSocketPath(projectDir: string): string {
+  const canonicalProject = canonicalDirectory(projectDir);
+  if (process.platform === 'win32') {
+    const shortHash = crypto
+      .createHash('sha256')
+      .update(canonicalProject)
+      .digest('hex')
+      .slice(0, 24);
+    return path.join('\\\\?\\pipe', `contextos-control-${shortHash}`);
+  }
+
+  const contextHome = ensurePrivateStateDir(path.join(os.homedir(), '.contextos'));
+  const runDir = ensurePrivateStateDir(path.join(contextHome, 'run'));
+  const shortHash = crypto
+    .createHash('sha256')
+    .update(canonicalProject)
+    .digest('hex')
+    .substring(0, 16);
+  return path.join(runDir, `c-${shortHash}.sock`);
+}
+
 /** Tighten a newly bound Unix socket and reject a swapped-in symlink. */
 export function secureBoundSocket(socketPath: string): void {
   const resolved = assertNoSymlinkInPath(socketPath);

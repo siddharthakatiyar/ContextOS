@@ -124,4 +124,20 @@ describe('scoreChunks', () => {
     const lastNoDivScore = noDiversity[noDiversity.length - 1].score;
     expect(lastNoDivScore).toBeGreaterThan(lastWithDiv);
   });
+
+  it('reports the exact graph keyword boost and feedback addition when observed', () => {
+    const signals = new Map();
+    scoreChunks(
+      [chunk({ id: 'signals', keywords: 'GraphNode, unrelated', score: 10 })],
+      [{ entity: 'GraphNode', relationshipType: 'calls', depth: 1, score: 0.5 }],
+      { signals: 2.25 },
+      { onSignals: (id, details) => signals.set(id, details) }
+    );
+
+    expect(signals.get('signals')).toEqual({
+      graphKeywordBoost: 2.5,
+      matchedGraphEntities: ['GraphNode'],
+      feedbackAdjustment: 2.25
+    });
+  });
 });

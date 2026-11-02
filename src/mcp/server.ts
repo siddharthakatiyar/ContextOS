@@ -13,38 +13,11 @@ import { registerReadFileTool } from './tools/read-file.js';
 import { registerExpandTool } from './tools/expand.js';
 import { MCP_SERVER_INSTRUCTIONS } from './instructions.js';
 import { DB } from '../core/storage/database.js';
-import { checkForUpdates } from '../core/updater/index.js';
-import fs from 'fs';
-import path from 'path';
-import { getWorkspaceRoot } from '../utils/fs-guard.js';
-import { preparePrivateStateFile, writePrivateStateFile } from '../utils/secure-state.js';
+import { checkForUpdates, formatUpdateNotice } from '../core/updater/index.js';
+import { registerUpdateStatusTool } from './tools/update-status.js';
 import { getPackageVersion } from '../utils/version.js';
 
 const version = getPackageVersion();
-
-/**
- * Check if we should run the auto-updater.
- * Only runs once per day to avoid spawning unnecessary child processes.
- */
-function shouldCheckForUpdates(): boolean {
-  try {
-    const markerPath = preparePrivateStateFile(
-      path.join(getWorkspaceRoot(), '.contextos', 'last-update-check')
-    );
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    if (fs.existsSync(markerPath)) {
-      const lastCheck = parseInt(fs.readFileSync(markerPath, 'utf8').trim(), 10);
-      if (Date.now() - lastCheck < oneDayMs) {
-        return false;
-      }
-    }
-    // Write current timestamp
-    writePrivateStateFile(markerPath, String(Date.now()));
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export async function startMcpServer(dbs: DB[]) {
   const server = new McpServer(
@@ -60,6 +33,7 @@ export async function startMcpServer(dbs: DB[]) {
   registerGetContextTool(server, dbs);
   registerIndexFilesTool(server, dbs[0]);
   registerGetStatusTool(server, dbs[0]);
+  registerUpdateStatusTool(server);
   registerExecuteTool(server);
   registerReadFileTool(server);
   registerExpandTool(server, dbs);
@@ -93,10 +67,8 @@ export async function startMcpServer(dbs: DB[]) {
   // directory tree exhausts file descriptors and crashes the system.
   // Use `contextos watch` CLI command for standalone file watching.
 
-  // Check for auto-updates at most once per day
-  if (shouldCheckForUpdates()) {
-    checkForUpdates();
-  }
+  const updateNotice = formatUpdateNotice(await checkForUpdates());
+  if (updateNotice) process.stderr.write(updateNotice);
 
   // Graceful shutdown: close DB connections on exit
   const cleanup = () => {
