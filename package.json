@@ -1,6 +1,6 @@
 {
   "name": "@siddharthakatiyar/contextos",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "ContextOS - Universal knowledge graph for coding agents",
   "repository": {
     "type": "git",
@@ -73,11 +73,11 @@
   "overrides": {
     "baseline-browser-mapping": "2.11.25",
     "browserslist": "4.29.0",
-    "fast-uri": "3.1.8",
-    "hono": "4.13.8",
+    "fast-uri": "3.1.9",
+    "hono": "4.13.16",
     "js-yaml": "4.3.2",
     "nanoid": "3.3.19",
-    "qs": "6.16.0"
+    "qs": "6.17.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
