@@ -10,6 +10,17 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-11-02
+
+### Security
+
+- Update the Next.js documentation toolchain and runtime dependency lock records to patched releases.
+- Refresh dependency overrides for URI parsing, HTTP middleware, and query-string handling.
+
+### Changed
+
+- Synchronize the package and documentation workspace versions, dependency inventory, and CycloneDX SBOM for v1.0.3.
+
 ## [1.0.2] - 2026-09-22
 
 ### Fixed
