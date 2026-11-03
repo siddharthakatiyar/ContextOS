@@ -15,9 +15,9 @@ npm sbom --sbom-format cyclonedx --package-lock-only > docs/sbom.cdx.json
 ```
 
 The current root package is `@siddharthakatiyar/contextos@1.1.0`; the `docs`
-workspace is `docs@1.1.0`. The lockfile contains 903 package locations (the
-root project is excluded from that count), and the SBOM contains 902 component
-records plus 903 dependency records. npm's SBOM writer omits license objects
+workspace is `docs@1.1.0`. The lockfile contains 914 package locations (the
+root project is excluded from that count), and the SBOM contains 913 component
+records plus 914 dependency records. npm's SBOM writer omits license objects
 for the private workspace and for the `sqlite-vec` package entries; those
 metadata gaps are called out below rather than inferred.
 
