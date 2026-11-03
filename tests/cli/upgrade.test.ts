@@ -314,6 +314,26 @@ describe('portable upgrade planning', () => {
     }
   });
 
+  it('recognizes a global npm package reached through a symlinked parent', () => {
+    const tempParent = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-global-link-'));
+    try {
+      const physicalRoot = path.join(tempParent, 'physical');
+      const linkedRoot = path.join(tempParent, 'linked');
+      fs.mkdirSync(physicalRoot);
+      fs.symlinkSync(physicalRoot, linkedRoot, process.platform === 'win32' ? 'junction' : 'dir');
+
+      const globalRoot = path.join(physicalRoot, 'node_modules');
+      const packageRoot = path.join(linkedRoot, 'node_modules', '@siddharthakatiyar', 'contextos');
+      fs.mkdirSync(packageRoot, { recursive: true });
+      const plan = createUpgradeInstallPlan(packageRoot, fs.realpathSync(globalRoot), '1.4.0');
+
+      expect(plan.kind).toBe('global-npm');
+      expect(plan.command).toBe('npm install -g @siddharthakatiyar/contextos@1.4.0');
+    } finally {
+      fs.rmSync(tempParent, { recursive: true, force: true });
+    }
+  });
+
   it('keeps source checkouts and ambiguous installs on their own workflow', () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-source-plan-'));
     try {

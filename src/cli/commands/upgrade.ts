@@ -527,7 +527,12 @@ export function createUpgradeInstallPlan(
   targetVersion: string,
   cwd = process.cwd()
 ): UpgradeInstallPlan {
-  const canonicalPackageRoot = path.resolve(packageRoot);
+  let canonicalPackageRoot = path.resolve(packageRoot);
+  try {
+    canonicalPackageRoot = fs.realpathSync(canonicalPackageRoot);
+  } catch {
+    // Keep a resolved fallback so missing or unreadable paths still fail closed below.
+  }
   const registrySpec = `${PACKAGE_NAME}@${targetVersion}`;
 
   if (isGitCheckout(canonicalPackageRoot)) {
