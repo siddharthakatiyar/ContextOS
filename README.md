@@ -265,7 +265,20 @@ appropriate. `contextos upgrade --dry-run` resolves a compatible published
 version and prints a read-only manual plan for recognized global npm, local
 npm/pnpm/Yarn, or source-checkout installs. Unknown, linked, and workspace
 layouts require their native update workflow. Update checks only report
-availability and never install packages automatically.
+availability by default. To opt in to automatic patch updates before an MCP
+`serve` session connects, run `contextos updates policy auto-patch`; return to
+the default with `contextos updates policy notify`. This preference is stored
+for your user in `~/.contextos/update-policy.json` and is not read from project
+configuration. Auto-patching applies only to stable releases with a higher
+patch number in the same major and minor version, and only for supported Linux
+global npm installs. Before replacing files, it skips when registry access is
+unavailable, another ContextOS process is active, or the staged package cannot
+be verified; the existing CLI keeps serving. A verified replacement restarts
+the MCP `serve` process with the updated CLI. If rollback cannot verify the
+previous install, or the new process cannot start, serving stops with recovery
+instructions instead of running code from an uncertain or replaced package.
+Resolve the issue and run `contextos serve` again. Notices and skip reasons go
+to stderr.
 
 **Concurrency**  
 Repository indexing now runs with bounded concurrency to overlap CPU-intensive parsing and disk I/O, dramatically speeding up `init` and `reindex` on large codebases.
@@ -338,6 +351,8 @@ contextos doctor --json        # Machine-readable diagnostic report
 contextos upgrade              # Stage and install the latest compatible release (global npm on Linux)
 contextos upgrade --version 1.2.3 # Select a release; add --allow-major for major-version changes
 contextos upgrade --dry-run    # Print a portable manual upgrade plan without changes
+contextos updates policy      # Show the per-user update setting (notify by default)
+contextos updates policy auto-patch # Opt in to eligible automatic patch updates
 contextos watch                # Live re-index on file changes
 ```
 

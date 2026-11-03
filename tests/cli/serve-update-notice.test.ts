@@ -5,6 +5,14 @@ vi.mock('../../src/core/updater/index.js', () => ({
   checkForUpdates: vi.fn(),
   formatUpdateNotice: vi.fn()
 }));
+vi.mock('../../src/core/updater/auto-patch-policy.js', () => ({
+  readAutoPatchPolicy: vi.fn(() => 'notify')
+}));
+vi.mock('../../src/cli/commands/upgrade.js', () => ({
+  runAutoPatchBeforeServe: vi.fn(),
+  formatAutoPatchNotice: vi.fn(),
+  upgradeCommand: {}
+}));
 
 import { serveCommand } from '../../src/cli/commands/serve.js';
 import { runDaemonClient } from '../../src/core/daemon/client.js';

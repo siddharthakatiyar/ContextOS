@@ -50,11 +50,38 @@ export interface UpgradeWorkflowAdapters {
     token: string
   ): Promise<boolean>;
   processAlive(pid: number): boolean;
+  beforeSwap?(): Promise<void>;
 }
 
 export interface UpgradeWorkflowResult {
   upgraded: boolean;
   rolledBack: boolean;
+}
+
+export type AutoPatchResult =
+  | { status: 'current'; currentVersion: string }
+  | {
+      status: 'skipped';
+      reason: string;
+      currentVersion?: string;
+      latestVersion?: string;
+    }
+  | { status: 'updated'; currentVersion: string; targetVersion: string };
+
+export interface AutoPatchRuntime {
+  platform: string;
+  resolveInstalledPackage(): { packageRoot: string; currentVersion: string };
+  resolveGlobalNpmRoot(): string | null;
+  fetchPublishedVersions(): Promise<string[]>;
+  hasActivePackageProcess(packageRoot: string): boolean;
+  installVersion(packageRoot: string, currentVersion: string, targetVersion: string): Promise<void>;
+}
+
+export class UpgradeRecoveryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UpgradeRecoveryError';
+  }
 }
 
 /**
@@ -124,6 +151,8 @@ export async function runUpgradeWorkflow(
       await stopDaemon(daemon, plan.currentVersion);
     }
 
+    await adapters.beforeSwap?.();
+
     await adapters.rename(plan.packageRoot, plan.backupPackageRoot);
     originalMovedToBackup = true;
     try {
@@ -165,12 +194,12 @@ export async function runUpgradeWorkflow(
           await adapters.rename(plan.backupPackageRoot, plan.packageRoot);
           originalMovedToBackup = false;
         } catch (restoreError) {
-          throw new Error(
+          throw new UpgradeRecoveryError(
             `${error instanceof Error ? error.message : String(error)} The previous package remains at ${plan.backupPackageRoot}; automatic restoration failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}. No daemon restart was attempted.`
           );
         }
         if (!(await adapters.verifyCli(plan.packageRoot, plan.currentVersion))) {
-          throw new Error(
+          throw new UpgradeRecoveryError(
             `${error instanceof Error ? error.message : String(error)} The previous package was restored at ${plan.packageRoot}, but its CLI version could not be verified. No daemon restart was attempted.`
           );
         }
@@ -199,7 +228,7 @@ export async function runUpgradeWorkflow(
       }
     }
     if ([...newDaemons.values()].some((daemon) => adapters.processAlive(daemon.pid))) {
-      throw new Error(
+      throw new UpgradeRecoveryError(
         `${error instanceof Error ? error.message : String(error)} A daemon may still be using the upgraded files; rollback was withheld. Previous package backup: ${plan.backupPackageRoot}`
       );
     }
@@ -214,7 +243,7 @@ export async function runUpgradeWorkflow(
       await adapters.remove(failedPackageRoot);
       await restartOldDaemons();
     } catch (rollbackError) {
-      throw new Error(
+      throw new UpgradeRecoveryError(
         `${error instanceof Error ? error.message : String(error)} Rollback needs attention: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}. Previous package backup: ${plan.backupPackageRoot}`
       );
     }
@@ -233,6 +262,35 @@ export function parseStableVersion(
   const values = match.slice(1).map(Number);
   if (values.some((value) => !Number.isSafeInteger(value))) return null;
   return { major: values[0]!, minor: values[1]!, patch: values[2]! };
+}
+
+/** Select only a higher stable patch in the installed major and minor line. */
+export function selectAutoPatchVersion(
+  currentVersion: string,
+  publishedVersions: string[]
+): string | null {
+  const current = parseStableVersion(currentVersion);
+  if (!current) return null;
+  const candidates = [...new Set(publishedVersions)].filter((version) => {
+    const parsed = parseStableVersion(version);
+    return (
+      parsed !== null &&
+      parsed.major === current.major &&
+      parsed.minor === current.minor &&
+      parsed.patch > current.patch
+    );
+  });
+  candidates.sort((left, right) => compareVersions(left, right) ?? 0);
+  return candidates.at(-1) ?? null;
+}
+
+function latestStableVersion(currentVersion: string, publishedVersions: string[]): string | null {
+  const candidates = [...new Set(publishedVersions)].filter(
+    (version) =>
+      parseStableVersion(version) !== null && compareVersions(version, currentVersion)! > 0
+  );
+  candidates.sort((left, right) => compareVersions(left, right) ?? 0);
+  return candidates.at(-1) ?? null;
 }
 
 export function selectUpgradeVersion(
@@ -596,9 +654,9 @@ export function formatUpgradeInstallPlan(plan: UpgradeInstallPlan, targetVersion
   return `${lines.join('\n')}\n`;
 }
 
-async function fetchPublishedVersions(): Promise<string[]> {
+async function fetchPublishedVersions(timeoutMs = PLAN_FETCH_TIMEOUT_MS): Promise<string[]> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PLAN_FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(PACKAGE_REGISTRY_URL, {
       headers: { accept: 'application/vnd.npm.install-v1+json' },
@@ -884,6 +942,259 @@ function defaultAdapters(): UpgradeWorkflowAdapters {
   };
 }
 
+async function installSelectedVersion(
+  packageRoot: string,
+  currentVersion: string,
+  targetVersion: string,
+  automatic: boolean
+): Promise<void> {
+  const scopeRoot = path.dirname(packageRoot);
+  const stagePrefix = fs.mkdtempSync(
+    path.join(scopeRoot, `.contextos-upgrade-stage-${process.pid}-`)
+  );
+  const stagedPackageRoot = path.join(stagePrefix, 'lib', 'node_modules', ...PACKAGE_PARTS);
+  const backupPackageRoot = `${packageRoot}.backup-${process.pid}-${Date.now()}`;
+  let lock: ReturnType<typeof createUpgradeLock> | undefined;
+  let workflowCompleted = false;
+  let operationFailed = false;
+  let operationError: unknown;
+  try {
+    const installTimeout = automatic ? 120_000 : 10 * 60 * 1000;
+    try {
+      run(
+        'npm',
+        [
+          'install',
+          '--global',
+          '--prefix',
+          stagePrefix,
+          '--no-audit',
+          '--no-fund',
+          `${PACKAGE_NAME}@${targetVersion}`
+        ],
+        installTimeout
+      );
+    } catch (error) {
+      throw new Error(
+        `Could not stage ${targetVersion}; the installed version was left unchanged. ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    const stagedManifest = JSON.parse(
+      fs.readFileSync(path.join(stagedPackageRoot, 'package.json'), 'utf8')
+    ) as { version?: string };
+    if (stagedManifest.version !== targetVersion || !runVersion(stagedPackageRoot, targetVersion)) {
+      throw new Error(
+        `Staged package did not verify as ${targetVersion}; the installed version was left unchanged.`
+      );
+    }
+
+    lock = createUpgradeLock();
+    const processEntries = scanPackageProcesses(packageRoot);
+    if (automatic && processEntries.length > 0) {
+      throw new Error(
+        `Another ContextOS process is using this package. Close active ContextOS clients and retry; no files were changed.`
+      );
+    }
+
+    const daemons: UpgradeDaemon[] = [];
+    if (!automatic) {
+      for (const entry of processEntries) {
+        if (!entry.daemon || !entry.projectDir) {
+          throw new Error(
+            `Process ${entry.pid} is using this ContextOS package but is not a verifiable daemon. Close active ContextOS clients and retry; no files were changed.`
+          );
+        }
+        const pidPath = path.join(entry.projectDir, '.contextos', 'daemon.pid');
+        try {
+          assertNoSymlinkInPath(pidPath);
+          const recordedPid = Number(fs.readFileSync(pidPath, 'utf8').trim());
+          if (recordedPid !== entry.pid) throw new Error('PID file does not identify this process');
+        } catch {
+          throw new Error(
+            `Could not verify daemon process ${entry.pid} in ${entry.projectDir}; no files were changed.`
+          );
+        }
+        daemons.push({ pid: entry.pid, projectDir: entry.projectDir, version: currentVersion });
+      }
+    }
+
+    const adapters = defaultAdapters();
+    if (automatic) {
+      adapters.beforeSwap = async () => {
+        if (scanPackageProcesses(packageRoot).length > 0) {
+          throw new Error(
+            'Another ContextOS process started before the package swap. No files were changed.'
+          );
+        }
+      };
+    }
+    await runUpgradeWorkflow(
+      {
+        packageRoot,
+        stagedPackageRoot,
+        backupPackageRoot,
+        targetVersion,
+        currentVersion,
+        token: lock.token,
+        daemons
+      },
+      adapters
+    );
+    workflowCompleted = true;
+  } catch (error) {
+    operationFailed = true;
+    operationError = error;
+  }
+
+  let lockReleaseError: unknown;
+  try {
+    lock?.release();
+  } catch (error) {
+    lockReleaseError = error;
+  }
+  let stageCleanupError: unknown;
+  try {
+    await fs.promises.rm(stagePrefix, { recursive: true, force: true });
+  } catch (error) {
+    stageCleanupError = error;
+  }
+
+  if (lockReleaseError) {
+    throw new UpgradeRecoveryError(
+      `${workflowCompleted ? 'The package update completed' : 'The upgrade stopped before commit'}, but its lock could not be released: ${lockReleaseError instanceof Error ? lockReleaseError.message : String(lockReleaseError)}. The lock may block other commands. No server was started; inspect the lock and remove it only after confirming no upgrade is running.`
+    );
+  }
+  if (stageCleanupError) {
+    process.stderr.write(
+      `[ContextOS] Could not remove temporary upgrade files at ${stagePrefix}: ${stageCleanupError instanceof Error ? stageCleanupError.message : String(stageCleanupError)}\n`
+    );
+  }
+  if (operationFailed) throw operationError;
+}
+
+const AUTO_FETCH_TIMEOUT_MS = 2_500;
+
+function defaultAutoPatchRuntime(): AutoPatchRuntime {
+  return {
+    platform: process.platform,
+    resolveInstalledPackage() {
+      const modulePath = fileURLToPath(import.meta.url);
+      const packageRoot = findPackageRoot(path.dirname(modulePath));
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')
+      ) as { version: string };
+      return { packageRoot, currentVersion: manifest.version };
+    },
+    resolveGlobalNpmRoot: tryGetGlobalNpmRoot,
+    fetchPublishedVersions: () => fetchPublishedVersions(AUTO_FETCH_TIMEOUT_MS),
+    hasActivePackageProcess: (packageRoot) => scanPackageProcesses(packageRoot).length > 0,
+    installVersion: (packageRoot, currentVersion, targetVersion) =>
+      installSelectedVersion(packageRoot, currentVersion, targetVersion, true)
+  };
+}
+
+export async function runAutoPatchBeforeServe(
+  runtime: AutoPatchRuntime = defaultAutoPatchRuntime()
+): Promise<AutoPatchResult> {
+  if (runtime.platform !== 'linux') {
+    return {
+      status: 'skipped',
+      reason: 'Automatic package installation is supported on Linux only.'
+    };
+  }
+
+  let currentVersion: string | undefined;
+  let latestVersion: string | undefined;
+  try {
+    const installed = runtime.resolveInstalledPackage();
+    currentVersion = installed.currentVersion;
+    if (!parseStableVersion(currentVersion)) {
+      return {
+        status: 'skipped',
+        currentVersion,
+        reason: `Installed version ${currentVersion} is not a stable release.`
+      };
+    }
+
+    const globalRoot = runtime.resolveGlobalNpmRoot();
+    if (!globalRoot) {
+      return {
+        status: 'skipped',
+        currentVersion,
+        reason: 'This is not a recognized global npm installation.'
+      };
+    }
+    const expectedRoot = path.join(globalRoot, ...PACKAGE_PARTS);
+    if (!samePath(installed.packageRoot, expectedRoot)) {
+      return {
+        status: 'skipped',
+        currentVersion,
+        reason: 'This is not the active global npm installation.'
+      };
+    }
+    try {
+      assertNoSymlinkInPath(installed.packageRoot);
+      if (fs.lstatSync(installed.packageRoot).isSymbolicLink()) {
+        return {
+          status: 'skipped',
+          currentVersion,
+          reason: 'The global package path is linked; automatic replacement is unsupported.'
+        };
+      }
+    } catch {
+      return {
+        status: 'skipped',
+        currentVersion,
+        reason: 'The global package path is unavailable or unsafe.'
+      };
+    }
+
+    if (runtime.hasActivePackageProcess(installed.packageRoot)) {
+      return {
+        status: 'skipped',
+        currentVersion,
+        reason: 'Another ContextOS process is using the package; automatic update was skipped.'
+      };
+    }
+
+    const versions = await runtime.fetchPublishedVersions();
+    latestVersion = latestStableVersion(currentVersion, versions) ?? undefined;
+    const targetVersion = selectAutoPatchVersion(currentVersion, versions);
+    if (!targetVersion) {
+      if (latestVersion) {
+        const current = parseStableVersion(currentVersion)!;
+        const line = `${current.major}.${current.minor}.x`;
+        return {
+          status: 'skipped',
+          currentVersion,
+          latestVersion,
+          reason: `Version ${latestVersion} is available; auto-patch only installs stable releases in ${line}. Run \`contextos upgrade\` for an explicit minor update, or \`contextos upgrade --allow-major\` for a major update.`
+        };
+      }
+      return { status: 'current', currentVersion };
+    }
+
+    await runtime.installVersion(installed.packageRoot, currentVersion, targetVersion);
+    return { status: 'updated', currentVersion, targetVersion };
+  } catch (error) {
+    if (error instanceof UpgradeRecoveryError) throw error;
+    return {
+      status: 'skipped',
+      currentVersion,
+      latestVersion,
+      reason: `Automatic patch update failed; continuing with the installed version. ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+export function formatAutoPatchNotice(result: AutoPatchResult): string {
+  if (result.status === 'current') return '';
+  if (result.status === 'updated') {
+    return `[ContextOS] Updated from ${result.currentVersion} to ${result.targetVersion}; restarting before serving.\n`;
+  }
+  return `[ContextOS] Automatic patch update skipped: ${result.reason}\n`;
+}
+
 async function upgrade(options: {
   version?: string;
   allowMajor?: boolean;
@@ -951,81 +1262,8 @@ async function upgrade(options: {
     options.allowMajor
   );
 
-  const scopeRoot = path.dirname(packageRoot);
-  const stagePrefix = fs.mkdtempSync(
-    path.join(scopeRoot, `.contextos-upgrade-stage-${process.pid}-`)
-  );
-  const stagedPackageRoot = path.join(stagePrefix, 'lib', 'node_modules', ...PACKAGE_PARTS);
-  const backupPackageRoot = `${packageRoot}.backup-${process.pid}-${Date.now()}`;
-  let lock: ReturnType<typeof createUpgradeLock> | undefined;
-  try {
-    try {
-      run(
-        'npm',
-        [
-          'install',
-          '--global',
-          '--prefix',
-          stagePrefix,
-          '--no-audit',
-          '--no-fund',
-          `${PACKAGE_NAME}@${targetVersion}`
-        ],
-        10 * 60 * 1000
-      );
-    } catch (error) {
-      throw new Error(
-        `Could not stage ${targetVersion}; the installed version was left unchanged. ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-    const stagedManifest = JSON.parse(
-      fs.readFileSync(path.join(stagedPackageRoot, 'package.json'), 'utf8')
-    ) as { version?: string };
-    if (stagedManifest.version !== targetVersion || !runVersion(stagedPackageRoot, targetVersion)) {
-      throw new Error(
-        `Staged package did not verify as ${targetVersion}; the installed version was left unchanged.`
-      );
-    }
-
-    lock = createUpgradeLock();
-    const processEntries = scanPackageProcesses(packageRoot);
-    const daemons: UpgradeDaemon[] = [];
-    for (const entry of processEntries) {
-      if (!entry.daemon || !entry.projectDir) {
-        throw new Error(
-          `Process ${entry.pid} is using this ContextOS package but is not a verifiable daemon. Close active ContextOS clients and retry; no files were changed.`
-        );
-      }
-      const pidPath = path.join(entry.projectDir, '.contextos', 'daemon.pid');
-      try {
-        assertNoSymlinkInPath(pidPath);
-        const recordedPid = Number(fs.readFileSync(pidPath, 'utf8').trim());
-        if (recordedPid !== entry.pid) throw new Error('PID file does not identify this process');
-      } catch {
-        throw new Error(
-          `Could not verify daemon process ${entry.pid} in ${entry.projectDir}; no files were changed.`
-        );
-      }
-      daemons.push({ pid: entry.pid, projectDir: entry.projectDir, version: currentVersion });
-    }
-
-    await runUpgradeWorkflow(
-      {
-        packageRoot,
-        stagedPackageRoot,
-        backupPackageRoot,
-        targetVersion,
-        currentVersion,
-        token: lock.token,
-        daemons
-      },
-      defaultAdapters()
-    );
-    process.stdout.write(`ContextOS upgraded from ${currentVersion} to ${targetVersion}.\n`);
-  } finally {
-    lock?.release();
-    await fs.promises.rm(stagePrefix, { recursive: true, force: true });
-  }
+  await installSelectedVersion(packageRoot, currentVersion, targetVersion, false);
+  process.stdout.write(`ContextOS upgraded from ${currentVersion} to ${targetVersion}.\n`);
 }
 
 export const upgradeCommand = new Command('upgrade')

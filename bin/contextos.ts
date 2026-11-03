@@ -27,14 +27,29 @@ function findPackageManifest(start: string): { path: string; version: string } {
 
 function skipsStartupNotice(args: string[]): boolean {
   const commands = new Set([
-    'init', 'serve', 'query', 'workspace', 'watch', 'export', 'import', 'analytics',
-    'status', 'doctor', 'reindex', 'clean', 'daemon', 'visualize', 'upgrade'
+    'init',
+    'serve',
+    'query',
+    'workspace',
+    'watch',
+    'export',
+    'import',
+    'analytics',
+    'status',
+    'doctor',
+    'reindex',
+    'clean',
+    'daemon',
+    'visualize',
+    'upgrade',
+    'updates'
   ]);
   const commandIndex = args.findIndex((arg) => commands.has(arg));
   const command = commandIndex >= 0 ? args[commandIndex] : undefined;
   return (
     command === 'doctor' ||
     command === 'upgrade' ||
+    command === 'updates' ||
     command === 'serve' ||
     args.includes('--version') ||
     args.includes('-V') ||
@@ -88,9 +103,27 @@ async function main(): Promise<void> {
     import('../src/cli/commands/clean.js'),
     import('../src/cli/commands/daemon.js'),
     import('../src/cli/commands/visualize.js'),
-    import('../src/cli/commands/upgrade.js')
+    import('../src/cli/commands/upgrade.js'),
+    import('../src/cli/commands/updates.js')
   ]);
-  const [init, serve, query, workspace, watch, exportCmd, importCmd, analytics, status, doctor, reindex, clean, daemon, visualize, upgrade] = commands;
+  const [
+    init,
+    serve,
+    query,
+    workspace,
+    watch,
+    exportCmd,
+    importCmd,
+    analytics,
+    status,
+    doctor,
+    reindex,
+    clean,
+    daemon,
+    visualize,
+    upgrade,
+    updates
+  ] = commands;
 
   program
     .name('contextos')
@@ -124,7 +157,8 @@ async function main(): Promise<void> {
     clean.cleanCommand,
     daemon.daemonCommand,
     visualize.visualizeCommand,
-    upgrade.upgradeCommand
+    upgrade.upgradeCommand,
+    updates.updatesCommand
   ]) {
     program.addCommand(command);
   }
