@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isFTSQuerySyntaxError,
   KeywordMatcher,
+  KeywordTrace,
   reciprocalRankFusion
 } from '../../src/core/retrieval/keyword-matcher.js';
 import { DB } from '../../src/core/storage/database.js';
@@ -82,5 +83,31 @@ describe('keyword-matcher', () => {
     expect(run1).toEqual(run2);
     // 'a-chunk' < 'z-chunk' lexicographically, so it comes first on a score tie
     expect(run1[0]).toBe('a-chunk');
+  });
+
+  it('records exact per-strategy RRF contributions when a trace is requested', () => {
+    const a = { id: 'a', score: 0 } as ScoredChunk;
+    const b = { id: 'b', score: 0 } as ScoredChunk;
+    const trace: KeywordTrace = new Map();
+    const fused = reciprocalRankFusion(
+      [
+        { list: [a, b], weight: 2, strategy: 'fts-or' },
+        { list: [a], weight: 1, strategy: 'file-stem-exact' }
+      ],
+      60,
+      trace
+    );
+
+    const aContributions = trace.get('a');
+    expect(aContributions).toEqual([
+      { strategy: 'fts-or', rank: 0, weight: 2, scoreContribution: (2 / 61) * 100 },
+      { strategy: 'file-stem-exact', rank: 0, weight: 1, scoreContribution: (1 / 61) * 100 }
+    ]);
+    expect(
+      aContributions?.reduce((total, contribution) => total + contribution.scoreContribution, 0)
+    ).toBeCloseTo(fused.find((chunk) => chunk.id === 'a')!.score);
+    expect(trace.get('b')).toEqual([
+      { strategy: 'fts-or', rank: 1, weight: 2, scoreContribution: (2 / 62) * 100 }
+    ]);
   });
 });

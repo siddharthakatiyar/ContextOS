@@ -231,14 +231,66 @@ ContextOS can rebuild source-derived chunks, but the SQLite files can also conta
 ### Developer Experience
 
 **CLI**  
-`init`, `reindex`, `serve`, `query`, `status`, `watch`, `visualize`, and more.
+`init`, `reindex`, `serve`, `query`, `status`, `doctor`, `watch`, `visualize`, and more.
 *Commands support graceful cancellation (Ctrl+C / SIGINT) to safely abort long-running indexing operations and rollback in-flight database transactions without causing lock-ups.*
+
+**Diagnostics**
+
+`contextos doctor` checks local MCP configuration, index health and freshness,
+and daemon state without changing files. It reports each result as `pass`,
+`warn`, `fail`, or `unknown`; missing state or telemetry is `unknown`, and the
+command exits with code 1 only when a check confirms a failure. Use
+`contextos doctor --json` for a machine-readable report. Add `--explain` to
+`contextos query` to inspect the ranking signals recorded for retrieved chunks
+and the compiler's tier, token budgets, and included or omitted chunks. The
+existing query JSON payload stays unchanged unless both `--json` and
+`--explain` are supplied, in which case an `explanation` object is added.
+
+**Updates**
+
+Normal CLI commands and each MCP `serve` session check npm for updates. Help,
+version, doctor, and internal daemon startup skip the notice; upgrade fetches
+the release list directly. The bounded check reports available updates on
+stderr; registry failures stay quiet and are reported as `unknown` by the
+`contextos_update_status` MCP tool. Update notices never write
+to the MCP stdio or JSON result stream. `contextos upgrade` explicitly stages
+and verifies the latest compatible release, drains the daemon, then installs
+and verifies it. Use `contextos upgrade --version X.Y.Z` to select a version;
+`--allow-major` is required for a major-version change. Self-upgrade is limited
+to global npm installs on Linux and refuses when it cannot prove the package is
+safe to replace; close active ContextOS clients before upgrading. Source
+checkouts, local installs, and `npx` runs are not modified; upgrade those with
+Git or by running `npm install -g @siddharthakatiyar/contextos@X.Y.Z` as
+appropriate. `contextos upgrade --dry-run` resolves a compatible published
+version and prints a read-only manual plan for recognized global npm, local
+npm/pnpm/Yarn, or source-checkout installs. Unknown, linked, and workspace
+layouts require their native update workflow. Automatic patch updates are on
+by default before an MCP `serve` session connects, but only for supported Linux
+global npm installs. The npm install includes a short notice, and the first
+substantive CLI invocation repeats a one-time reminder in case npm suppressed
+the lifecycle output. Run `contextos updates policy notify` to disable
+automatic patch updates; run `contextos updates policy auto-patch` to enable
+them again. A saved per-user preference such as `notify` is preserved. If no
+preference exists, the default is `auto-patch`. Explicit choices are stored
+for your user in `~/.contextos/update-policy.json` and are not read from
+project configuration; an invalid or unsafe preference fails closed to
+`notify`.
+Auto-patching applies only to stable releases with a higher
+patch number in the same major and minor version, and only for supported Linux
+global npm installs. Before replacing files, it skips when registry access is
+unavailable, another ContextOS process is active, or the staged package cannot
+be verified; the existing CLI keeps serving. A verified replacement restarts
+the MCP `serve` process with the updated CLI. If rollback cannot verify the
+previous install, or the new process cannot start, serving stops with recovery
+instructions instead of running code from an uncertain or replaced package.
+Resolve the issue and run `contextos serve` again. Notices and skip reasons go
+to stderr.
 
 **Concurrency**  
 Repository indexing now runs with bounded concurrency to overlap CPU-intensive parsing and disk I/O, dramatically speeding up `init` and `reindex` on large codebases.
 
 **MCP tools**  
-The default stable tools are `get_context`, `reindex_context`, `contextos_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, `ctx_remember`, `learn_fact`, `forget_fact`, `rate_chunk`, `ctx_symbol`, `get_neighbors`, and `get_symbol`. Deprecated compatibility tools such as `save_context`, `ctx_list_topics`, and `ctx_read_topic` are available only when `legacyTools` is enabled.
+The default stable tools are `get_context`, `reindex_context`, `contextos_status`, `contextos_update_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, `ctx_remember`, `learn_fact`, `forget_fact`, `rate_chunk`, `ctx_symbol`, `get_neighbors`, and `get_symbol`. Deprecated compatibility tools such as `save_context`, `ctx_list_topics`, and `ctx_read_topic` are available only when `legacyTools` is enabled.
 
 **Zero-config setup**  
 `contextos init` indexes the repo, writes MCP config if missing (does not overwrite an existing `contextos` MCP entry), and can start the background daemon.
@@ -297,7 +349,17 @@ contextos reindex              # Stop daemon, wipe local DB, and schedule a fres
 contextos reindex --embeddings # Backfill vectors without wiping the DB
 contextos serve                # MCP stdio server (Run automatically by your AI client. Do not run manually.)
 contextos query "..."          # Test retrieval locally
+contextos query "..." --explain # Show retrieval and compilation diagnostics
+contextos query "..." --json --explain # Include diagnostics in the JSON output
 contextos status               # Index stats
+contextos doctor               # Read-only configuration, index, and daemon checks
+contextos doctor --json        # Machine-readable diagnostic report
+contextos upgrade              # Stage and install the latest compatible release (global npm on Linux)
+contextos upgrade --version 1.2.3 # Select a release; add --allow-major for major-version changes
+contextos upgrade --dry-run    # Print a portable manual upgrade plan without changes
+contextos updates policy      # Show the per-user update setting (auto-patch by default)
+contextos updates policy notify     # Disable automatic patch updates
+contextos updates policy auto-patch # Enable automatic patch updates
 contextos watch                # Live re-index on file changes
 ```
 

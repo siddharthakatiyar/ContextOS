@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { getErrorCode, getErrorMessage } from '../../utils/errors.js';
 import { canonicalDirectory, getDaemonSocketPath } from '../../utils/secure-state.js';
+import { waitForUpgradeToFinish } from '../updater/upgrade-lock.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,17 +43,24 @@ function spawnDaemon(projectDir: string): Promise<void> {
     const cmd = isTs ? 'tsx' : 'node';
     const args = isTs ? [binPath, 'daemon', 'start'] : [binPath, 'daemon', 'start'];
 
-    const child = spawn(cmd, args, {
-      cwd: projectDir,
-      detached: true,
-      stdio: 'ignore', // run in background completely detached
-      env: { ...process.env, CONTEXTOS_REPO_ROOT: projectDir }
-    });
+    void waitForUpgradeToFinish()
+      .then(() => {
+        const child = spawn(cmd, args, {
+          cwd: projectDir,
+          detached: true,
+          stdio: 'ignore', // run in background completely detached
+          env: { ...process.env, CONTEXTOS_REPO_ROOT: projectDir }
+        });
 
-    child.unref();
+        child.unref();
 
-    // Give the daemon a moment to start and bind the socket
-    setTimeout(() => resolve(), 500);
+        // Give the daemon a moment to start and bind the socket
+        setTimeout(() => resolve(), 500);
+      })
+      .catch((error) => {
+        process.stderr.write(`ContextOS could not start its daemon: ${getErrorMessage(error)}\n`);
+        resolve();
+      });
   });
 }
 
@@ -84,6 +92,7 @@ export class ReconnectBackoff {
 }
 
 export async function runDaemonClient(projectDir: string): Promise<void> {
+  await waitForUpgradeToFinish();
   const socketPath = getSocketPath(projectDir);
   const reconnectBackoff = new ReconnectBackoff();
 

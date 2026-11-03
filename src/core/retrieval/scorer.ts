@@ -182,6 +182,9 @@ export function scoreChunks(
   const scored = chunks
     .map((chunk) => {
       let finalScore = chunk.score || 0;
+      let appliedGraphBoost = 0;
+      const matchedGraphEntities: string[] | undefined = opts?.onSignals ? [] : undefined;
+      let feedbackAdjustment: number | undefined;
 
       finalScore = applyPoisonPenalty(chunk, finalScore);
 
@@ -192,9 +195,11 @@ export function scoreChunks(
         for (const k of chunkKeywords) {
           if (entityScores.has(k)) {
             graphBoost += entityScores.get(k)! * 5.0;
+            matchedGraphEntities?.push(k);
           }
         }
-        finalScore += Math.min(graphBoost, maxGraphBoost);
+        appliedGraphBoost = Math.min(graphBoost, maxGraphBoost);
+        finalScore += appliedGraphBoost;
       }
 
       // Importance weight (small absolute)
@@ -202,7 +207,8 @@ export function scoreChunks(
 
       // Feedback adjustment
       if (chunk.id && feedbackAdjustments[chunk.id] !== undefined) {
-        finalScore += feedbackAdjustments[chunk.id];
+        feedbackAdjustment = feedbackAdjustments[chunk.id];
+        finalScore += feedbackAdjustment;
       }
 
       // Generic prompt-token → symbolName / fileStem / path-segment boost
@@ -354,6 +360,14 @@ export function scoreChunks(
       }
 
       finalScore = applyGenericAdjustments(chunk, finalScore, adjustCtx);
+
+      if (opts?.onSignals && chunk.id) {
+        opts.onSignals(chunk.id, {
+          graphKeywordBoost: appliedGraphBoost,
+          matchedGraphEntities: matchedGraphEntities || [],
+          ...(feedbackAdjustment !== undefined ? { feedbackAdjustment } : {})
+        });
+      }
 
       return { ...chunk, score: finalScore };
     })

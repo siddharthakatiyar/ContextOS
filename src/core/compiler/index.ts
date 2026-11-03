@@ -359,8 +359,9 @@ function renderXmlWithinBudget(
   pathDisplay: Map<string, string>,
   legend: string,
   repoRoot: string | undefined,
-  maxTokens: number
-): { output: string; tokenCount: number } {
+  maxTokens: number,
+  includeIds = false
+): { output: string; tokenCount: number; includedChunkIds?: string[] } {
   const selectedFull: ScoredChunk[] = [];
   const fits = (
     candidateFull: ScoredChunk[],
@@ -417,7 +418,18 @@ function renderXmlWithinBudget(
     output = '<contextos_context />';
     tokenCount = estimateTokens(output);
   }
-  return { output, tokenCount };
+  return {
+    output,
+    tokenCount,
+    ...(includeIds
+      ? {
+          includedChunkIds:
+            output === '<contextos_context />'
+              ? []
+              : [...selectedFull, ...selectedStubs].map((chunk) => chunk.id)
+        }
+      : {})
+  };
 }
 
 function renderPass(
@@ -425,7 +437,14 @@ function renderPass(
   result: RetrievalResult,
   opts: CompilerOptions,
   maxTokens: number
-): { output: string; tokenCount: number; stubs: ScoredChunk[] } {
+): {
+  output: string;
+  tokenCount: number;
+  stubs: ScoredChunk[];
+  includedChunkIds?: string[];
+  includedStubChunkIds?: string[];
+  stubBlockStart?: number;
+} {
   const full = compressedChunks.filter((c) => !isStub(c));
   const stubs = compressedChunks.filter((c) => isStub(c));
   const repoRoot = opts.repoRoot;
@@ -453,13 +472,20 @@ function renderPass(
       pathDisplay,
       legend,
       repoRoot,
-      maxTokens
+      maxTokens,
+      opts.explain
     );
 
     return {
       output: xml.output,
       tokenCount: xml.tokenCount,
-      stubs
+      stubs,
+      ...(opts.explain
+        ? {
+            includedChunkIds: xml.includedChunkIds || [],
+            includedStubChunkIds: stubs.map((chunk) => chunk.id)
+          }
+        : {})
     };
   }
 
@@ -488,6 +514,7 @@ function renderPass(
   }
 
   const stubsBlock = formatStubs(cappedStubs);
+  const stubBlockStart = opts.explain && stubsBlock ? output.length : undefined;
   if (stubsBlock) {
     output += stubsBlock;
   }
@@ -495,7 +522,17 @@ function renderPass(
   return {
     output,
     tokenCount: estimateTokens(output),
-    stubs
+    stubs,
+    ...(opts.explain
+      ? {
+          includedChunkIds: [
+            ...full.map((chunk) => chunk.id),
+            ...cappedStubs.map((chunk) => chunk.id)
+          ],
+          includedStubChunkIds: cappedStubs.map((chunk) => chunk.id)
+        }
+      : {}),
+    ...(stubBlockStart !== undefined ? { stubBlockStart } : {})
   };
 }
 
@@ -516,31 +553,79 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
 
   const framingFloor = opts.framingReserve ?? 48;
   const firstPassBudget = Math.max(380, activeMaxTokens - framingFloor);
+  let repackChunkBudget: number | undefined;
 
   let compressedChunks = compressChunks(result.chunks, firstPassBudget, ctxOpts);
   let renderResult = renderPass(compressedChunks, result, opts, activeMaxTokens);
 
   if (renderResult.tokenCount > activeMaxTokens) {
     const deficit = renderResult.tokenCount - activeMaxTokens;
-    const repackBudget = Math.max(380, firstPassBudget - deficit - 15);
-    compressedChunks = compressChunks(result.chunks, repackBudget, ctxOpts);
+    repackChunkBudget = Math.max(380, firstPassBudget - deficit - 15);
+    compressedChunks = compressChunks(result.chunks, repackChunkBudget, ctxOpts);
     renderResult = renderPass(compressedChunks, result, opts, activeMaxTokens);
   }
 
   let { output, tokenCount } = renderResult;
 
-  output = trimOutputToBudget(output, activeMaxTokens);
-
-  tokenCount = estimateTokens(output);
-  if (tokenCount > activeMaxTokens) {
-    output = output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
+  let removedGeneratedStubBlock = false;
+  if (opts.explain) {
+    let stubBlockStart = renderResult.stubBlockStart;
+    const firstTrim = trimOutputToBudgetWithBoundary(output, activeMaxTokens, stubBlockStart);
+    output = firstTrim.output;
+    stubBlockStart = firstTrim.stubBlockStart;
+    removedGeneratedStubBlock = firstTrim.removedStubBlock;
     tokenCount = estimateTokens(output);
+    if (tokenCount > activeMaxTokens) {
+      const secondTrim = trimOutputToBudgetWithBoundary(output, activeMaxTokens, stubBlockStart);
+      output = secondTrim.output;
+      removedGeneratedStubBlock ||= secondTrim.removedStubBlock;
+      tokenCount = estimateTokens(output);
+    }
+  } else {
+    output = trimOutputToBudget(output, activeMaxTokens);
+    tokenCount = estimateTokens(output);
+    if (tokenCount > activeMaxTokens) {
+      output = output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
+      tokenCount = estimateTokens(output);
+    }
   }
 
-  return {
+  const compiled: CompiledContext = {
     output,
     tokenCount
   };
+  if (opts.explain) {
+    const includedIds = new Set(renderResult.includedChunkIds || []);
+    if (opts.outputFormat !== 'xml' && removedGeneratedStubBlock) {
+      for (const id of renderResult.includedStubChunkIds || []) includedIds.delete(id);
+    }
+    const originalById = new Map(result.chunks.map((chunk) => [chunk.id, chunk]));
+    const includedChunks = compressedChunks
+      .filter((chunk) => includedIds.has(chunk.id))
+      .map((chunk) => {
+        const original = originalById.get(chunk.id);
+        const representation = isStub(chunk)
+          ? 'stub'
+          : original && chunk.content === original.content
+            ? 'body'
+            : 'excerpt';
+        return { id: chunk.id, representation } as const;
+      });
+    const includedSet = new Set(includedChunks.map((chunk) => chunk.id));
+    compiled.diagnostics = {
+      tier,
+      outputFormat: opts.outputFormat || 'markdown',
+      configuredMaxTokens: opts.maxTokens,
+      effectiveMaxTokens: activeMaxTokens,
+      firstPassChunkBudget: firstPassBudget,
+      ...(repackChunkBudget !== undefined ? { repackChunkBudget } : {}),
+      framingReserve: framingFloor,
+      signalTerms,
+      includedChunks,
+      omittedChunkIds: result.chunks.filter((chunk) => !includedSet.has(chunk.id)).map((c) => c.id)
+    };
+  }
+  return compiled;
 }
 
 /** Drop low-value framing sections when over budget (never touches code fences). */
@@ -548,4 +633,42 @@ function trimOutputToBudget(output: string, maxTokens: number): string {
   const tok = estimateTokens(output);
   if (tok <= maxTokens) return output;
   return output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
+}
+
+function trimOutputToBudgetWithBoundary(
+  output: string,
+  maxTokens: number,
+  stubBlockStart?: number
+): { output: string; stubBlockStart?: number; removedStubBlock: boolean } {
+  if (estimateTokens(output) <= maxTokens) {
+    return {
+      output,
+      ...(stubBlockStart !== undefined ? { stubBlockStart } : {}),
+      removedStubBlock: false
+    };
+  }
+
+  const trimPattern = /\n### Also\n[\s\S]*?(?=\n### |\n*$)/;
+  const match = trimPattern.exec(output);
+  if (!match) {
+    return {
+      output,
+      ...(stubBlockStart !== undefined ? { stubBlockStart } : {}),
+      removedStubBlock: false
+    };
+  }
+
+  const trimmed = output.replace(trimPattern, '\n');
+  const matchEnd = match.index + match[0].length;
+  const removedStubBlock =
+    stubBlockStart !== undefined && stubBlockStart >= match.index && stubBlockStart < matchEnd;
+  const adjustedStubBlockStart =
+    stubBlockStart !== undefined && !removedStubBlock && stubBlockStart >= matchEnd
+      ? stubBlockStart - match[0].length + 1
+      : stubBlockStart;
+  return {
+    output: trimmed,
+    ...(adjustedStubBlockStart !== undefined ? { stubBlockStart: adjustedStubBlockStart } : {}),
+    removedStubBlock
+  };
 }

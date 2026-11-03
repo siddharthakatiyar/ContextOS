@@ -82,5 +82,31 @@ describe('Full Index and Retrieve Integration', () => {
     expect(sourceFiles).toContain(file1); // utils.ts
     // We should not retrieve unrelated.ts since it has no relevance
     expect(sourceFiles).not.toContain(file3);
+    expect(result.explanation).toBeUndefined();
+
+    const feedbackAdjustments = Object.fromEntries(result.chunks.map((chunk) => [chunk.id, 1.25]));
+    const explained = await engine.retrieve('add function', {
+      explain: true,
+      feedbackAdjustments
+    });
+    expect(explained.explanation).toBeDefined();
+    expect(explained.explanation?.embeddingSearch).toMatchObject({
+      available: false,
+      searched: false,
+      hitCount: null
+    });
+    const explainedChunk = explained.chunks.find(
+      (chunk) => explained.explanation?.chunks[chunk.id]?.keyword
+    );
+    expect(explainedChunk).toBeDefined();
+    const chunkExplanation = explained.explanation!.chunks[explainedChunk!.id];
+    expect(chunkExplanation.keyword?.rrfScore).toBeGreaterThan(0);
+    expect(chunkExplanation.keyword?.contributions.length).toBeGreaterThan(0);
+    expect(chunkExplanation.finalScore).toBe(explainedChunk!.score);
+    expect(
+      Object.values(explained.explanation!.chunks).some(
+        (details) => details.feedback?.adjustment === 1.25
+      )
+    ).toBe(true);
   });
 });
