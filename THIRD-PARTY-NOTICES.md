@@ -14,10 +14,10 @@ It is a CycloneDX 1.5 SBOM generated from the repository lockfile with:
 npm sbom --sbom-format cyclonedx --package-lock-only > docs/sbom.cdx.json
 ```
 
-The current root package is `@siddharthakatiyar/contextos@1.0.3`; the `docs`
-workspace is `docs@1.0.3`. The lockfile contains 903 package locations (the
-root project is excluded from that count), and the SBOM contains 902 component
-records plus 903 dependency records. npm's SBOM writer omits license objects
+The current root package is `@siddharthakatiyar/contextos@1.1.0`; the `docs`
+workspace is `docs@1.1.0`. The lockfile contains 914 package locations (the
+root project is excluded from that count), and the SBOM contains 913 component
+records plus 914 dependency records. npm's SBOM writer omits license objects
 for the private workspace and for the `sqlite-vec` package entries; those
 metadata gaps are called out below rather than inferred.
 
@@ -25,14 +25,14 @@ The lockfile license metadata currently groups as follows:
 
 | SPDX/package license metadata | Package locations |
 | --- | ---: |
-| MIT | 720 |
+| MIT | 716 |
 | Apache-2.0 | 47 |
 | ISC | 47 |
 | BSD-3-Clause | 23 |
 | BSD-2-Clause | 14 |
-| MPL-2.0 | 13 |
+| MPL-2.0 | 25 |
 | LGPL-3.0-or-later | 10 |
-| BlueOak-1.0.0 | 6 |
+| BlueOak-1.0.0 | 9 |
 | MIT OR Apache | 6 |
 | Apache-2.0 AND LGPL-3.0-or-later | 3 |
 | (MIT OR CC0-1.0) | 3 |
