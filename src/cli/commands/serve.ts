@@ -116,6 +116,10 @@ export const serveCommand = new Command('serve')
     delete process.env[AUTO_PATCH_REEXEC_ENV];
     if (!wasAutoPatchReexec && readAutoPatchPolicy() === 'auto-patch') {
       const result = await runAutoPatchBeforeServe();
+      if (result.status === 'skipped' && !result.latestVersion && !result.registryCheckAttempted) {
+        const updateNotice = formatUpdateNotice(await checkForUpdates());
+        if (updateNotice) process.stderr.write(updateNotice);
+      }
       const notice = formatAutoPatchNotice(result);
       if (notice) process.stderr.write(notice);
       if (result.status === 'updated') {

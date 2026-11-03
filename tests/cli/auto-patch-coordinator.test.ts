@@ -77,6 +77,7 @@ describe('automatic patch coordinator', () => {
     const result = await runAutoPatchBeforeServe(runtime);
 
     expect(result).toMatchObject({ status: 'skipped', currentVersion: '1.2.3' });
+    expect(result.status === 'skipped' && result.registryCheckAttempted).toBeFalsy();
     expect(runtime.fetchPublishedVersions).not.toHaveBeenCalled();
     expect(runtime.installVersion).not.toHaveBeenCalled();
   });
@@ -128,7 +129,8 @@ describe('automatic patch coordinator', () => {
 
     await expect(runAutoPatchBeforeServe(offline)).resolves.toMatchObject({
       status: 'skipped',
-      currentVersion: '1.2.3'
+      currentVersion: '1.2.3',
+      registryCheckAttempted: true
     });
     await expect(runAutoPatchBeforeServe(failedInstall)).resolves.toMatchObject({
       status: 'skipped',

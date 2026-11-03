@@ -73,6 +73,53 @@ describe('serve auto-patch policy and restart flow', () => {
     expect(stdoutWrite).not.toHaveBeenCalled();
   });
 
+  it('falls back to a passive update notice when automatic installation is safely skipped', async () => {
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const updateNotice = '[ContextOS] Update available: 1.2.3 → 1.2.4\n';
+    const skipNotice = '[ContextOS] Automatic patch update skipped: Linux global npm only.\n';
+    const status = { status: 'update_available' } as UpdateStatus;
+    vi.stubEnv('CONTEXTOS_REPO_ROOT', originalCwd);
+    vi.mocked(readAutoPatchPolicy).mockReturnValue('auto-patch');
+    vi.mocked(runAutoPatchBeforeServe).mockResolvedValue({
+      status: 'skipped',
+      currentVersion: '1.2.3',
+      reason: 'Automatic package installation is supported on Linux only.'
+    });
+    vi.mocked(checkForUpdates).mockResolvedValue(status);
+    vi.mocked(formatUpdateNotice).mockReturnValue(updateNotice);
+    vi.mocked(formatAutoPatchNotice).mockReturnValue(skipNotice);
+
+    await serveCommand.parseAsync(['node', 'contextos']);
+
+    expect(runAutoPatchBeforeServe).toHaveBeenCalledOnce();
+    expect(checkForUpdates).toHaveBeenCalledOnce();
+    expect(formatUpdateNotice).toHaveBeenCalledWith(status);
+    expect(stderrWrite).toHaveBeenCalledWith(updateNotice);
+    expect(stderrWrite).toHaveBeenCalledWith(skipNotice);
+    expect(runDaemonClient).toHaveBeenCalledOnce();
+    expect(stdoutWrite).not.toHaveBeenCalled();
+  });
+
+  it('does not repeat a passive registry check after the auto-patch coordinator already checked', async () => {
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.stubEnv('CONTEXTOS_REPO_ROOT', originalCwd);
+    vi.mocked(readAutoPatchPolicy).mockReturnValue('auto-patch');
+    vi.mocked(runAutoPatchBeforeServe).mockResolvedValue({
+      status: 'skipped',
+      currentVersion: '1.2.3',
+      registryCheckAttempted: true,
+      reason: 'Automatic patch update failed; continuing with the installed version.'
+    });
+    vi.mocked(formatAutoPatchNotice).mockReturnValue('skip notice\n');
+
+    await serveCommand.parseAsync(['node', 'contextos']);
+
+    expect(checkForUpdates).not.toHaveBeenCalled();
+    expect(stderrWrite).toHaveBeenCalledWith('skip notice\n');
+    expect(runDaemonClient).toHaveBeenCalledOnce();
+  });
+
   it('relaunches once after a patch and lets the re-exec proceed without another update attempt', async () => {
     const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

@@ -65,6 +65,8 @@ export type AutoPatchResult =
       reason: string;
       currentVersion?: string;
       latestVersion?: string;
+      /** True when this attempt already contacted the registry. */
+      registryCheckAttempted?: boolean;
     }
   | { status: 'updated'; currentVersion: string; targetVersion: string };
 
@@ -1112,6 +1114,7 @@ export async function runAutoPatchBeforeServe(
 
   let currentVersion: string | undefined;
   let latestVersion: string | undefined;
+  let registryCheckAttempted = false;
   try {
     const installed = runtime.resolveInstalledPackage();
     currentVersion = installed.currentVersion;
@@ -1164,6 +1167,7 @@ export async function runAutoPatchBeforeServe(
       };
     }
 
+    registryCheckAttempted = true;
     const versions = await runtime.fetchPublishedVersions();
     latestVersion = latestStableVersion(currentVersion, versions) ?? undefined;
     const targetVersion = selectAutoPatchVersion(currentVersion, versions);
@@ -1189,6 +1193,7 @@ export async function runAutoPatchBeforeServe(
       status: 'skipped',
       currentVersion,
       latestVersion,
+      registryCheckAttempted,
       reason: `Automatic patch update failed; continuing with the installed version. ${error instanceof Error ? error.message : String(error)}`
     };
   }
