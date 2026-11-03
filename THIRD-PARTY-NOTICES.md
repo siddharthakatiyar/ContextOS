@@ -25,14 +25,14 @@ The lockfile license metadata currently groups as follows:
 
 | SPDX/package license metadata | Package locations |
 | --- | ---: |
-| MIT | 720 |
+| MIT | 716 |
 | Apache-2.0 | 47 |
 | ISC | 47 |
 | BSD-3-Clause | 23 |
 | BSD-2-Clause | 14 |
-| MPL-2.0 | 13 |
+| MPL-2.0 | 25 |
 | LGPL-3.0-or-later | 10 |
-| BlueOak-1.0.0 | 6 |
+| BlueOak-1.0.0 | 9 |
 | MIT OR Apache | 6 |
 | Apache-2.0 AND LGPL-3.0-or-later | 3 |
 | (MIT OR CC0-1.0) | 3 |

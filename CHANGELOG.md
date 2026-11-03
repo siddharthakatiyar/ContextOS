@@ -16,7 +16,7 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 - Add `contextos doctor` diagnostics and `contextos query --explain` retrieval and compilation details.
 - Add read-only `contextos upgrade --dry-run` plans for recognized global npm, local npm/pnpm/Yarn, and source-checkout installs.
-- Improve doctor configuration discovery and daemon read/expand helper coverage.
+- Fix doctor configuration discovery and improve daemon read/expand helper behavior.
 
 ### Changed
 
