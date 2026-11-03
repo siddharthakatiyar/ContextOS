@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { registerUpdateStatusTool } from '../../src/mcp/tools/update-status.js';
+import { getPackageVersion } from '../../src/utils/version.js';
+
+function nextPatchVersion(version: string): string {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
+  if (!match) throw new Error(`Expected a stable package version, received ${version}.`);
+  return `${match[1]}.${match[2]}.${BigInt(match[3]!) + 1n}`;
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -7,11 +14,13 @@ afterEach(() => {
 
 describe('contextos_update_status MCP tool', () => {
   it('publishes a structured, read-only update result for the installed version', async () => {
+    const currentVersion = getPackageVersion();
+    const latestVersion = nextPatchVersion(currentVersion);
     vi.stubGlobal(
       'fetch',
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ version: '1.0.3' }), {
+          new Response(JSON.stringify({ version: latestVersion }), {
             status: 200,
             headers: { 'content-type': 'application/json' }
           })
@@ -49,7 +58,8 @@ describe('contextos_update_status MCP tool', () => {
     const result = await registration!.handler();
     expect(result.structuredContent).toMatchObject({
       status: 'update_available',
-      latestVersion: '1.0.3',
+      currentVersion,
+      latestVersion,
       updateAvailable: true,
       compatible: true,
       upgradeCommand: 'contextos upgrade'
