@@ -10,6 +10,17 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-03
+
+### Added
+
+- Add `contextos doctor` diagnostics and `contextos query --explain` retrieval and compilation details.
+- Add read-only `contextos upgrade --dry-run` plans for recognized global npm, local npm/pnpm/Yarn, and source-checkout installs.
+
+### Changed
+
+- Enable automatic stable patch updates by default before MCP `serve` on supported Linux global npm installs. Updates stay within the installed major/minor line, use staged verification and rollback, and can be disabled with `contextos updates policy notify`.
+
 ## [1.0.3] - 2026-11-02
 
 ### Security

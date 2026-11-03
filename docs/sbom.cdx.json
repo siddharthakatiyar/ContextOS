@@ -19,14 +19,14 @@
       }
     ],
     "component": {
-      "bom-ref": "@siddharthakatiyar/contextos@1.0.3",
+      "bom-ref": "@siddharthakatiyar/contextos@1.1.0",
       "type": "library",
-      "name": "contextos-release-103",
-      "version": "1.0.3",
+      "name": "contextos-release-110",
+      "version": "1.1.0",
       "scope": "required",
       "author": "Siddhartha Katiyar",
       "description": "ContextOS - Universal knowledge graph for coding agents",
-      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.0.3",
+      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.1.0",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -58,12 +58,12 @@
   },
   "components": [
     {
-      "bom-ref": "docs@1.0.3",
+      "bom-ref": "docs@1.1.0",
       "type": "library",
       "name": "docs",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "scope": "required",
-      "purl": "pkg:npm/docs@1.0.3",
+      "purl": "pkg:npm/docs@1.1.0",
       "properties": [
         {
           "name": "cdx:npm:package:path",
