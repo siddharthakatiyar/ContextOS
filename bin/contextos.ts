@@ -59,6 +59,19 @@ function skipsStartupNotice(args: string[]): boolean {
   );
 }
 
+function skipsFirstUseAutoPatchNotice(args: string[]): boolean {
+  const maintenanceCommands = new Set(['doctor', 'upgrade', 'updates', 'daemon', 'help']);
+  const command = args.find((arg) => !arg.startsWith('-'));
+  return (
+    (command !== undefined && maintenanceCommands.has(command)) ||
+    args.includes('--version') ||
+    args.includes('--cli-version') ||
+    args.includes('-V') ||
+    args.includes('--help') ||
+    args.includes('-h')
+  );
+}
+
 async function main(): Promise<void> {
   // Keep the entrypoint light until the updater lock is clear. A package swap
   // must not make new commands import a mix of the old and new package trees.
@@ -70,6 +83,16 @@ async function main(): Promise<void> {
   if (args.includes('--version') && !args.includes('upgrade')) {
     process.stdout.write(`${manifest.version}\n`);
     return;
+  }
+
+  if (!skipsFirstUseAutoPatchNotice(args) && process.env.CONTEXTOS_AUTO_PATCH_REEXEC !== '1') {
+    try {
+      const { showAutoPatchDefaultNotice } =
+        await import('../src/core/updater/auto-patch-onboarding.js');
+      showAutoPatchDefaultNotice();
+    } catch {
+      // Onboarding state is optional and must not block a working command.
+    }
   }
 
   const { program } = await import('commander');

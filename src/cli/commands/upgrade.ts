@@ -695,12 +695,18 @@ function tryGetGlobalNpmRoot(): string | null {
   }
 }
 
-function run(command: string, args: string[], timeout = 5 * 60 * 1000): string {
+function run(
+  command: string,
+  args: string[],
+  timeout = 5 * 60 * 1000,
+  env: NodeJS.ProcessEnv = process.env
+): string {
   return childProcess
     .execFileSync(command, args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout,
+      env,
       maxBuffer: 16 * 1024 * 1024
     })
     .trim();
@@ -972,7 +978,8 @@ async function installSelectedVersion(
           '--no-fund',
           `${PACKAGE_NAME}@${targetVersion}`
         ],
-        installTimeout
+        installTimeout,
+        { ...process.env, CONTEXTOS_SUPPRESS_INSTALL_NOTICE: '1' }
       );
     } catch (error) {
       throw new Error(

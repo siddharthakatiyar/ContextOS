@@ -5,7 +5,7 @@ const REGISTRY_URL = 'https://registry.npmjs.org/@siddharthakatiyar%2Fcontextos/
 const PACKAGE_URL = 'https://www.npmjs.com/package/@siddharthakatiyar/contextos';
 const RELEASES_URL = 'https://github.com/siddharthakatiyar/ContextOS/releases';
 const UPGRADE_NOTE =
-  'Automatic patch installation is off by default; opt in with contextos updates policy auto-patch. It installs stable patch releases within the current major and minor only on Linux global npm installs. Run contextos upgrade --dry-run for a read-only plan on recognized global npm, local npm/pnpm/Yarn, or source-checkout installs; unknown, linked, and workspace layouts require their native update workflow.';
+  'Automatic patch installation is enabled by default for supported Linux global npm installs; use contextos updates policy notify to disable it. Only stable patch releases within the current major and minor are installed. Run contextos upgrade --dry-run for a read-only plan on recognized global npm, local npm/pnpm/Yarn, or source-checkout installs; unknown, linked, and workspace layouts require their native update workflow.';
 const DEFAULT_TIMEOUT_MS = 1_500;
 
 export interface UpdateStatus {

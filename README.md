@@ -264,12 +264,18 @@ Git or by running `npm install -g @siddharthakatiyar/contextos@X.Y.Z` as
 appropriate. `contextos upgrade --dry-run` resolves a compatible published
 version and prints a read-only manual plan for recognized global npm, local
 npm/pnpm/Yarn, or source-checkout installs. Unknown, linked, and workspace
-layouts require their native update workflow. Update checks only report
-availability by default. To opt in to automatic patch updates before an MCP
-`serve` session connects, run `contextos updates policy auto-patch`; return to
-the default with `contextos updates policy notify`. This preference is stored
-for your user in `~/.contextos/update-policy.json` and is not read from project
-configuration. Auto-patching applies only to stable releases with a higher
+layouts require their native update workflow. Automatic patch updates are on
+by default before an MCP `serve` session connects, but only for supported Linux
+global npm installs. The npm install includes a short notice, and the first
+substantive CLI invocation repeats a one-time reminder in case npm suppressed
+the lifecycle output. Run `contextos updates policy notify` to disable
+automatic patch updates; run `contextos updates policy auto-patch` to enable
+them again. A saved per-user preference such as `notify` is preserved. If no
+preference exists, the default is `auto-patch`. Explicit choices are stored
+for your user in `~/.contextos/update-policy.json` and are not read from
+project configuration; an invalid or unsafe preference fails closed to
+`notify`.
+Auto-patching applies only to stable releases with a higher
 patch number in the same major and minor version, and only for supported Linux
 global npm installs. Before replacing files, it skips when registry access is
 unavailable, another ContextOS process is active, or the staged package cannot
@@ -351,8 +357,9 @@ contextos doctor --json        # Machine-readable diagnostic report
 contextos upgrade              # Stage and install the latest compatible release (global npm on Linux)
 contextos upgrade --version 1.2.3 # Select a release; add --allow-major for major-version changes
 contextos upgrade --dry-run    # Print a portable manual upgrade plan without changes
-contextos updates policy      # Show the per-user update setting (notify by default)
-contextos updates policy auto-patch # Opt in to eligible automatic patch updates
+contextos updates policy      # Show the per-user update setting (auto-patch by default)
+contextos updates policy notify     # Disable automatic patch updates
+contextos updates policy auto-patch # Enable automatic patch updates
 contextos watch                # Live re-index on file changes
 ```
 

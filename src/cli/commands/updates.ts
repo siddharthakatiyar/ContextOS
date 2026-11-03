@@ -27,7 +27,7 @@ updatesCommand
       `Update policy: ${activeMode}\n` +
         `Settings file: ${getAutoPatchPolicyPath(os.homedir())}\n` +
         (activeMode === 'auto-patch'
-          ? 'Automatic installation is limited to stable patch releases in the current major and minor version on Linux global npm installs.\n'
+          ? 'Automatic installation is enabled by default for stable patch releases in the current major and minor version on Linux global npm installs. Disable it with `contextos updates policy notify`.\n'
           : 'Updates are reported with a command; no package is installed automatically.\n')
     );
   });
