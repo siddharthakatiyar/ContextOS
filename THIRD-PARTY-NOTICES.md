@@ -14,10 +14,10 @@ It is a CycloneDX 1.5 SBOM generated from the repository lockfile with:
 npm sbom --sbom-format cyclonedx --package-lock-only > docs/sbom.cdx.json
 ```
 
-The current root package is `@siddharthakatiyar/contextos@1.0.2`; the `docs`
-workspace is `docs@1.0.2`. The lockfile contains 802 package locations (the
-root project is excluded from that count), and the SBOM contains 801 component
-records plus 802 dependency records. npm's SBOM writer omits license objects
+The current root package is `@siddharthakatiyar/contextos@1.0.3`; the `docs`
+workspace is `docs@1.0.3`. The lockfile contains 903 package locations (the
+root project is excluded from that count), and the SBOM contains 902 component
+records plus 903 dependency records. npm's SBOM writer omits license objects
 for the private workspace and for the `sqlite-vec` package entries; those
 metadata gaps are called out below rather than inferred.
 
@@ -25,24 +25,26 @@ The lockfile license metadata currently groups as follows:
 
 | SPDX/package license metadata | Package locations |
 | --- | ---: |
-| MIT | 663 |
-| ISC | 42 |
-| Apache-2.0 | 34 |
+| MIT | 720 |
+| Apache-2.0 | 47 |
+| ISC | 47 |
 | BSD-3-Clause | 23 |
 | BSD-2-Clause | 14 |
+| MPL-2.0 | 13 |
+| LGPL-3.0-or-later | 10 |
 | BlueOak-1.0.0 | 6 |
-| MPL-2.0 | 4 |
-| MIT OR CC0-1.0 | 3 |
-| LGPL-3.0-or-later | 2 |
-| MIT OR Apache | 2 |
+| MIT OR Apache | 6 |
+| Apache-2.0 AND LGPL-3.0-or-later | 3 |
+| (MIT OR CC0-1.0) | 3 |
+| License field absent (workspace/link metadata) | 2 |
+| CC-BY-4.0 | 2 |
+| Apache-2.0 AND LGPL-3.0-or-later AND MIT | 1 |
 | Python-2.0 | 1 |
-| CC-BY-4.0 | 1 |
-| MIT OR WTFPL | 1 |
+| (MIT OR WTFPL) | 1 |
 | CC0-1.0 | 1 |
-| BSD-2-Clause OR MIT OR Apache-2.0 | 1 |
+| (BSD-2-Clause OR MIT OR Apache-2.0) | 1 |
 | Unlicense | 1 |
 | 0BSD | 1 |
-| License field absent (workspace/link metadata) | 2 |
 
 The summary is derived from `package-lock.json`; package metadata and upstream
 notice files remain authoritative for the complete text of each license.
@@ -59,8 +61,8 @@ third-party material that deserves an explicit release check:
 | `better-sqlite3` | 12.10.0 | MIT | [WiseLibs/better-sqlite3](https://github.com/WiseLibs/better-sqlite3) |
 | `onnxruntime-node` and `onnxruntime-common` | 1.30.0 | MIT | [ONNX Runtime license](https://github.com/microsoft/onnxruntime/blob/main/LICENSE) |
 | `@huggingface/transformers` | 4.3.0 | Apache-2.0 | [Transformers.js license](https://github.com/huggingface/transformers.js/blob/main/LICENSE) |
-| `sharp` and `@img/sharp-linux-x64` | 0.35.4 | Apache-2.0 | [sharp repository](https://github.com/lovell/sharp) |
-| `@img/sharp-libvips-linux-x64` and musl variant | 1.3.3 | LGPL-3.0-or-later in package metadata | [sharp-libvips third-party notices](https://github.com/lovell/sharp-libvips/blob/main/THIRD-PARTY-NOTICES.md); [libvips project](https://www.libvips.org/) |
+| `sharp` and `@img/sharp-linux-x64` | 0.35.5 | Apache-2.0 | [sharp repository](https://github.com/lovell/sharp) |
+| `@img/sharp-libvips-linux-x64` and musl variant | 1.3.4 | LGPL-3.0-or-later in package metadata | [sharp-libvips third-party notices](https://github.com/lovell/sharp-libvips/blob/main/THIRD-PARTY-NOTICES.md); [libvips project](https://www.libvips.org/) |
 | `tree-sitter-wasms` | 0.1.13 | Unlicense | [tree-sitter-wasms package](https://www.npmjs.com/package/tree-sitter-wasms) |
 
 The `sharp` and libvips packages are transitive dependencies of the
