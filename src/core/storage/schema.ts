@@ -481,6 +481,28 @@ function migrateToV6(db: Database.Database): void {
   setSchemaVersion(db, 6);
 }
 
+function migrateToV7(db: Database.Database): void {
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS repository_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
+  );
+  for (const table of [
+    'files',
+    'chunks',
+    'relationships',
+    'knowledge_facts',
+    'sessions',
+    'session_events',
+    'prompts'
+  ]) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!columns.some((c) => c.name === 'repo_id'))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN repo_id TEXT`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_repo ON ${table}(repo_id)`);
+    db.exec(`DROP TRIGGER IF EXISTS ${table}_owner`);
+  }
+  setSchemaVersion(db, 7);
+}
+
 export function applyMigrations(db: Database.Database) {
   // First ensure schema_version table exists
   db.exec(`
@@ -607,6 +629,7 @@ export function applyMigrations(db: Database.Database) {
         console.error(`Migration to v6 failed: ${getErrorMessage(error)}`);
       }
     }
+    if (getSchemaVersion(db) === 6) migrateToV7(db);
   });
 
   runMigrations();

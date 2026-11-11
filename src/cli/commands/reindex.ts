@@ -9,11 +9,29 @@ import { canonicalDirectory, removePrivateStateFile } from '../../utils/secure-s
 
 export const reindexCommand = new Command('reindex')
   .description('Force a complete re-index of the repository by clearing the local database')
+  .option('--repo <repo>', 'Rebuild a registered repository through its indexing owner')
   .option(
     '--embeddings',
     'Backfill chunk embeddings without wiping the DB (or after a full reindex)'
   )
-  .action(async (opts: { embeddings?: boolean }) => {
+  .action(async (opts: { embeddings?: boolean; repo?: string }) => {
+    const { WorkspaceRegistry } = await import('../../core/workspace/registry.js');
+    const { RepositoryRuntime } = await import('../../core/workspace/runtime.js');
+    const registry = new WorkspaceRegistry();
+    const source = opts.repo ? registry.resolve(opts.repo) : registry.active(process.cwd());
+    if (source) {
+      const runtime = new RepositoryRuntime(source, registry);
+      try {
+        if (opts.embeddings) await runtime.request({ action: 'embeddings' });
+        else await runtime.request({ action: 'index', force: true });
+        console.log(`Reindexed ${source.name}. Memories and history retained.`);
+      } finally {
+        await runtime.close();
+        registry.close();
+      }
+      return;
+    }
+    registry.close();
     const cwd = canonicalDirectory(process.cwd());
     const repoContextDir = path.join(cwd, '.contextos');
     const dbPath = path.join(repoContextDir, 'index.db');

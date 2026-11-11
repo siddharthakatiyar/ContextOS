@@ -18,6 +18,7 @@ export interface CompilerDiagnostics {
 }
 
 export interface CompilerOptions {
+  sentRegistry?: import('../session/sent-registry.js').SentRegistry | null;
   maxTokens: number;
   /** Collect compile decisions for the optional retrieval inspector. */
   explain?: boolean;

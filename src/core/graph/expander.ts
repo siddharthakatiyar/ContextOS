@@ -2,6 +2,7 @@ import { RelationshipsRepo } from '../storage/relationships-repo.js';
 import { STOPWORDS } from '../../utils/stopwords.js';
 
 export interface ExpandedEntity {
+  repoId?: string;
   entity: string;
   relationshipType: string;
   depth: number;

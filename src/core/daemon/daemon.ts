@@ -1,6 +1,9 @@
 import net from 'net';
 import fs from 'fs';
 import path from 'path';
+import { WorkspaceRegistry } from '../workspace/registry.js';
+import { WorkspaceRuntime } from '../workspace/runtime.js';
+import { registerWorkspaceTools } from '../../mcp/workspace-tools.js';
 import { DB } from '../storage/database.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -39,6 +42,9 @@ import { getActiveUpgradeToken, isUpgradeInProgress } from '../updater/upgrade-l
 const version = getPackageVersion();
 
 export class ContextOSDaemon {
+  private workspaceRuntime?: WorkspaceRuntime;
+  private workspaceRegistry?: WorkspaceRegistry;
+  private activeRepoId?: string;
   private server: net.Server;
   private controlServer: net.Server;
   private dbs: DB[] = [];
@@ -120,6 +126,15 @@ export class ContextOSDaemon {
 
     // Initialize core services ONCE
     this.dbs = DB.resolveDatabases(this.projectDir);
+    const home = (await import('../storage/database.js')).getContextOSHome();
+    if (fs.existsSync(path.join(home, 'registry.db'))) {
+      this.workspaceRegistry = new WorkspaceRegistry();
+      const source = this.workspaceRegistry.active(this.projectDir);
+      if (source) {
+        this.activeRepoId = source.repoId;
+        this.workspaceRuntime = new WorkspaceRuntime(this.workspaceRegistry);
+      }
+    }
 
     // Lightweight startup: PRAGMA optimize + optional retention prune (B22)
     for (const db of this.dbs) {
@@ -231,7 +246,13 @@ export class ContextOSDaemon {
             }
           }
 
-          if (needsFullIndex) {
+          if (this.workspaceRuntime && this.activeRepoId) {
+            const source = this.workspaceRegistry!.resolve(this.activeRepoId);
+            void this.workspaceRuntime
+              .get(source)
+              .watch()
+              .catch((error) => console.error(getErrorMessage(error)));
+          } else if (needsFullIndex) {
             // Start the watcher BEFORE indexing (buffered): events fired during
             // the full index used to be lost until restart. Buffered replays are
             // cheap — indexFile hash-skips unchanged files.
@@ -294,6 +315,8 @@ export class ContextOSDaemon {
       // Ignore sockets that have already closed.
     }
 
+    await this.workspaceRuntime?.close();
+    this.workspaceRegistry?.close();
     for (const db of this.dbs) {
       try {
         db.close();
@@ -430,17 +453,24 @@ export class ContextOSDaemon {
     );
 
     // Register all tools for this specific MCP Server instance
-    registerGetContextTool(mcpServer, this.dbs);
-    registerIndexFilesTool(mcpServer, this.dbs[0]);
-    registerGetStatusTool(mcpServer, this.dbs[0]);
-    registerUpdateStatusTool(mcpServer);
-    registerGetGraphTools(mcpServer, this.dbs[0]);
-    registerExecuteTool(mcpServer);
-    registerReadFileTool(mcpServer);
-    registerExpandTool(mcpServer, this.dbs);
-    registerListTopicsTool(mcpServer, this.dbs[0]);
-    registerKnowledgeTools(mcpServer, this.dbs);
-    registerFeedbackTools(mcpServer, this.dbs);
+    if (this.workspaceRuntime && this.activeRepoId) {
+      registerWorkspaceTools(mcpServer, this.workspaceRuntime, {
+        cwd: this.projectDir,
+        activeRepoId: this.activeRepoId
+      });
+    } else {
+      registerGetContextTool(mcpServer, this.dbs);
+      registerIndexFilesTool(mcpServer, this.dbs[0]);
+      registerGetStatusTool(mcpServer, this.dbs[0]);
+      registerUpdateStatusTool(mcpServer);
+      registerGetGraphTools(mcpServer, this.dbs[0]);
+      registerExecuteTool(mcpServer);
+      registerReadFileTool(mcpServer);
+      registerExpandTool(mcpServer, this.dbs);
+      registerListTopicsTool(mcpServer, this.dbs[0]);
+      registerKnowledgeTools(mcpServer, this.dbs);
+      registerFeedbackTools(mcpServer, this.dbs);
+    }
 
     // Use StdioServerTransport but with the socket stream
     const transport = new StdioServerTransport(socket, socket);

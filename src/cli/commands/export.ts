@@ -24,6 +24,14 @@ export const exportCommand = new Command('export')
       const exportData = {
         version: getPackageVersion(),
         exportedAt: Date.now(),
+        repository: Object.fromEntries(
+          (
+            dbInstance.prepare('SELECT key, value FROM repository_metadata').all() as {
+              key: string;
+              value: string;
+            }[]
+          ).map((row) => [row.key, row.value])
+        ),
         data: {
           chunks,
           relationships,
@@ -39,5 +47,8 @@ export const exportCommand = new Command('export')
       );
     } catch (error) {
       spinner.fail(`Export failed: ${getErrorMessage(error)}`);
+      process.exitCode = 1;
+    } finally {
+      db.close();
     }
   });

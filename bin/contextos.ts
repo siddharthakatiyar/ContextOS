@@ -31,6 +31,7 @@ function skipsStartupNotice(args: string[]): boolean {
     'serve',
     'query',
     'workspace',
+    'repo',
     'watch',
     'export',
     'import',
@@ -127,7 +128,8 @@ async function main(): Promise<void> {
     import('../src/cli/commands/daemon.js'),
     import('../src/cli/commands/visualize.js'),
     import('../src/cli/commands/upgrade.js'),
-    import('../src/cli/commands/updates.js')
+    import('../src/cli/commands/updates.js'),
+    import('../src/cli/commands/repo.js')
   ]);
   const [
     init,
@@ -145,7 +147,8 @@ async function main(): Promise<void> {
     daemon,
     visualize,
     upgrade,
-    updates
+    updates,
+    repo
   ] = commands;
 
   program
@@ -181,7 +184,8 @@ async function main(): Promise<void> {
     daemon.daemonCommand,
     visualize.visualizeCommand,
     upgrade.upgradeCommand,
-    updates.updatesCommand
+    updates.updatesCommand,
+    repo.repoCommand
   ]) {
     program.addCommand(command);
   }

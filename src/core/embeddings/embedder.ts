@@ -31,10 +31,10 @@ function logUnavailableOnce(reason: string): void {
  * True when embeddings are enabled and the model pipeline has not been marked unavailable.
  * Returns false immediately if CONTEXTOS_EMBEDDINGS=0 or config.embeddingsEnabled === false.
  */
-export function isEmbeddingsAvailable(): boolean {
+export function isEmbeddingsAvailable(config?: { embeddingsEnabled: boolean }): boolean {
   if (process.env.CONTEXTOS_EMBEDDINGS === '0') return false;
   try {
-    if (loadConfig().embeddingsEnabled === false) return false;
+    if ((config ?? loadConfig()).embeddingsEnabled === false) return false;
   } catch {
     // Config load failure should not disable embeddings by itself
   }
@@ -112,9 +112,12 @@ function meanPool(data: Float32Array, dims: number[]): Float32Array {
  * Embed texts with mean pooling + L2 normalization.
  * Returns empty array (never throws) if the model is unavailable.
  */
-export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
+export async function embedTexts(
+  texts: string[],
+  config?: { embeddingsEnabled: boolean }
+): Promise<Float32Array[]> {
   if (!texts.length) return [];
-  if (!isEmbeddingsAvailable()) return [];
+  if (!isEmbeddingsAvailable(config)) return [];
 
   try {
     const extractor = await loadPipeline();

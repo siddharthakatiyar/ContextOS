@@ -75,8 +75,7 @@ export class SessionStore {
     };
 
     const stmt = this.db.prepare(`
-      INSERT INTO sessions (id, started_at, repo_root, metadata)
-      VALUES (@id, @startedAt, @repoRoot, @metadata)
+      INSERT INTO sessions (repo_id, id, started_at, repo_root, metadata) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'), @id, @startedAt, @repoRoot, @metadata)
     `);
     stmt.run(session);
     return session;
@@ -111,8 +110,7 @@ export class SessionStore {
     const newEvent = { ...event, createdAt };
 
     const stmt = this.db.prepare(`
-      INSERT INTO session_events (session_id, event_type, content, related_files, created_at)
-      VALUES (@sessionId, @eventType, @content, @relatedFiles, @createdAt)
+      INSERT INTO session_events (repo_id, session_id, event_type, content, related_files, created_at) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'), @sessionId, @eventType, @content, @relatedFiles, @createdAt)
     `);
     const info = stmt.run(newEvent);
     return { ...newEvent, id: info.lastInsertRowid as number };
@@ -120,9 +118,9 @@ export class SessionStore {
 
   public getRecentEvents(sessionId: string, limit: number = 10): SessionEvent[] {
     const stmt = this.db.prepare(`
-      SELECT * FROM session_events 
-      WHERE session_id = ? 
-      ORDER BY created_at DESC 
+      SELECT * FROM session_events
+      WHERE session_id = ?
+      ORDER BY created_at DESC
       LIMIT ?
     `);
     const rows = stmt.all(sessionId, limit) as SessionEventRow[];

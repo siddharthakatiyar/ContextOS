@@ -19,6 +19,7 @@ export interface QueryFilterOpts {
 }
 
 interface ChunkRow {
+  repo_id?: string | null;
   id: string;
   source_file: string;
   layer: Layer;
@@ -71,13 +72,13 @@ export class ChunksRepo {
     const stmt = prepareCached(
       this.db,
       `
-      INSERT INTO chunks (
+      INSERT INTO chunks (repo_id,
         id, source_file, layer, workspace_name, section_title, section_depth,
         content, summary, keywords, hash, importance, token_count,
         file_type, language, symbol_name, symbol_kind, parent_symbol,
         start_line, end_line, file_stem,
         created_at, updated_at
-      ) VALUES (
+      ) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'),
         @id, @sourceFile, @layer, @workspaceName, @sectionTitle, @sectionDepth,
         @content, @summary, @keywords, @hash, @importance, @tokenCount,
         @fileType, @language, @symbolName, @symbolKind, @parentSymbol,
@@ -123,13 +124,13 @@ export class ChunksRepo {
     const stmt = prepareCached(
       this.db,
       `
-      INSERT INTO chunks (
+      INSERT INTO chunks (repo_id,
         id, source_file, layer, workspace_name, section_title, section_depth,
         content, summary, keywords, hash, importance, token_count,
         file_type, language, symbol_name, symbol_kind, parent_symbol,
         start_line, end_line, file_stem,
         created_at, updated_at
-      ) VALUES (
+      ) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'),
         @id, @sourceFile, @layer, @workspaceName, @sectionTitle, @sectionDepth,
         @content, @summary, @keywords, @hash, @importance, @tokenCount,
         @fileType, @language, @symbolName, @symbolKind, @parentSymbol,
@@ -431,6 +432,7 @@ export class ChunksRepo {
   private mapRow(row: ChunkRow): Chunk & { score?: number } {
     return {
       id: row.id,
+      repoId: row.repo_id ?? undefined,
       sourceFile: row.source_file,
       layer: row.layer,
       workspaceName: row.workspace_name,

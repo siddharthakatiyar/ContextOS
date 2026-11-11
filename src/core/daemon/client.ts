@@ -28,7 +28,7 @@ function connectToDaemon(socketPath: string): Promise<net.Socket> {
   });
 }
 
-function spawnDaemon(projectDir: string): Promise<void> {
+function spawnDaemon(projectDir: string, workspace?: string): Promise<void> {
   return new Promise((resolve) => {
     // Find the CLI binary
     // client.ts is in dist/src/core/daemon/client.js
@@ -41,7 +41,7 @@ function spawnDaemon(projectDir: string): Promise<void> {
 
     const isTs = binPath.endsWith('.ts');
     const cmd = isTs ? 'tsx' : 'node';
-    const args = isTs ? [binPath, 'daemon', 'start'] : [binPath, 'daemon', 'start'];
+    const args = [binPath, 'daemon', 'start', ...(workspace ? ['--workspace', workspace] : [])];
 
     void waitForUpgradeToFinish()
       .then(() => {
@@ -91,7 +91,10 @@ export class ReconnectBackoff {
   }
 }
 
-export async function runDaemonClient(projectDir: string): Promise<void> {
+export async function runDaemonClient(
+  projectDir: string,
+  workspace?: { name: string; id: string; activeRepoId: string }
+): Promise<void> {
   await waitForUpgradeToFinish();
   const socketPath = getSocketPath(projectDir);
   const reconnectBackoff = new ReconnectBackoff();
@@ -101,7 +104,7 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
     try {
       socket = await connectToDaemon(socketPath);
     } catch {
-      await spawnDaemon(projectDir);
+      await spawnDaemon(projectDir, workspace?.name);
       let retries = 5;
       while (retries > 0) {
         try {
@@ -125,6 +128,10 @@ export async function runDaemonClient(projectDir: string): Promise<void> {
   const wireSocket = async () => {
     const socket = await connectWithRetry();
 
+    if (workspace)
+      socket.write(
+        JSON.stringify({ workspaceId: workspace.id, activeRepoId: workspace.activeRepoId }) + '\n'
+      );
     process.stdin.pipe(socket);
     socket.pipe(process.stdout);
 

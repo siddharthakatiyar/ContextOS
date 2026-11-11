@@ -1,0 +1,33 @@
+{
+  "baselineVersion": "1.1.0",
+  "candidateVersion": "1.1.1",
+  "baselineCommit": "2e77e320a8ffa56268245c9c5ddd5e1cfb7aa358",
+  "corpus": "existing retrieval-examples",
+  "metricUnit": "ranked unique source files",
+  "baseline": {
+    "queries": 9,
+    "passed": 9,
+    "recallAt10": 1.0,
+    "mrrAt10": 0.8888888888888888
+  },
+  "candidate": {
+    "queries": 9,
+    "passed": 9,
+    "recallAt10": 1.0,
+    "mrrAt10": 0.8888888888888888
+  },
+  "gates": {
+    "allExistingCasesPass": true,
+    "recallRegressionWithinTwoPoints": true,
+    "mrrRegressionWithinTwoPoints": true
+  },
+  "verification": {
+    "build": "passed",
+    "lint": "passed",
+    "formatCheck": "passed",
+    "testFiles": 63,
+    "testsPassed": 294,
+    "manualTesting": "pending",
+    "releaseActionPerformedDuringImplementation": false
+  }
+}

@@ -6,6 +6,7 @@ import { Indexer, MAX_INDEXABLE_FILE_BYTES } from '../indexer/index.js';
 import { createIndexIgnore } from '../indexer/ignore.js';
 import { getErrorMessage } from '../../utils/errors.js';
 import { canonicalDirectory, writePrivateStateFile } from '../../utils/secure-state.js';
+import { pLimit } from '../../utils/async.js';
 import { isGeneratedFile } from '../../utils/file-heuristics.js';
 
 interface IndexConfig {
@@ -18,12 +19,13 @@ export const INDEXER_VERSION = 1;
 // Single-flight guard at module level: the daemon's startup indexer and any
 // watcher-burst indexer share one process, so a per-instance flag allowed two
 // full indexes to run concurrently (duplicate work + racing status writes).
-let activeFullIndex: Promise<void> | null = null;
+const activeFullIndexes = new Map<string, Promise<void>>();
+const scheduleFullIndex = pLimit(2);
 
-/** Wait for the process-wide full index before closing its database. */
-export async function waitForBackgroundIndexing(): Promise<void> {
-  while (activeFullIndex) {
-    await activeFullIndex;
+export async function waitForBackgroundIndexing(root?: string): Promise<void> {
+  const key = root ? canonicalDirectory(root) : undefined;
+  while (key ? activeFullIndexes.has(key) : activeFullIndexes.size > 0) {
+    await Promise.all(key ? [activeFullIndexes.get(key)] : [...activeFullIndexes.values()]);
   }
 }
 
@@ -53,19 +55,20 @@ export class BackgroundIndexer {
   }
 
   public startFullIndex(config: IndexConfig): Promise<void> {
-    // Single-flight: activeFullIndex is cleared in .finally() when the run ends,
-    // so any non-null value here means a full index is still running.
-    if (activeFullIndex) {
-      console.log('[BackgroundIndexer] Full index already running — skipping duplicate trigger.');
-      return activeFullIndex;
-    }
+    const key = this.projectDir;
+    const active = activeFullIndexes.get(key);
+    if (active) return active;
     this.isIndexing = true;
-    activeFullIndex = this.runFullIndex(config).finally(() => {
+    this.lastError = null;
+    const job = scheduleFullIndex(() => this.runFullIndex(config)).finally(() => {
       this.isIndexing = false;
-      activeFullIndex = null;
+      activeFullIndexes.delete(key);
     });
-    return activeFullIndex;
+    activeFullIndexes.set(key, job);
+    return job;
   }
+
+  public lastError: string | null = null;
 
   private async runFullIndex(config: IndexConfig): Promise<void> {
     const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
@@ -156,10 +159,17 @@ export class BackgroundIndexer {
       }
 
       console.log(`[BackgroundIndexer] Found ${this.totalFiles} files to index.`);
+      writeJsonAtomic(statusFile, {
+        fullIndexCompleted: false,
+        processed: 0,
+        total: this.totalFiles,
+        progressPercentage: 0
+      });
 
       // Process in batches yielding to the event loop
       const BATCH_SIZE = 10;
       let skippedTooLarge = 0;
+      let failedFiles = 0;
 
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         const batch = files.slice(i, i + BATCH_SIZE);
@@ -175,8 +185,9 @@ export class BackgroundIndexer {
               } else {
                 skippedTooLarge++;
               }
-            } catch {
-              // Silently skip failed parses
+            } catch (error) {
+              console.error(`[BackgroundIndexer] Failed ${file}: ${getErrorMessage(error)}`);
+              failedFiles++;
             }
             this.processedFiles++;
           })
@@ -204,6 +215,8 @@ export class BackgroundIndexer {
         );
       }
 
+      if (failedFiles > 0)
+        throw new Error(`${failedFiles} file(s) failed to index; retry the scan.`);
       // A successful scan is also a reconciliation point. Remove rows from a
       // previous full scan when a source was deleted or became ignored. Keep
       // other layers (manual facts/workspace/global indexes) untouched.
@@ -219,6 +232,8 @@ export class BackgroundIndexer {
         `[BackgroundIndexer] Full index completed in ${(Date.now() - this.startTime) / 1000}s`
       );
     } catch (error) {
+      this.lastError = getErrorMessage(error);
+      writeJsonAtomic(statusFile, { fullIndexCompleted: false, error: this.lastError });
       console.error(`[BackgroundIndexer] Error during indexing: ${getErrorMessage(error)}`);
     }
   }

@@ -157,9 +157,10 @@ export class RetrievalEngine {
 
   constructor(
     chunksRepos: ChunksRepo | ChunksRepo[],
-    relsRepos: RelationshipsRepo | RelationshipsRepo[]
+    relsRepos: RelationshipsRepo | RelationshipsRepo[],
+    private config?: import('../../config/types.js').ContextOSConfig
   ) {
-    this.matcher = new KeywordMatcher(chunksRepos);
+    this.matcher = new KeywordMatcher(chunksRepos, this.config);
     this.expander = new GraphExpander(relsRepos);
     this.primaryChunksRepo = Array.isArray(chunksRepos) ? chunksRepos[0] : chunksRepos;
   }
@@ -170,7 +171,7 @@ export class RetrievalEngine {
     signal?: AbortSignal
   ): Promise<RetrievalResult> {
     const startTime = Date.now();
-    const config = loadConfig();
+    const config = this.config ?? loadConfig();
     const pipeline = config.pipeline ?? {};
 
     // Step 1: Detect intent
@@ -269,7 +270,7 @@ export class RetrievalEngine {
     // Step 4: Retrieve chunks for expanded entities
     signal?.throwIfAborted();
     const expandedEntityNames = expandedEntities.map((e) => e.entity);
-    const expandedChunks = this.matcher.matchForEntities(expandedEntityNames);
+    const expandedChunks = this.matcher.matchForEntities(expandedEntityNames, opts);
 
     // Step 5: Merge + Score
     // deduplicate and sum scores
@@ -326,7 +327,7 @@ export class RetrievalEngine {
     }
     for (const parentSymbol of missingParents) {
       const pChunks = this.primaryChunksRepo
-        ? this.primaryChunksRepo.findBySymbolName(parentSymbol)
+        ? this.primaryChunksRepo.findBySymbolName(parentSymbol, { layers: opts?.layers })
         : [];
       for (const p of pChunks) {
         if (p.symbolKind !== 'segment' && !allChunksMap.has(p.id)) {
@@ -334,7 +335,9 @@ export class RetrievalEngine {
         }
       }
     }
-    allChunks = Array.from(allChunksMap.values()) as ScoredChunk[];
+    allChunks = (Array.from(allChunksMap.values()) as ScoredChunk[]).filter(
+      (chunk) => !opts?.layers?.length || opts.layers.includes(chunk.layer)
+    );
     const chunkIds = allChunks.map((c) => c.id);
 
     // Fetch feedback adjustments if not provided in opts
@@ -353,6 +356,8 @@ export class RetrievalEngine {
     const scoreSignals = opts?.explain ? new Map<string, ScoringSignals>() : undefined;
     let scored = scoreChunks(allChunks, expandedEntities, adjustments || {}, {
       repoRoot: opts?.repoRoot,
+      config: this.config,
+      selectedRepo: opts?.selectedRepo,
       matchTokens,
       identifiers: intent.identifiers,
       diversityFilter: pipeline.diversityFilter !== false,
@@ -471,19 +476,25 @@ export class RetrievalEngine {
       const embRetrievalOn =
         forceEnabled !== undefined
           ? forceEnabled
-          : loadConfig().embeddingsRetrieval === true ||
+          : (this.config ?? loadConfig()).embeddingsRetrieval === true ||
             process.env.CONTEXTOS_EMBEDDINGS_RETRIEVAL === '1';
       if (trace) {
         trace.search.configured = embRetrievalOn;
         trace.search.lowConfidenceFallback = lowConfidence;
       }
-      const embeddingsAvailable = isEmbeddingsAvailable();
+      const embeddingsAvailable =
+        this.config?.embeddingsEnabled !== false && isEmbeddingsAvailable(this.config);
       if (trace) trace.search.available = embeddingsAvailable;
       if (!embeddingsAvailable || !this.primaryChunksRepo || !(embRetrievalOn || lowConfidence)) {
         return directMatches;
       }
       if (trace) trace.search.searched = true;
-      const embHits = await searchEmbeddingChunks(this.primaryChunksRepo.getDatabase(), prompt, 15);
+      const embHits = await searchEmbeddingChunks(
+        this.primaryChunksRepo.getDatabase(),
+        prompt,
+        15,
+        this.config
+      );
       if (trace) trace.search.hitCount = embHits.length;
       if (embHits.length === 0) return directMatches;
 

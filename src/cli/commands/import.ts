@@ -27,13 +27,27 @@ export const importCommand = new Command('import')
       }
 
       const dbInstance = db.getInstance();
+      const local = dbInstance
+        .prepare("SELECT value FROM repository_metadata WHERE key='repo_id'")
+        .get() as { value: string } | undefined;
+      const incomingIds = new Set<string>(
+        [
+          importData.repository?.repo_id,
+          ...importData.data.chunks.map((chunk: { repo_id?: string }) => chunk.repo_id)
+        ].filter(Boolean)
+      );
+      if (incomingIds.size && (incomingIds.size !== 1 || !local || !incomingIds.has(local.value))) {
+        throw new Error(
+          'This export belongs to another repository. Import into its registered repository to preserve provenance; unrelated indexes cannot be merged.'
+        );
+      }
 
       dbInstance.transaction(() => {
         // Insert Files
         const insertFile = dbInstance.prepare(`
-          INSERT INTO files (
+          INSERT INTO files (repo_id,
             path, layer, workspace_name, hash, last_indexed, importance, chunk_count
-          ) VALUES (
+          ) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'),
             @path, @layer, @workspace_name, @hash, @last_indexed, @importance, @chunk_count
           ) ON CONFLICT(path) DO UPDATE SET
             layer = excluded.layer,
@@ -52,12 +66,12 @@ export const importCommand = new Command('import')
           INSERT INTO chunks (
             id, source_file, layer, workspace_name, section_title, section_depth,
             content, summary, keywords, hash, importance, token_count,
-            file_type, language, symbol_name, symbol_kind,
+            file_type, language, symbol_name, symbol_kind, parent_symbol, start_line, end_line, file_stem, repo_id,
             created_at, updated_at
           ) VALUES (
             @id, @source_file, @layer, @workspace_name, @section_title, @section_depth,
             @content, @summary, @keywords, @hash, @importance, @token_count,
-            @file_type, @language, @symbol_name, @symbol_kind,
+            @file_type, @language, @symbol_name, @symbol_kind, @parent_symbol, @start_line, @end_line, @file_stem, @repo_id,
             @created_at, @updated_at
           ) ON CONFLICT(id) DO UPDATE SET
             source_file = excluded.source_file,
@@ -75,19 +89,28 @@ export const importCommand = new Command('import')
             language = excluded.language,
             symbol_name = excluded.symbol_name,
             symbol_kind = excluded.symbol_kind,
+            parent_symbol = excluded.parent_symbol, start_line = excluded.start_line,
+            end_line = excluded.end_line, file_stem = excluded.file_stem, repo_id = excluded.repo_id,
             updated_at = excluded.updated_at
         `);
         for (const chunk of importData.data.chunks) {
-          insertChunk.run(chunk);
+          insertChunk.run({
+            parent_symbol: null,
+            start_line: null,
+            end_line: null,
+            file_stem: null,
+            repo_id: local?.value ?? null,
+            ...chunk
+          });
         }
 
         // Insert Relationships
         const insertRel = dbInstance.prepare(`
-          INSERT INTO relationships (
+          INSERT INTO relationships (repo_id,
             source, target, relationship_type, weight, source_chunk_id, layer, created_at
-          ) VALUES (
+          ) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'),
             @source, @target, @relationship_type, @weight, @source_chunk_id, @layer, @created_at
-          ) ON CONFLICT(source, target, relationship_type) DO UPDATE SET
+          ) ON CONFLICT(source, target, relationship_type, source_chunk_id) DO UPDATE SET
             weight = excluded.weight,
             source_chunk_id = excluded.source_chunk_id,
             layer = excluded.layer
@@ -102,5 +125,8 @@ export const importCommand = new Command('import')
       );
     } catch (error) {
       spinner.fail(`Import failed: ${getErrorMessage(error)}`);
+      process.exitCode = 1;
+    } finally {
+      db.close();
     }
   });

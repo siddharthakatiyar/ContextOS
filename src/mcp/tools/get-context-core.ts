@@ -21,6 +21,7 @@ export interface GetContextOpts {
 }
 
 export interface GetContextDeps {
+  sentRegistry?: import('../../core/session/sent-registry.js').SentRegistry;
   engine: RetrievalEngine;
   sessionManager: SessionManager;
   knowledgeStore: KnowledgeStore;
@@ -34,6 +35,7 @@ export async function executeGetContext(
   deps: GetContextDeps
 ) {
   const { engine, sessionManager, knowledgeStore, promptsRepo, sessionStore } = deps;
+  const sentRegistry = deps.sentRegistry ?? globalSentRegistry;
   let maxTokens = opts.maxTokens ?? loadConfig().maxTokenBudget;
   let maxExactTokens = loadConfig().maxExactTokenBudget;
 
@@ -70,22 +72,23 @@ export async function executeGetContext(
     for (let i = 1; i < result.chunks.length; i++) {
       const c = result.chunks[i];
       if (c.content && c.hash) {
-        if (globalSentRegistry.hasBeenSent(c.hash)) {
+        if (sentRegistry.hasBeenSent(c.hash)) {
           c.content = `(sent earlier, unchanged)`;
           c.tokenCount = estimateTokens(c.content);
         } else {
-          globalSentRegistry.markSent(c.hash);
+          sentRegistry.markSent(c.hash);
         }
       }
     }
     if (leader.hash) {
-      globalSentRegistry.markSent(leader.hash);
+      sentRegistry.markSent(leader.hash);
     }
   }
 
   const compiled = compile(result, {
     maxTokens,
     maxExactTokens,
+    sentRegistry,
     outputFormat,
     signalTerms: [...(result.intent?.identifiers || []), ...(result.intent?.concepts || [])]
   });

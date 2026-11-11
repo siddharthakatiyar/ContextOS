@@ -157,7 +157,10 @@ export function expandMatchTokens(tokens: string[]): string[] {
 export class KeywordMatcher {
   private chunksRepos: ChunksRepo[];
 
-  constructor(chunksRepo: ChunksRepo | ChunksRepo[]) {
+  constructor(
+    chunksRepo: ChunksRepo | ChunksRepo[],
+    private config?: import('../../config/types.js').ContextOSConfig
+  ) {
     this.chunksRepos = Array.isArray(chunksRepo) ? chunksRepo : [chunksRepo];
   }
 
@@ -436,7 +439,7 @@ export class KeywordMatcher {
     opts?: RetrievalOptions,
     trace?: KeywordTrace
   ): ScoredChunk[] {
-    const ftsLimit = opts?.limit ?? loadConfig().ftsLimit;
+    const ftsLimit = opts?.limit ?? (this.config ?? loadConfig()).ftsLimit;
     const strategyLists: WeightedList[] = [];
 
     // Strategy 0: Exact match for quoted terms
@@ -467,12 +470,12 @@ export class KeywordMatcher {
     return reciprocalRankFusion(strategyLists, RRF_K, trace);
   }
 
-  public matchForEntities(entities: string[]): ScoredChunk[] {
+  public matchForEntities(entities: string[], opts?: RetrievalOptions): ScoredChunk[] {
     // Low absolute scores — RRF direct matches are scaled ~1–10; don't wash them out
     const results: Map<string, ScoredChunk> = new Map();
     for (const entity of entities) {
       for (const repo of this.chunksRepos) {
-        const hits = repo.findByKeyword(entity);
+        const hits = repo.findByKeyword(entity, { layers: opts?.layers });
         for (const h of hits) {
           if (!results.has(h.id)) {
             results.set(h.id, { ...h, score: 0.5 });

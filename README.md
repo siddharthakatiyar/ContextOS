@@ -57,6 +57,23 @@ After upgrading, restart your MCP client. The daemon automatically schedules a
 background rebuild when the indexer format changes; use `contextos reindex` only
 when you explicitly want to clear and rebuild the local index.
 
+## Local multi-repository support (1.1.1)
+
+One workspace MCP server can search multiple local repositories while keeping their indexes and updates independent:
+
+```bash
+contextos repo add ~/projects/backend
+contextos repo add ~/projects/frontend
+contextos repo add ~/projects/shared-types
+contextos repo list
+contextos query "Where is payment status defined, processed, and displayed?" --all-repos
+contextos serve --workspace default --repo backend
+```
+
+Queries default to the active repository. Use `--repo` to choose repositories or `--workspace` to search a named workspace. MCP `get_context` accepts matching `repo`, `workspace`, and `all_repos` filters. Results include repository-qualified references, and existing single-repository setups continue to work.
+
+`repo remove` detaches workspace membership and retains local data. See [the local testing guide](MULTI_REPOSITORY_TESTING.md) for migration details, MCP configuration, independent update checks, and laptop testing instructions.
+
 ## The Problem: Traditional vs. ContextOS
 
 ### ⚡️ The ContextOS Difference
@@ -197,7 +214,7 @@ On upsert, chunks are embedded with a local MiniLM model (`@huggingface/transfor
 ### Retrieval
 
 **Multi-strategy matching + RRF**  
-FTS5 (porter tokenizer, operator-preserving sanitizer), exact/prefix symbol lookup, filename and path-stem boosts, and intent-aware queries are fused with Reciprocal Rank Fusion. Foreign workspace chunks are down-ranked so other projects in a shared DB do not dominate.
+FTS5 (porter tokenizer, operator-preserving sanitizer), exact/prefix symbol lookup, filename and path-stem boosts, and intent-aware queries are fused with Reciprocal Rank Fusion. Legacy foreign workspace chunks are down-ranked. Explicitly selected repositories use their local strategy ranks, with a modest preference for the active repository.
 
 **Graph expansion**  
 Seeds from identifiers and top hits expand through the relationship graph (depth/node caps are configurable), including import edges.

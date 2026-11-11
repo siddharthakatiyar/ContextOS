@@ -10,6 +10,7 @@ export interface DetectedIntent {
 }
 
 export interface RetrievalOptions {
+  selectedRepo?: boolean;
   limit?: number;
   maxChunks?: number;
   layers?: string[];
@@ -30,6 +31,7 @@ export interface KeywordScoreContribution {
 }
 
 export interface RetrievalChunkExplanation {
+  repository?: { repoId: string; name: string; localityMultiplier: number };
   keyword?: {
     rrfScore: number;
     contributions: KeywordScoreContribution[];
@@ -84,6 +86,9 @@ export interface ScoredChunk extends Chunk {
 }
 
 export interface RetrievalResult {
+  scope?: import('../workspace/registry.js').RetrievalScope;
+  unavailableSources?: Array<{ repoId: string; name: string; error: string }>;
+  partial?: boolean;
   chunks: ScoredChunk[];
   intent: DetectedIntent;
   expandedEntities: ExpandedEntity[];
@@ -92,6 +97,8 @@ export interface RetrievalResult {
 }
 
 export interface ScoreChunksOptions {
+  config?: import('../../config/types.js').ContextOSConfig;
+  selectedRepo?: boolean;
   repoRoot?: string;
   /** Prompt identifiers + concept unigrams for generic symbol fuzzy boost. */
   matchTokens?: string[];

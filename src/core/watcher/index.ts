@@ -48,6 +48,8 @@ export interface WatcherOptions {
    * instead of being lost until restart.
    */
   buffered?: boolean;
+  onIndexed?: () => void;
+  onError?: (error: unknown) => void;
 }
 
 export type ContextOSWatcher = FSWatcher & {
@@ -138,8 +140,9 @@ export function startWatcher(
         } else if (type === 'unlink') {
           await indexer.removeFile(filePath);
         }
-      } catch {
-        // silently ignore
+        options?.onIndexed?.();
+      } catch (error) {
+        options?.onError?.(error);
       }
     });
     pendingOperations.add(operation);
@@ -234,7 +237,7 @@ export function startWatcher(
     for (;;) {
       const current = Array.from(pendingOperations);
       if (current.length > 0) await Promise.allSettled(current);
-      await waitForBackgroundIndexing();
+      await waitForBackgroundIndexing(root);
       if (pendingOperations.size === 0 && !bulkActive) return;
     }
   };
@@ -247,6 +250,7 @@ export function startWatcher(
       // Log (but don't crash) — previously these were fully discarded, which hid
       // cases where the watch tree silently stopped (EMFILE/ENOSPC/EPERM). Kept
       // non-fatal to avoid taking down the daemon on transient/socket errors.
+      options?.onError?.(err);
       console.error(`[contextos] watcher error: ${(err as Error)?.message ?? err}`);
     });
 

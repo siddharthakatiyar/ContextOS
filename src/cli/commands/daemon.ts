@@ -35,12 +35,24 @@ export const daemonCommand = new Command('daemon').description(
 
 daemonCommand
   .command('start')
-  .description('Start the ContextOS daemon for the current project')
-  .action(async () => {
+  .description('Start the ContextOS daemon for a project or workspace')
+  .option('--workspace <name>', 'Workspace to serve')
+  .action(async (options: { workspace?: string }) => {
     if (isUpgradeInProgress() && process.env.CONTEXTOS_UPGRADE_TOKEN !== getActiveUpgradeToken()) {
       throw new Error(
         'A ContextOS upgrade is in progress; wait for it to finish before starting a daemon.'
       );
+    }
+    if (options.workspace) {
+      const { WorkspaceDaemon } = await import('../../core/workspace/daemon.js');
+      const daemon = new WorkspaceDaemon(options.workspace);
+      await daemon.start();
+      const cleanup = () => {
+        void daemon.stop().then(() => process.exit(0));
+      };
+      process.once('SIGINT', cleanup);
+      process.once('SIGTERM', cleanup);
+      return;
     }
     const envRoot = process.env.CONTEXTOS_REPO_ROOT?.trim();
     let projectDir = envRoot && envRoot.length > 1 ? envRoot : process.cwd();
@@ -61,8 +73,11 @@ daemonCommand
 daemonCommand
   .command('stop')
   .description('Stop the ContextOS daemon for the current project')
-  .action(async () => {
-    const projectDir = canonicalDirectory(process.cwd());
+  .option('--workspace <name>', 'Workspace daemon')
+  .action(async (options: { workspace?: string }) => {
+    const projectDir = options.workspace
+      ? (await import('../../core/workspace/daemon.js')).workspaceStateDirectory(options.workspace)
+      : canonicalDirectory(process.cwd());
     const pidPath = path.join(projectDir, '.contextos', 'daemon.pid');
 
     try {
@@ -95,8 +110,11 @@ daemonCommand
 daemonCommand
   .command('status')
   .description('Check the status of the ContextOS daemon')
-  .action(async () => {
-    const projectDir = canonicalDirectory(process.cwd());
+  .option('--workspace <name>', 'Workspace daemon')
+  .action(async (options: { workspace?: string }) => {
+    const projectDir = options.workspace
+      ? (await import('../../core/workspace/daemon.js')).workspaceStateDirectory(options.workspace)
+      : canonicalDirectory(process.cwd());
     const pidPath = path.join(projectDir, '.contextos', 'daemon.pid');
 
     try {

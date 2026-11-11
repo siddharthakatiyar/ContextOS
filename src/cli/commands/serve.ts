@@ -85,7 +85,31 @@ export async function relaunchUpdatedServe(targetVersion: string): Promise<void>
 
 export const serveCommand = new Command('serve')
   .description('Start the ContextOS MCP server (stdio)')
-  .action(async () => {
+  .option('--workspace <name>', 'Serve all members of a workspace')
+  .option('--repo <repo>', 'Default active repository for this connection')
+  .action(async (options: { workspace?: string; repo?: string }) => {
+    if (options.workspace) {
+      const { WorkspaceRegistry } = await import('../../core/workspace/registry.js');
+      const { workspaceStateDirectory } = await import('../../core/workspace/daemon.js');
+      const registry = new WorkspaceRegistry();
+      try {
+        const ws = registry.workspace(options.workspace);
+        const source = options.repo
+          ? registry.resolve(options.repo)
+          : registry.active(process.env.CONTEXTOS_REPO_ROOT || process.cwd());
+        if (!source || !registry.list(ws.id).some((repo) => repo.repoId === source.repoId))
+          throw new Error('Select an active workspace repository with --repo <repo>.');
+        await runDaemonClient(workspaceStateDirectory(ws.id), {
+          name: ws.name,
+          id: ws.id,
+          activeRepoId: source.repoId
+        });
+      } finally {
+        registry.close();
+      }
+      return;
+    }
+    if (options.repo) throw new Error('serve --repo requires --workspace.');
     // Use CONTEXTOS_REPO_ROOT env var if set (MCP clients often spawn with CWD=/)
     const envRoot = process.env.CONTEXTOS_REPO_ROOT?.trim();
     let projectDir = envRoot && envRoot.length > 1 ? envRoot : process.cwd();

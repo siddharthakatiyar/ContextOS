@@ -1,0 +1,26 @@
+{
+  "version": "1.1.1",
+  "baselineVersion": "1.1.0",
+  "nodeVersion": "v22.23.2",
+  "corpus": "four-repository payment fixture",
+  "embeddingMode": "disabled for deterministic keyword baseline",
+  "warmupIterations": 20,
+  "measuredIterations": 100,
+  "scopedComparisons": 400,
+  "identicalScopedRankings": 400,
+  "paymentRoleRecallAt10": 1,
+  "latencyMs": {
+    "baselineSingleP95": 7.8256329999994705,
+    "candidateSingleP95": 7.76466100000016,
+    "workspaceP95": 29.724467999999888,
+    "individualSumP95": 29.645129000000452,
+    "singleRatio": 0.9922086813936567,
+    "workspaceRatio": 1.0026762912719804
+  },
+  "gates": {
+    "identicalScopedRankings": true,
+    "paymentRoleCoverage": true,
+    "singleLatency": true,
+    "workspaceLatency": true
+  }
+}
