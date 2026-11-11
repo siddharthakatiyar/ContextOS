@@ -35,7 +35,7 @@ function appendSection(
   return { output: `${output}${RESPONSE_MARKER}`, truncated: true };
 }
 
-export function registerExpandTool(server: McpServer, _dbs: DB[]) {
+export function registerExpandTool(server: McpServer, _dbs: DB[], rootOverride?: string) {
   server.tool(
     'ctx_expand',
     'Extract targeted windows of code around specific terms from files. Use this when get_context returns stubs and you need to peek at specific implementations without loading the entire file.',
@@ -65,7 +65,7 @@ export function registerExpandTool(server: McpServer, _dbs: DB[]) {
     },
     async ({ paths, terms, linesBefore, linesAfter }) => {
       try {
-        const root = getWorkspaceRoot();
+        const root = rootOverride ?? getWorkspaceRoot();
         let output = '';
         for (const p of paths) {
           if (estimateTokens(output) >= MAX_EXPAND_RESPONSE_TOKENS) {

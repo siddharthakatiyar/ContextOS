@@ -1,108 +1,45 @@
 import { Command } from 'commander';
-import chokidar from 'chokidar';
-import path from 'path';
-import chalk from 'chalk';
-import ora from 'ora';
-import { DB } from '../../core/storage/database.js';
-import { Indexer } from '../../core/indexer/index.js';
-import { loadConfig } from '../../config/index.js';
-import { glob } from 'glob';
-import { getErrorMessage } from '../../utils/errors.js';
-import { createIndexIgnore } from '../../core/indexer/ignore.js';
-import { canonicalDirectory } from '../../utils/secure-state.js';
-
+import { WorkspaceRegistry } from '../../core/workspace/registry.js';
+import { WorkspaceRuntime } from '../../core/workspace/runtime.js';
 export const watchCommand = new Command('watch')
-  .description('Watch the current directory for changes and live re-index')
-  .option('-w, --workspace <name>', 'Workspace name')
-  .action(async (options) => {
-    const cwd = canonicalDirectory(process.cwd());
-    const config = loadConfig({ cwd });
-    const indexIgnore = createIndexIgnore(cwd, config.ignorePatterns);
-    const root = indexIgnore.root;
-    const db = new DB(path.join(root, '.contextos', 'index.db'));
-    const indexer = new Indexer(db, root, config.ignorePatterns);
-
-    console.log(chalk.blue.bold(`\nContextOS Watch Mode Started`));
-    console.log(`Watching: ${root}\n`);
-
-    const spinner = ora('Initializing watch mode...').start();
-
-    // Re-index all existing files on startup to ensure we're up to date
-    try {
-      const files = await glob(config.indexablePatterns, {
-        cwd: root,
-        ignore: [...indexIgnore.globIgnore],
-        absolute: true,
-        nodir: true,
-        follow: false
-      });
-      const indexableFiles = files.filter((file) => !indexIgnore.ignores(file));
-
-      let processed = 0;
-      for (const file of indexableFiles) {
-        await indexer.indexFile(file, 'workspace', options.workspace);
-        processed++;
-        spinner.text = `Initial sync: Indexed ${processed}/${indexableFiles.length} files...`;
-      }
-      spinner.succeed(`Initial sync complete. Indexed ${processed} files.`);
-    } catch (error) {
-      spinner.fail(`Failed initial sync: ${getErrorMessage(error)}`);
+  .description('Watch repositories and incrementally update their indexes')
+  .option('--repo <repo>', 'Registered repository')
+  .option('-w, --workspace <name>', 'Watch all members of a workspace')
+  .action(async (opts: { repo?: string; workspace?: string }) => {
+    const registry = new WorkspaceRegistry();
+    if (!opts.repo && !opts.workspace && !registry.active(process.cwd()))
+      registry.register(process.cwd());
+    // Older watch -w <label> indexed the current directory without registration.
+    if (opts.workspace && !opts.repo) {
+      const exists = registry
+        .workspaces()
+        .some((workspace) => workspace.name === opts.workspace || workspace.id === opts.workspace);
+      if (!exists) registry.ensureWorkspace(opts.workspace);
+      if (!registry.list(opts.workspace).length)
+        registry.register(process.cwd(), { workspace: opts.workspace });
     }
-
-    // Set up file watcher
-    const watcher = chokidar.watch(root, {
-      ignored: (filePath: string, stats?: import('node:fs').Stats) => {
-        const normalized = filePath.replace(/\\/g, '/');
-        const parts = normalized.split('/');
-        const hasDisallowedDot = parts.some(
-          (part) => part.startsWith('.') && part !== '.' && part !== '..' && part !== '.cursor'
-        );
-        // Chokidar omits stats for unlink events. Let those through so a file
-        // removed after an ignore rule change cannot leave stale rows behind.
-        return hasDisallowedDot || (stats !== undefined && indexIgnore.ignores(filePath));
-      },
-      persistent: true,
-      ignoreInitial: true,
-      followSymlinks: false
-    });
-
-    watcher
-      .on('add', async (filePath) => {
-        const ext = path.extname(filePath);
-        if (!ext) return;
-
-        console.log(chalk.gray(`[ADD] ${path.relative(root, filePath)}`));
-        try {
-          await indexer.indexFile(filePath, 'workspace', options.workspace);
-        } catch (error) {
-          console.error(chalk.red(`Failed to index ${filePath}: ${getErrorMessage(error)}`));
-        }
-      })
-      .on('change', async (filePath) => {
-        const ext = path.extname(filePath);
-        if (!ext) return;
-
-        console.log(chalk.yellow(`[CHANGE] ${path.relative(root, filePath)}`));
-        try {
-          await indexer.indexFile(filePath, 'workspace', options.workspace);
-        } catch (error) {
-          console.error(chalk.red(`Failed to update ${filePath}: ${getErrorMessage(error)}`));
-        }
-      })
-      .on('unlink', async (filePath) => {
-        console.log(chalk.red(`[DELETE] ${path.relative(root, filePath)}`));
-        try {
-          await indexer.removeFile(filePath);
-        } catch (error) {
-          console.error(
-            chalk.red(`Failed to remove ${filePath} from index: ${getErrorMessage(error)}`)
-          );
-        }
+    const runtime = new WorkspaceRuntime(registry, opts.workspace);
+    try {
+      const scope = registry.select(
+        { repo: opts.repo ? [opts.repo] : undefined, workspace: opts.workspace },
+        process.cwd()
+      );
+      for (const source of scope.sources) await runtime.get(source).watch();
+      console.log(`Watching: ${scope.sources.map((s) => s.name).join(', ')}`);
+    } catch (error) {
+      await runtime.close();
+      registry.close();
+      throw error;
+    }
+    // Delegating to another indexing owner must still preserve foreground watch behavior.
+    const foreground = setInterval(() => {}, 60_000);
+    const cleanup = () => {
+      clearInterval(foreground);
+      void runtime.close().then(() => {
+        registry.close();
+        process.exit(0);
       });
-
-    process.on('SIGINT', () => {
-      console.log(chalk.blue('\nStopping watch mode...'));
-      watcher.close();
-      process.exit(0);
-    });
+    };
+    process.once('SIGINT', cleanup);
+    process.once('SIGTERM', cleanup);
   });

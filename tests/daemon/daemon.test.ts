@@ -10,6 +10,7 @@ vi.mock('../../src/core/watcher/index.js', () => ({
 
 // Mock DB resolution to not attempt real schema migrations during this test
 vi.mock('../../src/core/storage/database.js', () => ({
+  getContextOSHome: () => path.join(os.tmpdir(), 'contextos-daemon-lifecycle-no-registry'),
   DB: {
     resolveDatabases: vi.fn(() => [
       { getInstance: vi.fn(() => ({ pragma: vi.fn() })), close: vi.fn() }

@@ -5,7 +5,11 @@ import { onFileRead } from './feedback.js';
 import { getWorkspaceRoot, resolveWithinWorkspace } from '../../utils/fs-guard.js';
 import { getErrorMessage } from '../../utils/errors.js';
 
-export function registerReadFileTool(server: McpServer) {
+export function registerReadFileTool(
+  server: McpServer,
+  rootOverride?: string,
+  onRead?: (file: string) => void
+) {
   server.tool(
     'ctx_read_file',
     'Read a file (or a line range) when get_context stubs or truncates. Prefer start_line/end_line from stub paths (e.g. path.ts:12-84) over whole-file reads. Prefer get_symbol when you only need one named symbol. Max 2000 lines per call.',
@@ -28,7 +32,7 @@ export function registerReadFileTool(server: McpServer) {
     },
     async ({ filePath, start_line, end_line }) => {
       try {
-        const root = getWorkspaceRoot();
+        const root = rootOverride ?? getWorkspaceRoot();
         const resolvedPath = resolveWithinWorkspace(root, filePath);
 
         if (resolvedPath === null) {
@@ -69,7 +73,7 @@ export function registerReadFileTool(server: McpServer) {
         }
 
         // B7: implicit positive feedback for chunks from this file after recent get_context
-        onFileRead(resolvedPath);
+        (onRead ?? onFileRead)(resolvedPath);
 
         const content = fs.readFileSync(resolvedPath, 'utf8');
         const lines = content.split('\n');

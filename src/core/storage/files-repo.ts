@@ -3,6 +3,7 @@ import { FileRecord, Layer } from './types.js';
 import { prepareCached } from './stmt-cache.js';
 
 interface FileRow {
+  repo_id?: string | null;
   path: string;
   layer: Layer;
   workspace_name: string | null;
@@ -19,9 +20,9 @@ export class FilesRepo {
     const stmt = prepareCached(
       this.db,
       `
-      INSERT INTO files (
+      INSERT INTO files (repo_id,
         path, layer, workspace_name, hash, last_indexed, importance, chunk_count
-      ) VALUES (
+      ) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'),
         @path, @layer, @workspaceName, @hash, @lastIndexed, @importance, @chunkCount
       ) ON CONFLICT(path) DO UPDATE SET
         layer = excluded.layer,
@@ -60,6 +61,7 @@ export class FilesRepo {
   private mapRow(row: FileRow): FileRecord {
     return {
       path: row.path,
+      repoId: row.repo_id ?? undefined,
       layer: row.layer,
       workspaceName: row.workspace_name,
       hash: row.hash,

@@ -19,9 +19,9 @@ export class PromptsRepo {
     const stmt = prepareCached(
       this.db,
       `
-      INSERT INTO prompts (
+      INSERT INTO prompts (repo_id,
         id, prompt, extracted_concepts, retrieved_chunk_ids, compiled_token_count, latency_ms, created_at
-      ) VALUES (
+      ) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'),
         @id, @prompt, @extractedConcepts, @retrievedChunkIds, @compiledTokenCount, @latencyMs, @createdAt
       )
     `

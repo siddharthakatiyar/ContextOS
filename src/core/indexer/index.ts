@@ -20,6 +20,7 @@ import { isBinaryFile, isGeneratedFile } from '../../utils/file-heuristics.js';
 import { Layer, Chunk, Relationship } from '../storage/types.js';
 import { indexChunkEmbeddings } from '../embeddings/index.js';
 import { EmbeddingsStore } from '../embeddings/embeddings-store.js';
+import { loadConfig } from '../../config/index.js';
 import { createIndexIgnore, IndexIgnore } from './ignore.js';
 
 /** Skip files larger than this before reading (B25). Shared by bulk + watcher paths. */
@@ -63,7 +64,33 @@ export class Indexer {
     return this.rootDir;
   }
 
-  public async indexFile(
+  private static fileJobs = new Map<string, Promise<unknown>>();
+
+  public indexFile(
+    filePath: string,
+    layer: Layer,
+    workspaceName?: string,
+    signal?: AbortSignal
+  ): Promise<IndexStats> {
+    return this.serializeFile(filePath, () =>
+      this.indexFileNow(filePath, layer, workspaceName, signal)
+    );
+  }
+
+  private serializeFile<T>(filePath: string, action: () => Promise<T>): Promise<T> {
+    const key = this.rootDir + ':' + path.resolve(filePath);
+    const previous = Indexer.fileJobs.get(key) ?? Promise.resolve();
+    const job = previous.catch(() => {}).then(action);
+    Indexer.fileJobs.set(key, job);
+    void job
+      .finally(() => {
+        if (Indexer.fileJobs.get(key) === job) Indexer.fileJobs.delete(key);
+      })
+      .catch(() => {});
+    return job;
+  }
+
+  private async indexFileNow(
     filePath: string,
     layer: Layer,
     workspaceName?: string,
@@ -162,6 +189,13 @@ export class Indexer {
       };
     }
 
+    const config = loadConfig({ cwd: this.rootDir });
+    const chunkOptions = {
+      layer,
+      workspaceName,
+      maxChunkTokens: config.maxChunkTokens,
+      maxSymbolChunkTokens: config.maxSymbolChunkTokens
+    };
     const ext = path.extname(filePath).toLowerCase();
     const isMarkdown = ext === '.md';
     const isCode = detectLanguage(filePath) !== 'unknown';
@@ -176,16 +210,16 @@ export class Indexer {
     if (isCode) {
       const parsed = await parseCode(filePath, content);
       imports = parsed.imports || [];
-      chunks = chunkCode(parsed, { layer, workspaceName });
+      chunks = chunkCode(parsed, chunkOptions);
     } else if (isConfig) {
       const parsed = parseConfig(filePath, content);
-      chunks = chunkCode(parsed, { layer, workspaceName }); // Config files are structurally similar to code
+      chunks = chunkCode(parsed, chunkOptions); // Config files are structurally similar to code
     } else if (isMarkdown) {
       const parsed = parseMarkdown(filePath, content);
-      chunks = chunkDocument(parsed, { layer, workspaceName });
+      chunks = chunkDocument(parsed, chunkOptions);
     } else {
       const parsed = parseText(filePath, content);
-      chunks = chunkDocument(parsed, { layer, workspaceName });
+      chunks = chunkDocument(parsed, chunkOptions);
     }
 
     // Apply importance score (preserve existing if any, to keep feedback boosts)
@@ -256,7 +290,8 @@ export class Indexer {
     // Embeddings are retrieval-side only — never block indexing on model failures
     try {
       signal?.throwIfAborted();
-      await indexChunkEmbeddings(this.chunksRepo.getDatabase(), chunks, signal);
+      if (config.embeddingsEnabled)
+        await indexChunkEmbeddings(this.chunksRepo.getDatabase(), chunks, signal, config);
     } catch {
       // continue without embeddings
     }
@@ -269,7 +304,11 @@ export class Indexer {
     };
   }
 
-  public async removeFile(filePath: string, expectedLayer?: Layer): Promise<boolean> {
+  public removeFile(filePath: string, expectedLayer?: Layer): Promise<boolean> {
+    return this.serializeFile(filePath, () => this.removeFileNow(filePath, expectedLayer));
+  }
+
+  private async removeFileNow(filePath: string, expectedLayer?: Layer): Promise<boolean> {
     const db = this.chunksRepo.getDatabase();
     // Take the write lock before checking the row. A full scan can race with a
     // watcher or MCP index request that reassigns the same path to another

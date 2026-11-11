@@ -3,6 +3,7 @@ import { Relationship, Layer } from './types.js';
 import { prepareCached } from './stmt-cache.js';
 
 interface RelationshipRow {
+  repo_id?: string | null;
   id: number;
   source: string;
   target: string;
@@ -20,9 +21,9 @@ export class RelationshipsRepo {
     const stmt = prepareCached(
       this.db,
       `
-      INSERT INTO relationships (
+      INSERT INTO relationships (repo_id,
         source, target, relationship_type, weight, source_chunk_id, layer, created_at
-      ) VALUES (
+      ) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'),
         @source, @target, @relationshipType, @weight, @sourceChunkId, @layer, @createdAt
       ) ON CONFLICT(source, target, relationship_type, source_chunk_id) DO UPDATE SET
         weight = excluded.weight,
@@ -36,9 +37,9 @@ export class RelationshipsRepo {
     const stmt = prepareCached(
       this.db,
       `
-      INSERT INTO relationships (
+      INSERT INTO relationships (repo_id,
         source, target, relationship_type, weight, source_chunk_id, layer, created_at
-      ) VALUES (
+      ) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'),
         @source, @target, @relationshipType, @weight, @sourceChunkId, @layer, @createdAt
       ) ON CONFLICT(source, target, relationship_type, source_chunk_id) DO UPDATE SET
         weight = excluded.weight,
@@ -79,6 +80,7 @@ export class RelationshipsRepo {
   private mapRow(row: RelationshipRow): Relationship {
     return {
       id: row.id,
+      repoId: row.repo_id ?? undefined,
       source: row.source,
       target: row.target,
       relationshipType: row.relationship_type,

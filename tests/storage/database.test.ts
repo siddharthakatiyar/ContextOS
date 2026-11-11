@@ -25,7 +25,7 @@ describe('database', () => {
     const version = instance
       .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
       .get() as { version: number };
-    expect(version.version).toBe(6);
+    expect(version.version).toBe(7);
 
     const cols = (instance.prepare('PRAGMA table_info(chunks)').all() as { name: string }[]).map(
       (column) => column.name

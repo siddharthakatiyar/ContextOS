@@ -36,8 +36,8 @@ export class KnowledgeStore {
         .getInstance()
         .prepare(
           `
-        UPDATE knowledge_facts 
-        SET confidence = MIN(confidence + 0.1, 1.0), 
+        UPDATE knowledge_facts
+        SET confidence = MIN(confidence + 0.1, 1.0),
             updated_at = ?,
             last_accessed = ?,
             access_count = access_count + 1
@@ -52,8 +52,7 @@ export class KnowledgeStore {
       .getInstance()
       .prepare(
         `
-      INSERT INTO knowledge_facts (id, fact, confidence, category, created_at, updated_at, last_accessed, access_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO knowledge_facts (repo_id, id, fact, confidence, category, created_at, updated_at, last_accessed, access_count) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'), ?, ?, ?, ?, ?, ?, ?, ?)
     `
       )
       .run(id, fact, 1.0, category, now, now, now, 1);
@@ -88,7 +87,7 @@ export class KnowledgeStore {
       .getInstance()
       .prepare(
         `
-      SELECT k.*, f.rank 
+      SELECT k.*, f.rank
       FROM knowledge_facts_fts f
       JOIN knowledge_facts k ON f.rowid = k.rowid
       WHERE knowledge_facts_fts MATCH ?
@@ -106,8 +105,8 @@ export class KnowledgeStore {
         .getInstance()
         .prepare(
           `
-        UPDATE knowledge_facts 
-        SET last_accessed = ?, access_count = access_count + 1 
+        UPDATE knowledge_facts
+        SET last_accessed = ?, access_count = access_count + 1
         WHERE id IN (${placeholders})
       `
         )
@@ -124,7 +123,7 @@ export class KnowledgeStore {
       .getInstance()
       .prepare(
         `
-      SELECT * FROM knowledge_facts 
+      SELECT * FROM knowledge_facts
       WHERE category = ? AND confidence > 0.3
       ORDER BY confidence DESC, updated_at DESC
       LIMIT ?
@@ -138,8 +137,8 @@ export class KnowledgeStore {
       .getInstance()
       .prepare(
         `
-      SELECT * FROM knowledge_facts 
-      ORDER BY confidence DESC 
+      SELECT * FROM knowledge_facts
+      ORDER BY confidence DESC
       LIMIT ?
     `
       )
@@ -168,7 +167,7 @@ export class KnowledgeStore {
       .getInstance()
       .prepare(
         `
-      UPDATE knowledge_facts 
+      UPDATE knowledge_facts
       SET confidence = MAX(confidence - 0.05, 0.1)
       WHERE last_accessed < ? AND confidence > 0.1
     `
@@ -183,7 +182,7 @@ export class KnowledgeStore {
       .getInstance()
       .prepare(
         `
-      DELETE FROM knowledge_facts 
+      DELETE FROM knowledge_facts
       WHERE confidence < 0.15 AND last_accessed < ?
     `
       )

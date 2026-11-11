@@ -79,6 +79,7 @@ function locLabel(chunk: ScoredChunk, displayPath: string, repoRoot?: string): s
     const rel = chunk.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
     if (rel) label = rel;
   }
+  if (chunk.repoName && chunk.relativePath) label = `${chunk.repoName}/${chunk.relativePath}`;
   if (chunk.startLine != null && chunk.endLine != null) {
     return `${label}:${chunk.startLine}-${chunk.endLine}`;
   }
@@ -290,6 +291,7 @@ function renderXmlDocument(
       const rel = chunk.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
       if (rel) src = rel;
     }
+    if (chunk.repoName && chunk.relativePath) src = `${chunk.repoName}/${chunk.relativePath}`;
     let out = `<chunk id="${escapeXml(chunk.id)}" layer="${escapeXml(chunk.layer)}" source="${escapeXml(src)}"`;
     if (chunk.symbolName) {
       out += ` symbol="${escapeXml(chunk.symbolName)}" kind="${escapeXml(chunk.symbolKind)}"`;
@@ -313,6 +315,8 @@ function renderXmlDocument(
             : '');
       }
     }
+    if (chunk.repoName && chunk.relativePath)
+      src = `${chunk.repoName}/${chunk.relativePath}:${chunk.startLine ?? 1}`;
     let out = `  <stub source="${escapeXml(src)}" symbol="${escapeXml(chunk.symbolName || '')}"`;
     if (chunk.startLine != null) out += ` start="${chunk.startLine}"`;
     if (chunk.endLine != null) out += ` end="${chunk.endLine}"`;
@@ -540,6 +544,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
   const signalTerms = collectSignalTerms(result, opts);
   const tier = opts.tier || assessTier(result);
   const ctxOpts = {
+    sentRegistry: opts.sentRegistry,
     signalTerms,
     identifiers: result.intent?.identifiers || [],
     concepts: result.intent?.concepts || [],

@@ -10,6 +10,20 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-12
+
+### Added
+
+- Persistent workspace/repository registry and `contextos repo add`, `remove`, `list`, and `status`.
+- Repository and workspace query filters, repository-qualified result references, and one MCP server serving multiple local indexes.
+- Independent indexing ownership, repository-aware watchers, connection-scoped MCP state, schema-v7 ownership migration, and workspace integration benchmarks.
+
+### Changed
+
+- Reuse existing strategy/RRF ranking independently within each repository before combining results.
+- Preserve memories and history when rebuilding a registered repository; retain local data when removing workspace membership.
+
+
 ## [1.1.0] - 2026-11-03
 
 ### Added

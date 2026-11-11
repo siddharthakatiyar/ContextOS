@@ -47,9 +47,10 @@ export function embedChunkText(chunk: Chunk): string {
 export async function indexChunkEmbeddings(
   db: Database.Database,
   chunks: Chunk[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  config?: { embeddingsEnabled: boolean }
 ): Promise<void> {
-  if (!chunks.length || !isEmbeddingsAvailable()) return;
+  if (!chunks.length || !isEmbeddingsAvailable(config)) return;
 
   try {
     const store = new EmbeddingsStore(db);
@@ -59,7 +60,7 @@ export async function indexChunkEmbeddings(
       signal?.throwIfAborted();
       const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
       const texts = batch.map(embedChunkText);
-      const vectors = await embedTexts(texts);
+      const vectors = await embedTexts(texts, config);
       if (!vectors.length) return; // model failed — stop quietly
 
       const n = Math.min(batch.length, vectors.length);
@@ -85,12 +86,13 @@ export async function indexChunkEmbeddings(
 export async function searchEmbeddingChunks(
   db: Database.Database,
   prompt: string,
-  limit: number = 15
+  limit: number = 15,
+  config?: { embeddingsEnabled: boolean }
 ): Promise<ScoredChunk[]> {
-  if (!prompt || !isEmbeddingsAvailable()) return [];
+  if (!prompt || !isEmbeddingsAvailable(config)) return [];
 
   try {
-    const vectors = await embedTexts([prompt]);
+    const vectors = await embedTexts([prompt], config);
     if (!vectors.length) return [];
 
     const store = new EmbeddingsStore(db);
@@ -120,9 +122,10 @@ export async function searchEmbeddingChunks(
  */
 export async function backfillAllEmbeddings(
   db: Database.Database,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  config?: { embeddingsEnabled: boolean }
 ): Promise<number> {
-  if (!isEmbeddingsAvailable()) return 0;
+  if (!isEmbeddingsAvailable(config)) return 0;
   try {
     const rows = db.prepare(`SELECT id FROM chunks`).all() as { id: string }[];
     if (!rows.length) return 0;
@@ -135,7 +138,7 @@ export async function backfillAllEmbeddings(
       signal?.throwIfAborted();
       chunks.push(...repo.getByIds(ids.slice(i, i + 200)));
     }
-    await indexChunkEmbeddings(db, chunks, signal);
+    await indexChunkEmbeddings(db, chunks, signal, config);
     return chunks.length;
   } catch (error) {
     console.error(`[contextos] backfillAllEmbeddings failed: ${getErrorMessage(error)}`);

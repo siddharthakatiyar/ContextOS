@@ -16,13 +16,13 @@ const execFileAsync = promisify(execFile);
  * hostile repo. Default OFF; enable via config `execAllowRepoScripts: true`
  * or env `CONTEXTOS_EXEC_ALLOW_SCRIPTS=1` for trusted repositories.
  */
-export function repoScriptsAllowed(): boolean {
+export function repoScriptsAllowed(root?: string): boolean {
   const env = process.env.CONTEXTOS_EXEC_ALLOW_SCRIPTS;
   if (env !== undefined && env !== '') {
     return env !== '0' && env.toLowerCase() !== 'false';
   }
   try {
-    return loadConfig({ cwd: getWorkspaceRoot() }).execAllowRepoScripts !== false;
+    return loadConfig({ cwd: root ?? getWorkspaceRoot() }).execAllowRepoScripts !== false;
   } catch {
     return false;
   }
@@ -137,7 +137,7 @@ export function validateSymlinkFollowOptions(exe: string, args: readonly string[
   return null;
 }
 
-export function registerExecuteTool(server: McpServer) {
+export function registerExecuteTool(server: McpServer, rootOverride?: string) {
   server.tool(
     'ctx_execute',
     'Execute a shell command within the workspace. Use this to run tests, build the project, or check status. SECURITY WARNING: Only allowed commands are permitted (ls, cat, head, tail, wc, find, grep, tree, npm, npx, tsc, git). Directory traversal outside cwd is not allowed.',
@@ -213,7 +213,7 @@ export function registerExecuteTool(server: McpServer) {
           };
         }
 
-        if ((exe === 'npm' || exe === 'npx') && !repoScriptsAllowed()) {
+        if ((exe === 'npm' || exe === 'npx') && !repoScriptsAllowed(rootOverride)) {
           return {
             content: [
               {
@@ -288,7 +288,7 @@ export function registerExecuteTool(server: McpServer) {
           }
         }
 
-        const root = getWorkspaceRoot();
+        const root = rootOverride ?? getWorkspaceRoot();
         const targetCwd = cwd || root;
         const resolvedCwd = resolveWithinWorkspace(root, targetCwd);
         if (resolvedCwd === null) {

@@ -1,46 +1,27 @@
 import { Command } from 'commander';
-import fs from 'fs';
-import path from 'path';
-import { getContextOSHome } from '../../core/storage/database.js';
-
-interface WorkspaceConfig {
-  name: string;
-  repos: string[];
-  contextDir: string;
-}
-
+import { WorkspaceRegistry } from '../../core/workspace/registry.js';
 export const workspaceCommand = new Command('workspace').description('Manage workspaces');
-
 workspaceCommand
   .command('add <name>')
   .description('Add a workspace')
   .action((name: string) => {
-    const configPath = path.join(getContextOSHome(), 'workspaces.json');
-    let workspaces: Record<string, WorkspaceConfig> = {};
-    if (fs.existsSync(configPath)) {
-      workspaces = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const registry = new WorkspaceRegistry();
+    try {
+      registry.ensureWorkspace(name);
+      console.log(`Workspace ${name} added.`);
+    } finally {
+      registry.close();
     }
-    workspaces[name] = {
-      name,
-      repos: [],
-      contextDir: path.join(getContextOSHome(), 'workspaces', name)
-    };
-    fs.writeFileSync(configPath, JSON.stringify(workspaces, null, 2));
-    console.log(`Workspace ${name} added.`);
   });
-
 workspaceCommand
   .command('list')
   .description('List workspaces')
   .action(() => {
-    const configPath = path.join(getContextOSHome(), 'workspaces.json');
-    if (!fs.existsSync(configPath)) {
-      console.log('No workspaces found.');
-      return;
-    }
-    const workspaces = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    console.log('Workspaces:');
-    for (const name of Object.keys(workspaces)) {
-      console.log(`- ${name}`);
+    const registry = new WorkspaceRegistry();
+    try {
+      for (const ws of registry.workspaces())
+        console.log(`- ${ws.name} (${registry.list(ws.id).length} repositories)`);
+    } finally {
+      registry.close();
     }
   });

@@ -10,15 +10,15 @@ import { SessionManager } from '../../core/session/index.js';
 import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
 import { loadConfig } from '../../config/index.js';
 import { executeGetContext } from './get-context-core.js';
+import { SentRegistry } from '../../core/session/sent-registry.js';
 import { getErrorMessage } from '../../utils/errors.js';
 
 const PROMPT_CACHE_TTL_MS = 30_000;
 const PROMPT_CACHE_SIZE = 8;
 
 type CacheEntry = { at: number; text: string };
-const promptCache = new Map<string, CacheEntry>();
 
-function cacheGet(key: string): string | null {
+function cacheGet(promptCache: Map<string, CacheEntry>, key: string): string | null {
   const e = promptCache.get(key);
   if (!e) return null;
   if (Date.now() - e.at > PROMPT_CACHE_TTL_MS) {
@@ -31,7 +31,7 @@ function cacheGet(key: string): string | null {
   return e.text;
 }
 
-function cacheSet(key: string, text: string): void {
+function cacheSet(promptCache: Map<string, CacheEntry>, key: string, text: string): void {
   if (promptCache.has(key)) promptCache.delete(key);
   promptCache.set(key, { at: Date.now(), text });
   while (promptCache.size > PROMPT_CACHE_SIZE) {
@@ -42,6 +42,8 @@ function cacheSet(key: string, text: string): void {
 }
 
 export function registerGetContextTool(server: McpServer, dbs: DB[]) {
+  const promptCache = new Map<string, CacheEntry>();
+  const sentRegistry = new SentRegistry();
   const chunksRepos = dbs.map((db) => new ChunksRepo(db.getInstance()));
   const relsRepos = dbs.map((db) => new RelationshipsRepo(db.getInstance()));
 
@@ -56,7 +58,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
   const knowledgeStore = new KnowledgeStore(primaryDb);
   const repoRoot = process.env.CONTEXTOS_REPO_ROOT || process.cwd();
 
-  const deps = { engine, sessionManager, knowledgeStore, promptsRepo, sessionStore };
+  const deps = { engine, sessionManager, knowledgeStore, promptsRepo, sessionStore, sentRegistry };
 
   server.tool(
     'get_context',
@@ -101,7 +103,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
     async ({ prompt, max_tokens, layers, tier, output_format }) => {
       try {
         const cacheKey = `${output_format}|${max_tokens}|${(layers || []).join(',')}|${prompt}`;
-        const cached = cacheGet(cacheKey);
+        const cached = cacheGet(promptCache, cacheKey);
         if (cached) {
           return {
             content: [{ type: 'text', text: cached }]
@@ -120,7 +122,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           deps
         );
 
-        cacheSet(cacheKey, text);
+        cacheSet(promptCache, cacheKey, text);
 
         return {
           content: [

@@ -5,6 +5,7 @@ import { loadConfig } from '../../config/index.js';
 import { globalSentRegistry } from '../session/sent-registry.js';
 
 export interface CompressOptions {
+  sentRegistry?: import('../session/sent-registry.js').SentRegistry | null;
   signalTerms?: string[];
   /** High-precision prompt identifiers — used for exact-symbol leader budget override. */
   identifiers?: string[];
@@ -148,11 +149,13 @@ export function stubLocLabel(c: ScoredChunk): string {
   // Prefer last 2–3 path segments so agents can pass a usable relative path
   const parts = normalized.split('/').filter(Boolean);
   const display =
-    parts.length >= 3
-      ? parts.slice(-3).join('/')
-      : parts.length >= 2
-        ? parts.slice(-2).join('/')
-        : parts[0] || c.sourceFile;
+    c.repoName && c.relativePath
+      ? `${c.repoName}/${c.relativePath}`
+      : parts.length >= 3
+        ? parts.slice(-3).join('/')
+        : parts.length >= 2
+          ? parts.slice(-2).join('/')
+          : parts[0] || c.sourceFile;
   if (c.startLine != null && c.endLine != null) {
     return `${display}:${c.startLine}-${c.endLine}`;
   }
@@ -971,7 +974,8 @@ export function packToBudget(
   let used = 0;
 
   const config = loadConfig();
-  const suppressSent = config.memoryInjection !== 'off';
+  const suppressSent = ctx.opts?.sentRegistry !== null && config.memoryInjection !== 'off';
+  const sentRegistry = ctx.opts?.sentRegistry ?? globalSentRegistry;
 
   const finalCandidates: ScoredChunk[] = [];
   if (candidates.length > 0) finalCandidates.push(candidates[0]);
@@ -979,7 +983,7 @@ export function packToBudget(
   if (suppressSent) {
     for (let i = 1; i < candidates.length; i++) {
       const c = candidates[i];
-      if (c.hash && globalSentRegistry.hasBeenSent(c.hash)) {
+      if (c.hash && sentRegistry.hasBeenSent(c.repoId ? `${c.repoId}:${c.hash}` : c.hash)) {
         stubs.push(toStub(c));
       } else {
         finalCandidates.push(c);
@@ -1259,7 +1263,7 @@ export function packToBudget(
   for (const c of finalFull) {
     c.tokenCount = estimateTokens(c.content);
     if (c.hash && suppressSent) {
-      globalSentRegistry.markSent(c.hash);
+      sentRegistry.markSent(c.repoId ? `${c.repoId}:${c.hash}` : c.hash);
     }
   }
 
@@ -1331,11 +1335,12 @@ export function compressChunks(
     });
   }
 
-  let fileStructureSeen = false;
+  const fileStructureSeen = new Set<string>();
   filteredChunks = filteredChunks.filter((c) => {
     if (c.sectionTitle === 'File Structure') {
-      if (fileStructureSeen) return false;
-      fileStructureSeen = true;
+      const owner = c.repoId ?? '';
+      if (fileStructureSeen.has(owner)) return false;
+      fileStructureSeen.add(owner);
     }
     return true;
   });
@@ -1343,7 +1348,7 @@ export function compressChunks(
   const uniqueHashes = new Set<string>();
   const deduped: ScoredChunk[] = [];
   for (const c of filteredChunks) {
-    const hash = c.hash || `id:${c.id}`;
+    const hash = `${c.repoId ?? ''}:${c.hash || `id:${c.id}`}`;
     if (!uniqueHashes.has(hash)) {
       uniqueHashes.add(hash);
       deduped.push(prepareContent(c));

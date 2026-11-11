@@ -150,7 +150,7 @@ export function scoreChunks(
   feedbackAdjustments: Record<string, number> = {},
   opts?: ScoreChunksOptions
 ): ScoredChunk[] {
-  const config = loadConfig();
+  const config = opts?.config ?? loadConfig();
   const layerBoosts = config.layerBoosts || {
     session: 1.5,
     repo: 1.3,
@@ -321,7 +321,7 @@ export function scoreChunks(
         finalScore *= 1 + 0.12 * Math.exp(-ageDays / 45);
       }
 
-      finalScore = applyWorkspacePenalty(chunk, finalScore, adjustCtx);
+      if (!opts?.selectedRepo) finalScore = applyWorkspacePenalty(chunk, finalScore, adjustCtx);
       finalScore = applyNoiseDemotion(chunk, finalScore);
 
       // Prefer large schema/DDL variable symbols (template-literal consts)

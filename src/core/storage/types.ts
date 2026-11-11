@@ -1,6 +1,10 @@
 export type Layer = 'global' | 'workspace' | 'repo' | 'session';
 
 export interface Chunk {
+  repoId?: string;
+  repoName?: string;
+  relativePath?: string;
+  localId?: string;
   id: string;
   sourceFile: string;
   layer: Layer;
@@ -28,6 +32,7 @@ export interface Chunk {
 }
 
 export interface FileRecord {
+  repoId?: string;
   path: string;
   layer: Layer;
   workspaceName: string | null;
@@ -38,6 +43,7 @@ export interface FileRecord {
 }
 
 export interface Relationship {
+  repoId?: string;
   id?: number;
   source: string;
   target: string;

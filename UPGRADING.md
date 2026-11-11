@@ -2,6 +2,14 @@
 
 This guide covers breaking changes and migration steps for upgrading ContextOS across major and minor versions.
 
+## 1.1.0 to 1.1.1
+
+Schema v7 adds repository ownership without replacing local chunk IDs or deleting embeddings, feedback, memories, or history. Existing single-repository commands need no registry setup. Register repositories with `contextos repo add <path>` to enable workspace search; legacy workspace configuration is imported into `~/.contextos/registry.db` with a backup.
+
+Stop any older live daemon before the new indexing owner manages that repository. Use `contextos serve --workspace default --repo <name>` for one workspace MCP server. Unfiltered queries still target the active repository; workspace-wide retrieval is explicit.
+
+See [the local testing guide](MULTI_REPOSITORY_TESTING.md).
+
 ## 0.9.x to 1.0.0
 
 ### 1. Automatic schema migration (no action required)

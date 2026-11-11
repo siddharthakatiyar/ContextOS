@@ -18,13 +18,17 @@ export class SessionManager {
   private sessionStore: SessionStore;
   private branchCache: { branch: string; at: number } | null = null;
 
-  constructor(promptsRepo: PromptsRepo, sessionStore: SessionStore) {
+  constructor(
+    promptsRepo: PromptsRepo,
+    sessionStore: SessionStore,
+    private options?: { root: string; fresh?: boolean }
+  ) {
     this.promptsRepo = promptsRepo;
     this.sessionStore = sessionStore;
 
-    let session = this.sessionStore.getLatestSession();
+    let session = options?.fresh ? null : this.sessionStore.getLatestSession();
     if (shouldRotateSession(session)) {
-      session = this.sessionStore.createSession(process.cwd());
+      session = this.sessionStore.createSession(options?.root ?? process.cwd());
     }
     this.sessionId = session!.id;
   }
@@ -39,7 +43,9 @@ export class SessionManager {
       return this.branchCache.branch;
     }
     try {
-      const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
+      const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: this.options?.root
+      });
       const branch = stdout.trim();
       if (branch) {
         this.branchCache = { branch, at: now };
