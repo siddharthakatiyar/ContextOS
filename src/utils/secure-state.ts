@@ -151,15 +151,16 @@ export function canonicalDirectory(inputPath: string): string {
 }
 
 /** Unix socket addresses have a small byte limit, including any channel suffix. */
-function unixSocketPath(runDir: string, filename: string): string {
+export function unixSocketPath(runDir: string, filename: string, createDirectory = true): string {
   const preferred = path.join(runDir, filename);
   if (Buffer.byteLength(preferred) <= 100) return preferred;
   const identity = crypto.createHash('sha256').update(runDir).digest('hex').slice(0, 16);
-  const shortDir = ensurePrivateStateDir(
-    path.join('/tmp', `contextos-${process.getuid!()}-${identity}`)
-  );
-  if (fs.statSync(shortDir).uid !== process.getuid!())
-    throw new Error(`${describe(shortDir)}: directory belongs to another user`);
+  const shortDir = path.join('/tmp', `contextos-${process.getuid!()}-${identity}`);
+  if (createDirectory) {
+    ensurePrivateStateDir(shortDir);
+    if (fs.statSync(shortDir).uid !== process.getuid!())
+      throw new Error(`${describe(shortDir)}: directory belongs to another user`);
+  }
   return path.join(shortDir, filename);
 }
 

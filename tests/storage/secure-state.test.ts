@@ -12,6 +12,7 @@ import {
   PRIVATE_FILE_MODE,
   getDaemonSocketPath,
   getDaemonControlSocketPath,
+  unixSocketPath,
   secureBoundSocket
 } from '../../src/utils/secure-state.js';
 
@@ -25,9 +26,13 @@ describe('private ContextOS state paths', () => {
       const home = path.join(root, 'nested-home-'.repeat(12));
       fs.mkdirSync(home);
       const homedir = vi.spyOn(os, 'homedir').mockReturnValue(home);
-      const addresses = [getDaemonSocketPath(root), getDaemonControlSocketPath(root, '.index')];
+      const addresses = [
+        getDaemonSocketPath(root),
+        getDaemonControlSocketPath(root, '.index'),
+        unixSocketPath(path.join(home, '.contextos', 'runtime'), 'daemon.sock')
+      ];
       try {
-        expect(new Set(addresses).size).toBe(2);
+        expect(new Set(addresses).size).toBe(3);
         for (const address of addresses) {
           expect(Buffer.byteLength(address)).toBeLessThanOrEqual(100);
           expect(mode(path.dirname(address))).toBe(PRIVATE_DIR_MODE);
@@ -52,7 +57,8 @@ describe('private ContextOS state paths', () => {
       } finally {
         homedir.mockRestore();
         fs.rmSync(root, { recursive: true, force: true });
-        fs.rmSync(path.dirname(addresses[0]), { recursive: true, force: true });
+        for (const directory of new Set(addresses.map((address) => path.dirname(address))))
+          fs.rmSync(directory, { recursive: true, force: true });
       }
     }
   );

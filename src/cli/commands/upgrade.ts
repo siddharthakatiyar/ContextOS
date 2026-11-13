@@ -10,7 +10,8 @@ import { createUpgradeLock } from '../../core/updater/upgrade-lock.js';
 import {
   getDaemonControlSocketPath,
   assertNoSymlinkInPath,
-  ensurePrivateStateDir
+  ensurePrivateStateDir,
+  unixSocketPath
 } from '../../utils/secure-state.js';
 
 const PACKAGE_NAME = '@siddharthakatiyar/contextos';
@@ -868,7 +869,7 @@ function requestDaemon(
     const sharedDir = path.join(os.homedir(), '.contextos', 'runtime');
     const socketPath =
       projectDir === sharedDir && process.platform !== 'win32'
-        ? path.join(sharedDir, 'daemon.sock')
+        ? unixSocketPath(sharedDir, 'daemon.sock')
         : getDaemonControlSocketPath(projectDir);
     const socket = net.createConnection(socketPath);
     const timer = setTimeout(() => {

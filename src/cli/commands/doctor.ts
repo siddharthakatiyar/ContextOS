@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { INDEXER_VERSION } from '../../core/daemon/background-indexer.js';
 import { getPackageVersion } from '../../utils/version.js';
-import { canonicalDirectory } from '../../utils/secure-state.js';
+import { canonicalDirectory, unixSocketPath } from '../../utils/secure-state.js';
 import { registeredProjectPaths } from '../../core/workspace/project-paths.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'unknown';
@@ -735,7 +735,7 @@ function daemonSocketPath(root: string, homeDirectory: string): string {
     return path.join('\\\\?\\pipe', `contextos-${Buffer.from(root).toString('hex')}`);
   }
   const hash = crypto.createHash('md5').update(root).digest('hex').slice(0, 12);
-  return path.join(homeDirectory, '.contextos', 'run', `d-${hash}.sock`);
+  return unixSocketPath(path.join(homeDirectory, '.contextos', 'run'), `d-${hash}.sock`, false);
 }
 
 function unpackRpcError(message: Record<string, unknown>): Error | null {
@@ -933,7 +933,7 @@ export async function collectDoctorReport(
   const socketPath = usingShared
     ? process.platform === 'win32'
       ? daemonSocketPath(sharedDir, homeDirectory)
-      : path.join(sharedDir, 'daemon.sock')
+      : unixSocketPath(sharedDir, 'daemon.sock', false)
     : daemonSocketPath(root, homeDirectory);
   if (fs.existsSync(socketPath)) {
     try {

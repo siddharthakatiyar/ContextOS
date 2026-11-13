@@ -13,6 +13,7 @@ import {
   writePrivateStateFile,
   removePrivateStateFile,
   secureBoundSocket,
+  unixSocketPath,
   assertNoSymlinkInPath
 } from '../../utils/secure-state.js';
 import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
@@ -28,7 +29,9 @@ export function workspaceStateDirectory(name: string): string {
 
 export function workspaceSocketPath(): string {
   const root = workspaceStateDirectory('default');
-  return process.platform === 'win32' ? getDaemonSocketPath(root) : path.join(root, 'daemon.sock');
+  return process.platform === 'win32'
+    ? getDaemonSocketPath(root)
+    : unixSocketPath(root, 'daemon.sock');
 }
 
 export class WorkspaceDaemon {

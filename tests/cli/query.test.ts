@@ -21,7 +21,9 @@ describe('CLI query scope and provenance', () => {
   let sources: RepositorySource[];
 
   const addIndexedProject = (registry: WorkspaceRegistry, name: string, group?: string) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), `contextos-query-${name}-`));
+    const root = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), `contextos-query-${name}-`))
+    );
     roots.push(root);
     const source = registry.register(root, { name, group });
     const relativePath = 'src/payment.ts';

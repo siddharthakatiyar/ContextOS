@@ -398,7 +398,8 @@ export class WorkspaceRegistry {
           );
           if (
             metadata.repo_id &&
-            metadata.root_path === discovery.rootPath &&
+            metadata.root_path &&
+            canonical(metadata.root_path) === discovery.rootPath &&
             !this.db.prepare('SELECT id FROM repositories WHERE id=?').get(metadata.repo_id)
           )
             preferred = { id: metadata.repo_id, root: discovery.rootPath, dbPath: legacyPath };
@@ -421,6 +422,7 @@ export class WorkspaceRegistry {
     name?: string,
     preferred?: { id: string; root: string; dbPath: string }
   ): RepositorySource[] {
+    if (preferred) preferred = { ...preferred, root: canonical(preferred.root) };
     const key = crypto
       .createHash('sha256')
       .update(discovery.commonDir ?? discovery.rootPath)
@@ -454,17 +456,20 @@ export class WorkspaceRegistry {
     const hasLegacy = this.db
       .prepare("SELECT name FROM sqlite_master WHERE name='legacy_repositories'")
       .get();
+    const legacyRows = hasLegacy
+      ? (this.db.prepare('SELECT id,root_path,db_path FROM legacy_repositories').all() as {
+          id: string;
+          root_path: string;
+          db_path: string;
+        }[])
+      : [];
     for (const tree of discovery.worktrees) {
-      const legacy = hasLegacy
-        ? (this.db
-            .prepare('SELECT id,root_path,db_path FROM legacy_repositories WHERE root_path=?')
-            .get(tree.rootPath) as { id: string; root_path: string; db_path: string } | undefined)
-        : undefined;
+      const legacy = legacyRows.find((row) => canonical(row.root_path) === tree.rootPath);
       sources.push(
         this.upsertWorktree(
           project,
           tree,
-          legacy ? { id: legacy.id, root: legacy.root_path, dbPath: legacy.db_path } : preferred
+          legacy ? { id: legacy.id, root: tree.rootPath, dbPath: legacy.db_path } : preferred
         )
       );
     }

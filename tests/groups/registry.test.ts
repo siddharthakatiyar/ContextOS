@@ -29,7 +29,7 @@ function repository(name = 'backend'): string {
   return root;
 }
 beforeEach(() => {
-  temp = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-groups-'));
+  temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-groups-')));
   registry = new WorkspaceRegistry(path.join(temp, 'state'));
 });
 afterEach(() => {
@@ -224,54 +224,74 @@ describe('global project/worktree registry', () => {
     }
     expect(fs.existsSync(local)).toBe(true);
   });
+
+  it('retains legacy identity when its recorded root uses a symlink alias', () => {
+    const root = repository();
+    const alias = path.join(temp, 'old-checkout-alias');
+    fs.symlinkSync(root, alias, 'dir');
+    const local = path.join(root, '.contextos', 'index.db');
+    const db = new DB(local);
+    bindRepository(db.getInstance(), 'legacy-alias-id', alias);
+    db.close();
+    const source = registry.register(root);
+    expect(source.repoId).toBe('legacy-alias-id');
+    expect(source.rootPath).toBe(root);
+    expect(registry.register(alias).repoId).toBe(source.repoId);
+    expect(fs.existsSync(local)).toBe(true);
+  });
 });
 
 describe('registry upgrade and cleanup safety', () => {
-  it('migrates the previous registry schema, preserving memberships and view IDs across restart', () => {
-    const root = repository();
-    const home = path.join(temp, 'old-state');
-    fs.mkdirSync(home);
-    const localPath = path.join(root, '.contextos', 'index.db');
-    const local = new DB(localPath);
-    bindRepository(local.getInstance(), 'old-view', root);
-    local.close();
-    const old = new Database(path.join(home, 'registry.db'));
-    old.exec(`CREATE TABLE workspaces(id TEXT PRIMARY KEY,name TEXT UNIQUE,created_at INTEGER);
+  it.each(['canonical', 'alias'])(
+    'migrates the previous registry with a %s root, preserving memberships and view IDs across restart',
+    (rootSpelling) => {
+      const root = repository();
+      const recordedRoot = rootSpelling === 'alias' ? path.join(temp, 'legacy-root-alias') : root;
+      if (rootSpelling === 'alias') fs.symlinkSync(root, recordedRoot, 'dir');
+      const home = path.join(temp, 'old-state');
+      fs.mkdirSync(home);
+      const localPath = path.join(root, '.contextos', 'index.db');
+      const local = new DB(localPath);
+      bindRepository(local.getInstance(), 'old-view', recordedRoot);
+      local.close();
+      const old = new Database(path.join(home, 'registry.db'));
+      old.exec(`CREATE TABLE workspaces(id TEXT PRIMARY KEY,name TEXT UNIQUE,created_at INTEGER);
       CREATE TABLE repositories(id TEXT PRIMARY KEY,name TEXT UNIQUE,root_path TEXT UNIQUE,db_path TEXT UNIQUE,state TEXT,generation INTEGER,last_success INTEGER,last_error TEXT,config_fingerprint TEXT,indexer_version INTEGER,progress TEXT,created_at INTEGER);
       CREATE TABLE memberships(workspace_id TEXT,repo_id TEXT,PRIMARY KEY(workspace_id,repo_id));
       INSERT INTO workspaces VALUES ('payments-group','payments',1);`);
-    old
-      .prepare('INSERT INTO repositories VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(
-        'old-view',
-        'backend',
-        root,
-        localPath,
-        'ready',
-        3,
-        2,
-        null,
-        'old-fingerprint',
-        1,
-        null,
-        1
-      );
-    old.prepare('INSERT INTO memberships VALUES (?,?)').run('payments-group', 'old-view');
-    old.close();
-    const migrated = new WorkspaceRegistry(home);
-    const source = migrated.resolve('old-view');
-    expect(source.generation).toBe(3);
-    expect(migrated.list('payments')[0].repoId).toBe('old-view');
-    expect(source.dbPath).toContain(path.join(home, 'projects'));
-    expect(fs.existsSync(path.join(home, 'registry.pre-groups.db'))).toBe(true);
-    migrated.close();
-    const reopened = new WorkspaceRegistry(home);
-    try {
-      expect(reopened.list('payments')[0].repoId).toBe('old-view');
-    } finally {
-      reopened.close();
+      old
+        .prepare('INSERT INTO repositories VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+        .run(
+          'old-view',
+          'backend',
+          recordedRoot,
+          localPath,
+          'ready',
+          3,
+          2,
+          null,
+          'old-fingerprint',
+          1,
+          null,
+          1
+        );
+      old.prepare('INSERT INTO memberships VALUES (?,?)').run('payments-group', 'old-view');
+      old.close();
+      const migrated = new WorkspaceRegistry(home);
+      const source = migrated.resolve('old-view');
+      expect(source.generation).toBe(3);
+      expect(migrated.list('payments')[0].repoId).toBe('old-view');
+      expect(source.dbPath).toContain(path.join(home, 'projects'));
+      expect(fs.existsSync(path.join(home, 'registry.pre-groups.db'))).toBe(true);
+      migrated.close();
+      const reopened = new WorkspaceRegistry(home);
+      try {
+        expect(reopened.list('payments')[0].repoId).toBe('old-view');
+      } finally {
+        reopened.close();
+      }
     }
-  });
+  );
   it('refuses migration and purge while a live owner holds data', () => {
     const root = repository();
     const legacy = path.join(root, '.contextos');

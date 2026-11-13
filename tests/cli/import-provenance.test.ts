@@ -49,7 +49,7 @@ function legacyData() {
 }
 
 beforeEach(async () => {
-  temp = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-import-'));
+  temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-import-')));
   originalCwd = process.cwd();
   const home = path.join(temp, 'home');
   fs.mkdirSync(home);

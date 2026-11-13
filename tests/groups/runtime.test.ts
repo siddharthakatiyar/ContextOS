@@ -24,7 +24,7 @@ let root: string;
 const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { stdio: 'ignore' });
 
 beforeEach(() => {
-  temp = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-runtime-'));
+  temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-runtime-')));
   const home = path.join(temp, 'home');
   fs.mkdirSync(home);
   vi.spyOn(os, 'homedir').mockReturnValue(home);
