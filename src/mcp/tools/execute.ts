@@ -1,3 +1,5 @@
+import os from 'node:os';
+import crypto from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execFile } from 'child_process';
@@ -61,7 +63,13 @@ export function buildExecutionEnv(cwd?: string): NodeJS.ProcessEnv {
     // ambient npm_config_* values and user-level .npmrc files are untrusted.
     env.npm_config_prefix = cwd;
     env.npm_config_global = 'false';
-    env.npm_config_cache = path.join(cwd, '.contextos', 'npm-cache');
+    env.npm_config_cache = path.join(
+      os.homedir(),
+      '.contextos',
+      'runtime',
+      'npm-cache',
+      crypto.createHash('sha256').update(cwd).digest('hex').slice(0, 16)
+    );
     env.npm_config_userconfig = process.platform === 'win32' ? 'NUL' : '/dev/null';
   }
   return env;

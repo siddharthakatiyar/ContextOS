@@ -10,18 +10,22 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
-## [1.1.1] - 2026-11-12
+## [1.1.1] — local testing candidate; not released
 
 ### Added
 
-- Persistent workspace/repository registry and `contextos repo add`, `remove`, `list`, and `status`.
-- Repository and workspace query filters, repository-qualified result references, and one MCP server serving multiple local indexes.
-- Independent indexing ownership, repository-aware watchers, connection-scoped MCP state, schema-v7 ownership migration, and workspace integration benchmarks.
+- Global project storage organized into groups and per-worktree, per-branch index views.
+- Automatic discovery and indexing of checked-out Git worktrees, plus `contextos group`, `project`, `worktree`, and cleanup commands.
+- Evidence-backed agent knowledge tools for verified facts and cross-project links. Ambiguous or speculative connections are not stored.
+- Group and worktree retrieval, qualified result references, and one MCP server serving a selected group.
 
 ### Changed
 
-- Reuse existing strategy/RRF ranking independently within each repository before combining results.
-- Preserve memories and history when rebuilding a registered repository; retain local data when removing workspace membership.
+- Store new registry, index, graph, and runtime data under `~/.contextos/`; do not create new per-project `.contextos` data directories.
+- Keep group membership, project identity, worktree identity, and branch-view identity separate so a project can join multiple groups without sharing branch indexes.
+- Preserve existing local databases as migration sources and move new indexing writes to global storage.
+- Retain verified knowledge only while its supporting indexed evidence remains valid.
+- Store shared agent instructions in `AGENTS.md`, with a deduplicated `@AGENTS.md` import in `CLAUDE.md`. Initialization migrates older generated sections while preserving user-authored guidance.
 
 
 ## [1.1.0] - 2026-11-03

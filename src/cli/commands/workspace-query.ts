@@ -2,7 +2,6 @@ import { WorkspaceRegistry, type ScopeSelectors } from '../../core/workspace/reg
 import { WorkspaceRuntime } from '../../core/workspace/runtime.js';
 import { retrieveWorkspace } from '../../core/workspace/retrieval.js';
 import { compile } from '../../core/compiler/index.js';
-import { loadConfig } from '../../config/index.js';
 
 export async function workspaceQuery(
   prompt: string,
@@ -11,16 +10,24 @@ export async function workspaceQuery(
   const registry = new WorkspaceRegistry();
   const runtime = new WorkspaceRuntime(registry);
   try {
+    const explain = opts.explain || process.env.TRACE === '1';
     const scope = registry.select(opts, process.cwd());
-    const result = await retrieveWorkspace(runtime, scope, prompt, { explain: opts.explain });
-    const budget = opts.maxTokens ? Number(opts.maxTokens) : loadConfig().maxTokenBudget;
+    const result = await retrieveWorkspace(runtime, scope, prompt, { explain });
+    const unavailable = new Set(result.unavailableSources?.map((source) => source.repoId));
+    const responseSource =
+      scope.sources.find(
+        (source) => source.repoId === scope.activeRepoId && !unavailable.has(source.repoId)
+      ) ?? scope.sources.find((source) => !unavailable.has(source.repoId))!;
+    const responseConfig = runtime.get(responseSource).config;
+    const budget = opts.maxTokens ? Number(opts.maxTokens) : responseConfig.maxTokenBudget;
     if (!Number.isInteger(budget) || budget <= 0 || budget > 8000)
       throw new Error('--max-tokens must be an integer between 1 and 8000');
     const compiled = compile(result, {
       maxTokens: budget,
-      maxExactTokens: budget,
+      maxExactTokens: opts.maxTokens ? budget : Math.min(responseConfig.maxExactTokenBudget, 8000),
+      framingReserve: responseConfig.framingReserve,
       sentRegistry: null,
-      explain: opts.explain
+      explain
     });
     const omittedRepositories = scope.sources
       .filter((source) => !compiled.output.includes(source.name + '/'))
@@ -30,7 +37,7 @@ export async function workspaceQuery(
       context: compiled.output,
       tokens: compiled.tokenCount,
       omittedRepositories,
-      ...(opts.explain
+      ...(explain
         ? { explanation: { retrieval: result.explanation, compilation: compiled.diagnostics } }
         : {})
     };
@@ -46,7 +53,7 @@ export async function workspaceQuery(
         console.log(
           `No compiled evidence for: ${omittedRepositories.join(', ')} (no matching result or token budget).`
         );
-      if (opts.explain) console.log(JSON.stringify(output.explanation, null, 2));
+      if (explain) console.log(JSON.stringify(output.explanation, null, 2));
     }
   } finally {
     await runtime.close();

@@ -150,6 +150,19 @@ export function canonicalDirectory(inputPath: string): string {
   }
 }
 
+/** Unix socket addresses have a small byte limit, including any channel suffix. */
+function unixSocketPath(runDir: string, filename: string): string {
+  const preferred = path.join(runDir, filename);
+  if (Buffer.byteLength(preferred) <= 100) return preferred;
+  const identity = crypto.createHash('sha256').update(runDir).digest('hex').slice(0, 16);
+  const shortDir = ensurePrivateStateDir(
+    path.join('/tmp', `contextos-${process.getuid!()}-${identity}`)
+  );
+  if (fs.statSync(shortDir).uid !== process.getuid!())
+    throw new Error(`${describe(shortDir)}: directory belongs to another user`);
+  return path.join(shortDir, filename);
+}
+
 /**
  * Derive the Unix socket/named-pipe address shared by daemon and client.
  * The run directory is private before a socket is ever bound.
@@ -168,11 +181,11 @@ export function getDaemonSocketPath(projectDir: string): string {
     .update(canonicalProject)
     .digest('hex')
     .substring(0, 12);
-  return path.join(runDir, `d-${shortHash}.sock`);
+  return unixSocketPath(runDir, `d-${shortHash}.sock`);
 }
 
 /** Private control channel used by ContextOS maintenance commands, not MCP clients. */
-export function getDaemonControlSocketPath(projectDir: string): string {
+export function getDaemonControlSocketPath(projectDir: string, suffix = ''): string {
   const canonicalProject = canonicalDirectory(projectDir);
   if (process.platform === 'win32') {
     const shortHash = crypto
@@ -180,7 +193,7 @@ export function getDaemonControlSocketPath(projectDir: string): string {
       .update(canonicalProject)
       .digest('hex')
       .slice(0, 24);
-    return path.join('\\\\?\\pipe', `contextos-control-${shortHash}`);
+    return path.join('\\\\?\\pipe', `contextos-control-${shortHash}${suffix}`);
   }
 
   const contextHome = ensurePrivateStateDir(path.join(os.homedir(), '.contextos'));
@@ -190,7 +203,7 @@ export function getDaemonControlSocketPath(projectDir: string): string {
     .update(canonicalProject)
     .digest('hex')
     .substring(0, 16);
-  return path.join(runDir, `c-${shortHash}.sock`);
+  return unixSocketPath(runDir, `c-${shortHash}.sock${suffix}`);
 }
 
 /** Tighten a newly bound Unix socket and reject a swapped-in symlink. */

@@ -4,6 +4,7 @@ import { compressChunks, stubLocLabel } from './compressor.js';
 import { assessTier } from './tier.js';
 import { estimateTokens } from '../../utils/tokens.js';
 import path from 'path';
+import { loadConfig } from '../../config/index.js';
 
 export * from './types.js';
 export {
@@ -74,6 +75,7 @@ function collectSignalTerms(result: RetrievalResult, opts: CompilerOptions): str
 }
 
 function locLabel(chunk: ScoredChunk, displayPath: string, repoRoot?: string): string {
+  if (chunk.worktreeId) return stubLocLabel(chunk);
   let label = displayPath;
   if (repoRoot && chunk.sourceFile.startsWith(repoRoot)) {
     const rel = chunk.sourceFile.slice(repoRoot.length).replace(/^[/\\]/, '');
@@ -296,6 +298,8 @@ function renderXmlDocument(
     if (chunk.symbolName) {
       out += ` symbol="${escapeXml(chunk.symbolName)}" kind="${escapeXml(chunk.symbolKind)}"`;
     }
+    if (chunk.worktreeId)
+      out += ` project="${escapeXml(chunk.projectId)}" view="${escapeXml(chunk.viewId)}" branch="${escapeXml(chunk.branch ?? 'detached/working')}" worktree="${escapeXml(chunk.worktreeId)}"`;
     if (chunk.sectionTitle) out += ` section="${escapeXml(chunk.sectionTitle)}"`;
     if (chunk.startLine != null) out += ` start="${chunk.startLine}"`;
     if (chunk.endLine != null) out += ` end="${chunk.endLine}"`;
@@ -317,6 +321,7 @@ function renderXmlDocument(
     }
     if (chunk.repoName && chunk.relativePath)
       src = `${chunk.repoName}/${chunk.relativePath}:${chunk.startLine ?? 1}`;
+    if (chunk.worktreeId) src = stubLocLabel(chunk);
     let out = `  <stub source="${escapeXml(src)}" symbol="${escapeXml(chunk.symbolName || '')}"`;
     if (chunk.startLine != null) out += ` start="${chunk.startLine}"`;
     if (chunk.endLine != null) out += ` end="${chunk.endLine}"`;
@@ -556,7 +561,7 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
     activeMaxTokens = Math.max(activeMaxTokens, opts.maxExactTokens || 4000);
   }
 
-  const framingFloor = opts.framingReserve ?? 48;
+  const framingFloor = opts.framingReserve ?? loadConfig().framingReserve ?? 48;
   const firstPassBudget = Math.max(380, activeMaxTokens - framingFloor);
   let repackChunkBudget: number | undefined;
 
@@ -593,6 +598,25 @@ export function compile(result: RetrievalResult, opts: CompilerOptions): Compile
       output = output.replace(/\n### Also\n[\s\S]*?(?=\n### |\n*$)/, '\n');
       tokenCount = estimateTokens(output);
     }
+  }
+
+  // Compression budgets content before repository citations and code fences.
+  // Drop whole lower-ranked bodies when framing still exceeds the hard limit;
+  // a lone oversized body becomes a location stub rather than a broken fence.
+  while (tokenCount > activeMaxTokens && compressedChunks.length) {
+    const bodies = compressedChunks.filter((chunk) => !isStub(chunk));
+    if (bodies.length > 1) {
+      const dropped = bodies[bodies.length - 1];
+      compressedChunks = compressedChunks.filter((chunk) => chunk.id !== dropped.id);
+    } else if (bodies.length === 1) {
+      compressedChunks = compressedChunks.map((chunk) => ({ ...chunk, summary: '[stub]' }));
+    } else {
+      compressedChunks = compressedChunks.slice(0, -1);
+    }
+    renderResult = renderPass(compressedChunks, result, opts, activeMaxTokens);
+    output = renderResult.output;
+    tokenCount = renderResult.tokenCount;
+    removedGeneratedStubBlock = false;
   }
 
   const compiled: CompiledContext = {

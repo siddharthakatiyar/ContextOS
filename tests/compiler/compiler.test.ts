@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import * as configModule from '../../src/config/index.js';
+import { defaultConfig } from '../../src/config/defaults.js';
 import { compile } from '../../src/core/compiler/index.js';
 import { RetrievalResult, ScoredChunk } from '../../src/core/retrieval/types.js';
 
@@ -89,6 +91,64 @@ describe('Compiler', () => {
     expect(compiled.output).toContain('<![CDATA[');
     expect(compiled.output).toContain('</contextos_context>');
   });
+
+  it('uses configured framing reserve and preserves explicit caller overrides', () => {
+    const config = vi.spyOn(configModule, 'loadConfig').mockReturnValue({
+      ...structuredClone(defaultConfig),
+      framingReserve: 123
+    });
+    try {
+      const result: RetrievalResult = {
+        chunks: [makeChunk('framing', 'export const framing = true;', 10)],
+        expandedEntities: [],
+        intent,
+        latencyMs: 1
+      };
+      expect(compile(result, { maxTokens: 1000, explain: true }).diagnostics).toMatchObject({
+        framingReserve: 123,
+        firstPassChunkBudget: 877
+      });
+      expect(
+        compile(result, { maxTokens: 1000, framingReserve: 17, explain: true }).diagnostics
+      ).toMatchObject({ framingReserve: 17, firstPassChunkBudget: 983 });
+    } finally {
+      config.mockRestore();
+    }
+  });
+
+  it.each([100, 400, 1200, 4000])(
+    'includes repository citation framing in the %i-token Markdown limit',
+    (budget) => {
+      const chunks = Array.from({ length: 8 }, (_, index) => ({
+        ...makeChunk(
+          `budget-${index}`,
+          'export const request = "rate limit";\n'.repeat(140),
+          20 - index
+        ),
+        sourceFile: `service-${index}/internal/handler/requests.ts`,
+        repoName: `throttlex-service-${index}`,
+        relativePath: 'internal/handler/requests.ts',
+        projectId: `project-${index}`,
+        worktreeId: `worktree-${index}`,
+        branch: 'feature/long-citation-budget',
+        viewId: `view-${index}`
+      }));
+      const result: RetrievalResult = { chunks, expandedEntities: [], intent, latencyMs: 1 };
+      const ordinary = compile(result, { maxTokens: budget, maxExactTokens: budget });
+      const explained = compile(result, {
+        maxTokens: budget,
+        maxExactTokens: budget,
+        explain: true
+      });
+      expect(ordinary.tokenCount).toBeLessThanOrEqual(budget);
+      expect(explained.tokenCount).toBeLessThanOrEqual(budget);
+      expect((ordinary.output.match(/^```/gm) ?? []).length % 2).toBe(0);
+      for (const item of explained.diagnostics?.includedChunks ?? []) {
+        const chunk = chunks.find((chunk) => chunk.id === item.id)!;
+        expect(explained.output).toContain(chunk.repoName);
+      }
+    }
+  );
 
   it('keeps XML output within a strict budget by dropping whole elements', () => {
     const result: RetrievalResult = {

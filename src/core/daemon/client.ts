@@ -14,54 +14,67 @@ function getSocketPath(projectDir: string): string {
   return getDaemonSocketPath(canonicalDirectory(projectDir));
 }
 
-function connectToDaemon(socketPath: string): Promise<net.Socket> {
+function connectToDaemon(socketPath: string, timeoutMs = 1000): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath);
 
+    socket.setTimeout(timeoutMs, () => socket.destroy(new Error('Socket connection timed out')));
     socket.once('connect', () => {
+      socket.setTimeout(0);
       resolve(socket);
     });
 
     socket.once('error', (err) => {
+      socket.destroy();
       reject(err);
     });
   });
 }
 
-function spawnDaemon(projectDir: string, workspace?: string): Promise<void> {
-  return new Promise((resolve) => {
-    // Find the CLI binary
-    // client.ts is in dist/src/core/daemon/client.js
-    // bin/contextos.js is in dist/bin/contextos.js
-    let binPath = path.resolve(__dirname, '../../../bin/contextos.js');
-    if (!fs.existsSync(binPath)) {
-      // Maybe we are running via tsx in dev
-      binPath = path.resolve(process.cwd(), 'bin/contextos.ts');
-    }
-
-    const isTs = binPath.endsWith('.ts');
-    const cmd = isTs ? 'tsx' : 'node';
-    const args = [binPath, 'daemon', 'start', ...(workspace ? ['--workspace', workspace] : [])];
-
-    void waitForUpgradeToFinish()
-      .then(() => {
-        const child = spawn(cmd, args, {
-          cwd: projectDir,
-          detached: true,
-          stdio: 'ignore', // run in background completely detached
-          env: { ...process.env, CONTEXTOS_REPO_ROOT: projectDir }
-        });
-
-        child.unref();
-
-        // Give the daemon a moment to start and bind the socket
-        setTimeout(() => resolve(), 500);
-      })
-      .catch((error) => {
-        process.stderr.write(`ContextOS could not start its daemon: ${getErrorMessage(error)}\n`);
-        resolve();
-      });
+async function spawnDaemon(projectDir: string, workspace?: string): Promise<void> {
+  let binPath = path.resolve(__dirname, '../../../bin/contextos.js');
+  if (!fs.existsSync(binPath)) binPath = path.resolve(process.cwd(), 'bin/contextos.ts');
+  const isTs = binPath.endsWith('.ts');
+  const cmd = isTs ? 'tsx' : process.execPath;
+  const args = [binPath, 'daemon', 'start', ...(workspace ? ['--workspace', workspace] : [])];
+  await waitForUpgradeToFinish();
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      cwd: projectDir,
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, CONTEXTOS_REPO_ROOT: projectDir }
+    });
+    child.once('error', reject);
+    child.once('spawn', () => {
+      child.unref();
+      resolve();
+    });
   });
+}
+
+/** Wait for a newly started daemon to bind its socket, including under heavy startup load. */
+export async function waitForDaemonSocket(
+  socketPath: string,
+  options: { timeoutMs?: number; intervalMs?: number } = {}
+): Promise<net.Socket> {
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  const intervalMs = options.intervalMs ?? 200;
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+  for (;;) {
+    try {
+      return await connectToDaemon(socketPath, Math.max(1, Math.min(1000, deadline - Date.now())));
+    } catch (error) {
+      lastError = error;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0)
+        throw new Error(
+          `ContextOS daemon did not become ready within ${timeoutMs}ms at ${socketPath}: ${getErrorMessage(lastError)}. Run contextos daemon status and contextos daemon start to diagnose.`
+        );
+      await new Promise((resolve) => setTimeout(resolve, Math.min(intervalMs, remaining)));
+    }
+  }
 }
 
 /** Exponential backoff for transparent reconnects: 200ms, 400ms, ... capped at 8s. */
@@ -96,41 +109,52 @@ export async function runDaemonClient(
   workspace?: { name: string; id: string; activeRepoId: string }
 ): Promise<void> {
   await waitForUpgradeToFinish();
-  const socketPath = getSocketPath(projectDir);
+  const socketPath = workspace
+    ? (await import('../workspace/daemon.js')).workspaceSocketPath()
+    : getSocketPath(projectDir);
+  let activeRoot: string | undefined;
+  if (workspace) {
+    const { WorkspaceRegistry } = await import('../workspace/registry.js');
+    const registry = new WorkspaceRegistry();
+    try {
+      activeRoot = registry.resolve(workspace.activeRepoId).rootPath;
+    } finally {
+      registry.close();
+    }
+  }
   const reconnectBackoff = new ReconnectBackoff();
+  let stopping = false;
+  let currentSocket: net.Socket | undefined;
+  process.stdin.once('end', () => {
+    stopping = true;
+    currentSocket?.end();
+  });
 
   const connectWithRetry = async (): Promise<net.Socket> => {
-    let socket: net.Socket;
     try {
-      socket = await connectToDaemon(socketPath);
+      return await connectToDaemon(socketPath);
     } catch {
       await spawnDaemon(projectDir, workspace?.name);
-      let retries = 5;
-      while (retries > 0) {
-        try {
-          socket = await connectToDaemon(socketPath);
-          break;
-        } catch (err) {
-          retries--;
-          if (retries === 0) {
-            process.stderr.write(
-              `Failed to connect to ContextOS Daemon at ${socketPath}: ${err}\n`
-            );
-            process.exit(1);
-          }
-          await new Promise((r) => setTimeout(r, 200));
-        }
-      }
+      return waitForDaemonSocket(socketPath);
     }
-    return socket!;
   };
 
   const wireSocket = async () => {
+    if (stopping) return;
     const socket = await connectWithRetry();
+    if (stopping) {
+      socket.destroy();
+      return;
+    }
+    currentSocket = socket;
 
     if (workspace)
       socket.write(
-        JSON.stringify({ workspaceId: workspace.id, activeRepoId: workspace.activeRepoId }) + '\n'
+        JSON.stringify({
+          workspaceId: workspace.id,
+          activeRepoId: workspace.activeRepoId,
+          cwd: activeRoot
+        }) + '\n'
       );
     process.stdin.pipe(socket);
     socket.pipe(process.stdout);
@@ -145,6 +169,7 @@ export async function runDaemonClient(
       // Cleanup existing bindings
       process.stdin.unpipe(socket);
       socket.unpipe(process.stdout);
+      if (stopping) return;
 
       // The daemon died or dropped us. Reconnect with exponential backoff —
       // previously this looped spawn→crash→respawn every ~600ms forever when

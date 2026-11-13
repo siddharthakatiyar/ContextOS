@@ -12,6 +12,8 @@ import { RelationshipsRepo } from '../storage/relationships-repo.js';
 import { detectIntent } from '../retrieval/intent-detector.js';
 import { WorkspaceRuntime } from './runtime.js';
 import type { RepositorySource, RetrievalScope } from './registry.js';
+import { GraphStore } from '../knowledge/graph-store.js';
+import { parseRef } from './identity.js';
 import { entityRef } from './identity.js';
 import { loadConfig } from '../../config/index.js';
 import { getErrorMessage } from '../../utils/errors.js';
@@ -22,6 +24,12 @@ export function qualifyChunk<T extends ScoredChunk>(chunk: T, source: Repository
     id: entityRef(source.repoId, 'chunk', chunk.id),
     localId: chunk.id,
     repoId: source.repoId,
+    viewId: source.viewId,
+    projectId: source.projectId,
+    worktreeId: source.worktreeId,
+    branch: source.branch,
+    head: source.head,
+    worktreePath: source.rootPath,
     repoName: source.name,
     relativePath: path.relative(source.rootPath, chunk.sourceFile).split(path.sep).join('/')
   };
@@ -45,6 +53,7 @@ export async function retrieveWorkspace(
     signal?.throwIfAborted();
     try {
       const repo = runtime.get(source);
+      await repo.prepareRead();
       if (
         repo.db
           .getInstance()
@@ -62,6 +71,7 @@ export async function retrieveWorkspace(
         { ...opts, repoRoot: source.rootPath, selectedRepo: true },
         signal
       );
+      repo.assertReadable();
       const locality = scope.sources.length > 1 && source.repoId === scope.activeRepoId ? 1.1 : 1;
       chunks.push(
         ...result.chunks
@@ -124,8 +134,114 @@ export async function retrieveWorkspace(
       globalDb?.close();
     }
   }
+  const knowledgeLinks: NonNullable<RetrievalResult['knowledgeLinks']> = [];
+  if (
+    (!opts.layers || opts.layers.includes('repo')) &&
+    fs.existsSync(path.join(runtime.registry.home, 'graph.db'))
+  ) {
+    const graph = new GraphStore({
+      home: runtime.registry.home,
+      resolve: (id) => {
+        const source = runtime.registry.resolve(id);
+        return { source, db: runtime.get(source).db.getInstance() };
+      }
+    });
+    try {
+      const permitted = scope.sources
+        .filter((source) => !unavailableSources.some((failed) => failed.repoId === source.repoId))
+        .map((source) => source.repoId);
+      const seen = new Set(chunks.map((chunk) => chunk.id));
+      let frontier = chunks
+        .slice()
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10)
+        .map((chunk) => chunk.id);
+      const seedScore = Math.max(1, ...chunks.map((chunk) => chunk.score));
+      const seenLinks = new Set<string>();
+      for (let depth = 1; depth <= 2 && frontier.length; depth++) {
+        const expanded = graph.expand(frontier, permitted, 12);
+        for (const link of expanded.links)
+          if (!seenLinks.has(link.id)) {
+            seenLinks.add(link.id);
+            knowledgeLinks.push(link);
+          }
+        const next: string[] = [];
+        for (const ref of expanded.refs) {
+          if (seen.has(ref)) continue;
+          const parsed = parseRef(ref);
+          const source = scope.sources.find((view) => view.repoId === parsed?.repoId);
+          if (!parsed || !source || parsed.kind !== 'chunk') continue;
+          const row = new ChunksRepo(runtime.get(source).db.getInstance()).getByIds([
+            parsed.localId
+          ])[0];
+          if (!row || (opts.layers?.length && !opts.layers.includes(row.layer))) continue;
+          const chunk = qualifyChunk({ ...row, score: seedScore * Math.pow(0.6, depth) }, source);
+          chunks.push(chunk);
+          seen.add(ref);
+          next.push(ref);
+          if (explanation)
+            explanation.chunks[ref] = {
+              finalScore: chunk.score,
+              graph: { matchedEntities: [row.symbolName ?? row.sourceFile] }
+            };
+        }
+        frontier = next;
+      }
+      const facts = graph.searchFacts(prompt, {
+        viewIds: permitted,
+        projectIds: [...new Set(scope.sources.map((view) => view.projectId))],
+        groupId: scope.groupId ?? scope.workspaceId,
+        limit: 5
+      });
+      for (const fact of facts) {
+        const source =
+          fact.provenance === 'user' && fact.scope === 'project'
+            ? scope.sources.find((view) => view.projectId === fact.scopeId)
+            : fact.provenance === 'user' && fact.scope === 'group'
+              ? (scope.sources.find((view) => view.repoId === scope.activeRepoId) ??
+                scope.sources[0])
+              : scope.sources.find((view) => view.repoId === fact.viewIds[0]);
+        if (!source) continue;
+        const factChunk: ScoredChunk = {
+          id: entityRef(source.repoId, 'fact', fact.id),
+          localId: fact.id,
+          repoId: source.repoId,
+          viewId: source.viewId,
+          projectId: source.projectId,
+          worktreeId: source.worktreeId,
+          worktreePath: source.rootPath,
+          repoName: source.name,
+          branch: source.branch,
+          head: source.head,
+          relativePath: 'memory.fact',
+          sourceFile: 'memory.fact',
+          layer: 'repo',
+          workspaceName: null,
+          sectionTitle: 'Verified knowledge',
+          sectionDepth: 0,
+          content:
+            fact.content +
+            (fact.evidence.length
+              ? '\nEvidence: ' + fact.evidence.map((e) => e.ref).join(', ')
+              : '\nProvenance: explicit user statement'),
+          summary: null,
+          keywords: null,
+          hash: fact.id,
+          importance: 8,
+          tokenCount: Math.ceil(fact.content.length / 4),
+          score: seedScore * 0.8,
+          createdAt: fact.createdAt,
+          updatedAt: fact.updatedAt
+        };
+        chunks.push(factChunk);
+      }
+    } finally {
+      graph.close();
+    }
+  }
   chunks.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
   return {
+    knowledgeLinks,
     chunks: chunks.slice(0, opts.maxChunks ?? config.maxRetrievalResults),
     intent: detectIntent(prompt),
     expandedEntities,

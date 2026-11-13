@@ -2,12 +2,14 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { DB } from '../storage/database.js';
 import { loadConfig } from '../../config/index.js';
 import { BackgroundIndexer, INDEXER_VERSION } from '../daemon/background-indexer.js';
 import { startWatcher, type ContextOSWatcher } from '../watcher/index.js';
 import { Indexer } from '../indexer/index.js';
 import { backfillAllEmbeddings } from '../embeddings/index.js';
+import { GraphStore } from '../knowledge/graph-store.js';
 import {
   WorkspaceRegistry,
   type RepositorySource,
@@ -27,7 +29,7 @@ import { getErrorMessage } from '../../utils/errors.js';
 
 type Owner = { pid: number; token: string; endpoint: string; protocol: number };
 export type IndexRequest = {
-  action: 'index' | 'file' | 'status' | 'embeddings';
+  action: 'index' | 'file' | 'status' | 'embeddings' | 'watch';
   file?: string;
   force?: boolean;
   layer?: import('../storage/types.js').Layer;
@@ -40,6 +42,53 @@ function alive(pid: number): boolean {
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH';
   }
+}
+/** Capture both the checked-out ref and its commit; detached HEAD is supported. */
+function checkoutIdentityReader(root: string): () => string | undefined {
+  let gitDir: string;
+  let commonDir: string;
+  try {
+    const git = (args: string[]) =>
+      execFileSync('git', ['-C', root, ...args], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore']
+      }).trim();
+    gitDir = git(['rev-parse', '--absolute-git-dir']);
+    commonDir = git(['rev-parse', '--path-format=absolute', '--git-common-dir']);
+  } catch {
+    return () => undefined;
+  }
+  return () => {
+    // Git holds this lock while replacing checkout files. HEAD is updated only
+    // near the end of a checkout, so checking HEAD alone misses that window.
+    if (fs.existsSync(path.join(gitDir, 'index.lock')))
+      throw new Error(`Git checkout or index update is in progress: ${root}`);
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+    let commit = '';
+    if (head.startsWith('ref: ')) {
+      const ref = head.slice(5);
+      // Git normally stores branch refs in the common directory. Packed refs
+      // are included as a fallback, including unborn branches with no ref.
+      try {
+        commit = fs.readFileSync(path.join(commonDir, ref), 'utf8').trim();
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        try {
+          const packed = fs.readFileSync(path.join(commonDir, 'packed-refs'), 'utf8');
+          commit =
+            packed
+              .split('\n')
+              .find((line) => line.endsWith(` ${ref}`))
+              ?.split(' ')[0] ?? '';
+        } catch (packedError) {
+          if ((packedError as NodeJS.ErrnoException).code !== 'ENOENT') throw packedError;
+        }
+      }
+    } else {
+      commit = head;
+    }
+    return `${gitDir}\n${head}\n${commit}`;
+  };
 }
 export function configFingerprint(root: string): string {
   const config = loadConfig({ cwd: root, forceReload: true });
@@ -70,6 +119,8 @@ export class RepositoryRuntime {
   private acquisition?: Promise<Owner>;
   private leaseFile: string;
   private fingerprint: string;
+  private readonly checkout: string | undefined;
+  private readonly currentCheckout: () => string | undefined;
   constructor(
     readonly source: RepositorySource,
     private registry: WorkspaceRegistry
@@ -79,8 +130,57 @@ export class RepositoryRuntime {
     this.config = loadConfig({ cwd: source.rootPath, forceReload: true });
     this.fingerprint = configFingerprint(source.rootPath);
     this.db = new DB(source.dbPath);
-    bindRepository(this.db.getInstance(), source.repoId, source.rootPath);
-    this.leaseFile = path.join(source.rootPath, '.contextos', 'index-owner.json');
+    bindRepository(this.db.getInstance(), source.repoId, source.rootPath, {
+      projectId: source.projectId,
+      worktreeId: source.worktreeId,
+      viewId: source.viewId,
+      branch: source.branch,
+      head: source.head,
+      checkoutGeneration: source.checkoutGeneration
+    });
+    this.leaseFile = path.join(path.dirname(source.dbPath), 'index-owner.json');
+    this.currentCheckout = checkoutIdentityReader(source.rootPath);
+    this.checkout = this.currentCheckout();
+    if (this.checkout) {
+      const [, ref, commit] = this.checkout.split('\n');
+      if (
+        (source.branch && ref !== `ref: refs/heads/${source.branch}`) ||
+        (source.head && commit !== source.head)
+      ) {
+        this.db.close();
+        throw new Error(
+          `Checkout changed before indexing: ${source.rootPath}. Retry after reconciliation.`
+        );
+      }
+    }
+  }
+  private assertCurrent = (): void => {
+    if (this.closing || this.currentCheckout() !== this.checkout)
+      throw new Error(
+        `Checkout changed during indexing: ${this.source.rootPath}. Retry after reconciliation.`
+      );
+  };
+  async prepareRead(): Promise<void> {
+    const current = this.registry.resolve(this.source.repoId);
+    if (current.state === 'registered' || current.state === 'indexing') await this.index();
+    this.assertReadable();
+  }
+  assertReadable(): void {
+    this.assertCurrent();
+    const current = this.registry.resolve(this.source.repoId);
+    if (
+      !current.active ||
+      current.checkoutGeneration !== this.source.checkoutGeneration ||
+      current.state !== 'ready'
+    )
+      throw new Error(`View ${this.source.name} is not ready for retrieval; refresh and retry.`);
+    if (
+      this.db
+        .getInstance()
+        .prepare("SELECT 1 FROM repository_metadata WHERE key='needs_reindex'")
+        .get()
+    )
+      throw new Error('View requires reconciliation before it can be searched.');
   }
   private readOwner(): Owner | undefined {
     const owner = this.registry.lease(this.source.repoId);
@@ -108,7 +208,7 @@ export class RepositoryRuntime {
         );
     }
     const token = crypto.randomUUID();
-    const endpoint = getDaemonControlSocketPath(this.source.rootPath) + '.index';
+    const endpoint = getDaemonControlSocketPath(path.dirname(this.source.dbPath), '.index');
     const owner: Owner = { pid: process.pid, token, endpoint, protocol: 1 };
     const winner = this.registry.takeLease(this.source.repoId, owner);
     if (winner.token !== token) return winner;
@@ -129,7 +229,7 @@ export class RepositoryRuntime {
           const request = JSON.parse(buffer.split('\n')[0]) as IndexRequest & { token: string };
           if (
             request.token !== token ||
-            !['index', 'file', 'status', 'embeddings'].includes(request.action)
+            !['index', 'file', 'status', 'embeddings', 'watch'].includes(request.action)
           )
             throw new Error('Invalid index request');
           const job = this.request(request);
@@ -213,7 +313,12 @@ export class RepositoryRuntime {
     const owner = await this.acquire();
     if (owner.token !== this.owner?.token) return this.remote(owner, request);
     if (request.action === 'status') return this.status();
+    if (request.action === 'watch') {
+      await this.watch();
+      return this.status();
+    }
     if (request.action === 'embeddings') {
+      this.assertCurrent();
       const result = await backfillAllEmbeddings(this.db.getInstance(), undefined, this.config);
       this.changed();
       return result;
@@ -222,20 +327,43 @@ export class RepositoryRuntime {
       if (typeof request.file !== 'string') throw new Error('A file path is required');
       const file = resolveWithinWorkspace(this.source.rootPath, request.file);
       if (!file) throw new Error('File is outside the selected repository');
-      const indexer = new Indexer(this.db, this.source.rootPath, this.config.ignorePatterns);
+      const indexer = new Indexer(
+        this.db,
+        this.source.rootPath,
+        this.config.ignorePatterns,
+        this.assertCurrent
+      );
       const result = fs.existsSync(file)
         ? await indexer.indexFile(file, request.layer ?? 'repo', request.workspaceName)
         : await indexer.removeFile(file);
-      this.changed();
+      if (typeof result === 'boolean' ? result : result.filesProcessed > 0) this.changed(true);
       return result;
     }
+    this.assertCurrent();
     if (request.force && !this.scan)
       this.db.getInstance().prepare("UPDATE files SET hash='' WHERE layer='repo'").run();
     await this.index(request.force);
     return this.status();
   }
-  private changed(): void {
+  private changed(prune = false): void {
     this.registry.update(this.source.repoId, { incrementGeneration: true });
+    if (prune) this.pruneKnowledge();
+  }
+  private pruneKnowledge(): void {
+    if (!fs.existsSync(path.join(this.registry.home, 'graph.db'))) return;
+    if (this.registry.resolve(this.source.repoId).state !== 'ready') return;
+    const graph = new GraphStore({
+      home: this.registry.home,
+      resolve: (id) => {
+        if (id !== this.source.repoId) throw new Error('Unrelated view is unavailable for pruning');
+        return { source: this.registry.resolve(id), db: this.db.getInstance() };
+      }
+    });
+    try {
+      graph.pruneInvalid({ affectedViewIds: [this.source.repoId] });
+    } finally {
+      graph.close();
+    }
   }
   async index(force = false): Promise<void> {
     if (this.scan) return this.scan;
@@ -246,21 +374,28 @@ export class RepositoryRuntime {
     }
     if (this.scan) return this.scan;
     const current = this.registry.resolve(this.source.repoId);
+    this.assertCurrent();
     if (!force && current.state === 'ready' && current.configFingerprint === this.fingerprint)
       return;
     this.scan = (async () => {
       this.registry.update(this.source.repoId, { state: 'indexing', lastError: null });
       if (current.configFingerprint !== this.fingerprint)
         this.db.getInstance().prepare("UPDATE files SET hash='' WHERE layer='repo'").run();
-      const indexer = new BackgroundIndexer(this.db, this.source.rootPath);
+      const indexer = new BackgroundIndexer(
+        this.db,
+        this.source.rootPath,
+        path.dirname(this.source.dbPath),
+        this.assertCurrent
+      );
       await indexer.startFullIndex(this.config);
       if (indexer.lastError) throw new Error(indexer.lastError);
       const status = JSON.parse(
-        fs.readFileSync(path.join(this.source.rootPath, '.contextos', 'status.json'), 'utf8')
+        fs.readFileSync(path.join(path.dirname(this.source.dbPath), 'status.json'), 'utf8')
       );
       if (!status.fullIndexCompleted) throw new Error(status.error ?? 'Indexing did not complete');
       this.watcher?.flushBufferedEvents?.();
       await this.watcher?.waitForIdle?.();
+      this.assertCurrent();
       this.db
         .getInstance()
         .prepare("DELETE FROM repository_metadata WHERE key='needs_reindex'")
@@ -274,6 +409,7 @@ export class RepositoryRuntime {
         incrementGeneration: true,
         progress: indexer.getStatus()
       });
+      this.pruneKnowledge();
     })()
       .catch((error) => {
         this.registry.update(this.source.repoId, {
@@ -292,13 +428,16 @@ export class RepositoryRuntime {
     if (this.watcher) return;
     const owner = await this.acquire();
     if (owner.token !== this.owner?.token) {
-      await this.remote(owner, { action: 'index' });
+      await this.remote(owner, { action: 'watch' });
       return;
     }
     if (!this.watcher)
       this.watcher = startWatcher(this.db, this.source.rootPath, {
         buffered: true,
-        onIndexed: () => this.changed(),
+        stateDir: path.dirname(this.source.dbPath),
+        assertCurrent: this.assertCurrent,
+        onIndexed: () => this.changed(true),
+        onReconciled: () => this.changed(true),
         onError: (error) =>
           this.registry.update(this.source.repoId, {
             state: 'failed',
@@ -314,7 +453,7 @@ export class RepositoryRuntime {
     let progress: unknown;
     try {
       progress = JSON.parse(
-        fs.readFileSync(path.join(this.source.rootPath, '.contextos', 'status.json'), 'utf8')
+        fs.readFileSync(path.join(path.dirname(this.source.dbPath), 'status.json'), 'utf8')
       );
     } catch {
       /* no scan yet */
@@ -329,18 +468,27 @@ export class RepositoryRuntime {
   }
   async close(): Promise<void> {
     this.closing = true;
-    await this.acquisition?.catch(() => {});
-    await this.watcher?.close();
-    await this.scan?.catch(() => {});
-    await this.watcher?.waitForIdle?.();
-    await Promise.allSettled([...this.pending]);
-    if (this.server?.listening)
-      await new Promise<void>((resolve) => this.server!.close(() => resolve()));
-    if (this.owner && this.readOwner()?.token === this.owner.token) {
-      removePrivateStateFile(this.leaseFile);
-      this.registry.releaseLease(this.source.repoId, this.owner.token);
+    try {
+      await this.acquisition?.catch(() => {});
+      await this.watcher?.close().catch(() => {});
+      await this.scan?.catch(() => {});
+      await this.watcher?.waitForIdle?.().catch(() => {});
+      await Promise.allSettled([...this.pending]);
+      if (this.server?.listening)
+        await new Promise<void>((resolve) => this.server!.close(() => resolve()));
+    } finally {
+      try {
+        if (this.owner && this.readOwner()?.token === this.owner.token) {
+          try {
+            removePrivateStateFile(this.leaseFile);
+          } finally {
+            this.registry.releaseLease(this.source.repoId, this.owner.token);
+          }
+        }
+      } finally {
+        this.db.close();
+      }
     }
-    this.db.close();
   }
 }
 
@@ -349,6 +497,24 @@ export class WorkspaceRuntime {
   private retired = new Set<RepositoryRuntime>();
   private requests = 0;
   private retireJobs = new Set<Promise<void>>();
+  private refreshJob?: Promise<void>;
+  private paused = new Set<string>();
+  private lastCleanupError?: string;
+  async quiesce(repoIds: string[]): Promise<void> {
+    for (const id of repoIds) this.paused.add(id);
+    while (this.refreshJob) await this.refreshJob;
+    for (const id of repoIds) {
+      const runtime = this.repositories.get(id);
+      if (runtime) {
+        this.repositories.delete(id);
+        this.retired.add(runtime);
+      }
+    }
+    await this.waitForIdle();
+  }
+  resume(repoIds: string[]): void {
+    for (const id of repoIds) this.paused.delete(id);
+  }
   async withSnapshot<T>(action: () => Promise<T>): Promise<T> {
     this.requests++;
     try {
@@ -374,43 +540,109 @@ export class WorkspaceRuntime {
     readonly workspace?: string
   ) {}
   get(source: RepositorySource): RepositoryRuntime {
+    if (this.paused.has(source.repoId))
+      throw new Error('Repository is being removed; retry after maintenance.');
     if (!fs.existsSync(source.rootPath) || !fs.existsSync(source.dbPath))
       throw new Error(`Repository unavailable: ${source.rootPath}`);
     let runtime = this.repositories.get(source.repoId);
+    if (runtime && runtime.source.checkoutGeneration !== source.checkoutGeneration)
+      throw new Error(
+        `Checkout changed for ${source.name}; indexing is reconciling. Retry shortly.`
+      );
     if (!runtime) {
       runtime = new RepositoryRuntime(source, this.registry);
       this.repositories.set(source.repoId, runtime);
     }
     return runtime;
   }
-  select(selectors: ScopeSelectors, cwd: string, activeRepoId?: string): RetrievalScope {
+  select(
+    selectors: ScopeSelectors,
+    cwd: string,
+    activeRepoId?: string,
+    defaultWorkspace = this.workspace
+  ): RetrievalScope {
+    const requestedWorkspace = selectors.group ?? selectors.workspace;
     if (
-      this.workspace &&
-      selectors.workspace &&
-      this.registry.workspace(selectors.workspace).id !== this.registry.workspace(this.workspace).id
+      defaultWorkspace &&
+      requestedWorkspace &&
+      this.registry.workspace(requestedWorkspace).id !==
+        this.registry.workspace(defaultWorkspace).id
     )
       throw new Error('The requested workspace is outside this server scope.');
-    const scope = this.registry.select(selectors, cwd, this.workspace, activeRepoId);
-    if (this.workspace) {
-      scope.workspaceId ??= this.registry.workspace(this.workspace).id;
-      const members = new Set(this.registry.list(this.workspace).map((r) => r.repoId));
+    const scope = this.registry.select(selectors, cwd, defaultWorkspace, activeRepoId);
+    if (defaultWorkspace) {
+      scope.workspaceId ??= this.registry.workspace(defaultWorkspace).id;
+      const members = new Set(this.registry.list(defaultWorkspace, true).map((r) => r.repoId));
       if (scope.sources.some((r) => !members.has(r.repoId)))
         throw new Error('Repository is outside this server workspace.');
     }
     return scope;
   }
-  async refreshWatchers(): Promise<void> {
-    if (!this.workspace) return;
-    const sources = this.registry.list(this.workspace);
+  async refreshWatchers(
+    workspaces: string[] = this.workspace ? [this.workspace] : []
+  ): Promise<void> {
+    return this.refreshBy(() =>
+      workspaces.flatMap((workspace) => this.registry.list(workspace, true))
+    );
+  }
+  async refreshSelected(
+    selectors: ScopeSelectors,
+    cwd: string,
+    activeRepoId?: string,
+    defaultWorkspace?: string
+  ): Promise<void> {
+    return this.refreshBy(
+      () => this.select(selectors, cwd, activeRepoId, defaultWorkspace).sources
+    );
+  }
+  private async refreshBy(resolveSources: () => RepositorySource[]): Promise<void> {
+    while (this.refreshJob) await this.refreshJob;
+    this.refreshJob = this.refreshWatchersNow(resolveSources);
+    try {
+      await this.refreshJob;
+    } finally {
+      this.refreshJob = undefined;
+    }
+  }
+  private async refreshWatchersNow(resolveSources: () => RepositorySource[]): Promise<void> {
+    this.registry.reconcile();
+    let resolved: RepositorySource[] = [];
+    let resolutionError: unknown;
+    try {
+      resolved = resolveSources();
+    } catch (error) {
+      resolutionError = error;
+    }
+    const sources = [
+      ...new Map(
+        resolved
+          .filter((source) => !this.paused.has(source.repoId))
+          .map((source) => [source.repoId, source])
+      ).values()
+    ];
     const members = new Set(sources.map((r) => r.repoId));
     for (const [id, runtime] of this.repositories) {
-      if (!members.has(id)) {
+      const current = sources.find((source) => source.repoId === id);
+      if (!members.has(id) || current?.checkoutGeneration !== runtime.source.checkoutGeneration) {
         this.repositories.delete(id);
         // Keep handles alive until requests using the previous membership finish.
         this.retired.add(runtime);
       }
     }
-    if (!this.requests) await this.drainRetired();
+    if (this.retired.size) {
+      while (this.requests > 0) await new Promise((resolve) => setTimeout(resolve, 20));
+      await this.drainRetired();
+    }
+    try {
+      this.registry.cleanup();
+      this.lastCleanupError = undefined;
+    } catch (error) {
+      const message = getErrorMessage(error);
+      if (message !== this.lastCleanupError)
+        process.stderr.write(`ContextOS cleanup will retry: ${message}\n`);
+      this.lastCleanupError = message;
+    }
+    if (resolutionError) throw resolutionError;
     await Promise.allSettled(
       sources.map(async (source) => {
         try {
@@ -430,6 +662,7 @@ export class WorkspaceRuntime {
     await Promise.allSettled([...this.retireJobs]);
   }
   async close(): Promise<void> {
+    await this.refreshJob?.catch(() => {});
     while (this.requests > 0) await new Promise((resolve) => setTimeout(resolve, 20));
     await Promise.allSettled(
       [...this.repositories.values(), ...this.retired].map((runtime) => runtime.close())

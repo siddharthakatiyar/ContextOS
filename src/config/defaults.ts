@@ -6,7 +6,7 @@ export const defaultConfig: ContextOSConfig = {
   // Note: dbPath is calculated at module-load time, but loadConfig() deep-clones
   // this object so the dbPath will be resolved correctly later.
   get dbPath() {
-    return path.join(process.cwd(), '.contextos', 'index.db');
+    return path.join(os.homedir(), '.contextos', 'index.db');
   },
   get globalContextDir() {
     return path.join(os.homedir(), '.contextos', 'global');
@@ -15,6 +15,7 @@ export const defaultConfig: ContextOSConfig = {
   indexablePatterns: [
     '**/*.md',
     '**/*.txt',
+    '**/AGENTS.md',
     '**/CLAUDE.md',
     '**/SKILLS.md',
     '**/.cursor/rules/**',

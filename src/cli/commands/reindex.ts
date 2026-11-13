@@ -1,113 +1,57 @@
 import { Command } from 'commander';
-import fs from 'fs';
-import path from 'path';
-import chalk from 'chalk';
-import { initCommand } from './init.js';
-import { DB } from '../../core/storage/database.js';
-import { backfillAllEmbeddings, isEmbeddingsAvailable } from '../../core/embeddings/index.js';
-import { canonicalDirectory, removePrivateStateFile } from '../../utils/secure-state.js';
-
+import { WorkspaceRegistry } from '../../core/workspace/registry.js';
+import { WorkspaceRuntime } from '../../core/workspace/runtime.js';
 export const reindexCommand = new Command('reindex')
-  .description('Force a complete re-index of the repository by clearing the local database')
-  .option('--repo <repo>', 'Rebuild a registered repository through its indexing owner')
-  .option(
-    '--embeddings',
-    'Backfill chunk embeddings without wiping the DB (or after a full reindex)'
-  )
-  .action(async (opts: { embeddings?: boolean; repo?: string }) => {
-    const { WorkspaceRegistry } = await import('../../core/workspace/registry.js');
-    const { RepositoryRuntime } = await import('../../core/workspace/runtime.js');
-    const registry = new WorkspaceRegistry();
-    const source = opts.repo ? registry.resolve(opts.repo) : registry.active(process.cwd());
-    if (source) {
-      const runtime = new RepositoryRuntime(source, registry);
+  .description('Rebuild selected indexes while preserving memories and history')
+  .option('--repo <repo>', 'Project selector (legacy alias)')
+  .option('--project <project>', 'Project selector')
+  .option('--group <group>', 'Reindex a group')
+  .option('--worktree <worktree>', 'Select one worktree')
+  .option('--branch <branch>', 'Select one live branch')
+  .option('--all-worktrees', 'Reindex all live worktrees')
+  .option('--embeddings', 'Backfill embeddings without rebuilding content')
+  .action(
+    async (opts: {
+      repo?: string;
+      project?: string;
+      group?: string;
+      worktree?: string;
+      branch?: string;
+      allWorktrees?: boolean;
+      embeddings?: boolean;
+    }) => {
+      const registry = new WorkspaceRegistry();
+      const runtime = new WorkspaceRuntime(registry);
       try {
-        if (opts.embeddings) await runtime.request({ action: 'embeddings' });
-        else await runtime.request({ action: 'index', force: true });
-        console.log(`Reindexed ${source.name}. Memories and history retained.`);
+        if (
+          !opts.project &&
+          !opts.repo &&
+          !opts.group &&
+          !opts.worktree &&
+          !registry.active(process.cwd())
+        )
+          registry.register(process.cwd());
+        const scope = registry.select(
+          {
+            ...opts,
+            project: opts.project ? [opts.project] : undefined,
+            repo: opts.repo ? [opts.repo] : undefined
+          },
+          process.cwd()
+        );
+        await Promise.all(
+          scope.sources.map(async (source) => {
+            await runtime
+              .get(source)
+              .request({ action: opts.embeddings ? 'embeddings' : 'index', force: true });
+            console.log(
+              `Reindexed ${source.name} [${source.branch ?? 'working/detached'}]. Memories and history retained.`
+            );
+          })
+        );
       } finally {
         await runtime.close();
         registry.close();
       }
-      return;
     }
-    registry.close();
-    const cwd = canonicalDirectory(process.cwd());
-    const repoContextDir = path.join(cwd, '.contextos');
-    const dbPath = path.join(repoContextDir, 'index.db');
-    const walPath = path.join(repoContextDir, 'index.db-wal');
-    const shmPath = path.join(repoContextDir, 'index.db-shm');
-
-    // Embeddings-only backfill: keep existing index, just (re)build vectors
-    const abortController = new AbortController();
-    const onSigInt = () => {
-      console.log(chalk.red('\n\nAborting reindex...'));
-      abortController.abort();
-    };
-    process.on('SIGINT', onSigInt);
-
-    try {
-      if (opts.embeddings && fs.existsSync(dbPath)) {
-        if (!isEmbeddingsAvailable()) {
-          console.log(
-            chalk.yellow(
-              'Embeddings are disabled (CONTEXTOS_EMBEDDINGS=0 or embeddingsEnabled=false). Nothing to do.'
-            )
-          );
-          return;
-        }
-        console.log(chalk.blue.bold('Backfilling embeddings for existing chunks...'));
-        console.log(
-          chalk.dim('(Normal indexing also embeds on upsert; this forces a full backfill.)')
-        );
-        const db = new DB(dbPath);
-        try {
-          const n = await backfillAllEmbeddings(db.getInstance(), abortController.signal);
-          console.log(chalk.green(`Embedding backfill complete (${n} chunks processed).`));
-        } finally {
-          db.close();
-        }
-        return;
-      }
-
-      console.log(chalk.yellow.bold(`Clearing local database at ${dbPath}...`));
-
-      try {
-        const { daemonCommand } = await import('./daemon.js');
-        await daemonCommand.parseAsync(['node', 'contextos', 'stop']);
-        console.log(chalk.dim('Stopped existing daemon to prepare for fresh index.'));
-      } catch {
-        // ignore if no daemon is running
-      }
-
-      removePrivateStateFile(dbPath);
-      removePrivateStateFile(walPath);
-      removePrivateStateFile(shmPath);
-
-      console.log(chalk.green('Database cleared. Starting fresh initialization...'));
-      console.log(chalk.dim('Embeddings are built automatically during indexFile when available.'));
-
-      // Call the init command logic
-      await initCommand.parseAsync(['node', 'contextos']);
-
-      // Optional post-init embedding backfill (covers any chunks that skipped embed during index)
-      if (opts.embeddings) {
-        if (!isEmbeddingsAvailable()) {
-          console.log(
-            chalk.yellow('Embeddings unavailable after reindex — keyword-only index is ready.')
-          );
-          return;
-        }
-        console.log(chalk.blue.bold('\nEnsuring embeddings are backfilled...'));
-        const db = new DB(dbPath);
-        try {
-          const n = await backfillAllEmbeddings(db.getInstance(), abortController.signal);
-          console.log(chalk.green(`Embedding backfill complete (${n} chunks processed).`));
-        } finally {
-          db.close();
-        }
-      }
-    } finally {
-      process.off('SIGINT', onSigInt);
-    }
-  });
+  );

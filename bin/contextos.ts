@@ -32,6 +32,9 @@ function skipsStartupNotice(args: string[]): boolean {
     'query',
     'workspace',
     'repo',
+    'project',
+    'group',
+    'worktree',
     'watch',
     'export',
     'import',
@@ -129,7 +132,9 @@ async function main(): Promise<void> {
     import('../src/cli/commands/visualize.js'),
     import('../src/cli/commands/upgrade.js'),
     import('../src/cli/commands/updates.js'),
-    import('../src/cli/commands/repo.js')
+    import('../src/cli/commands/repo.js'),
+    import('../src/cli/commands/group.js'),
+    import('../src/cli/commands/worktree.js')
   ]);
   const [
     init,
@@ -148,7 +153,9 @@ async function main(): Promise<void> {
     visualize,
     upgrade,
     updates,
-    repo
+    repo,
+    group,
+    worktree
   ] = commands;
 
   program
@@ -185,7 +192,9 @@ async function main(): Promise<void> {
     visualize.visualizeCommand,
     upgrade.upgradeCommand,
     updates.updatesCommand,
-    repo.repoCommand
+    repo.repoCommand,
+    group.groupCommand,
+    worktree.worktreeCommand
   ]) {
     program.addCommand(command);
   }
@@ -196,7 +205,7 @@ async function main(): Promise<void> {
       performance.mark('contextos_end');
       performance.measure('Execution Time', 'contextos_start', 'contextos_end');
       const measure = performance.getEntriesByName('Execution Time')[0];
-      process.stdout.write(`\n[Profile] Total execution time: ${measure.duration.toFixed(2)}ms\n`);
+      process.stderr.write(`\n[Profile] Total execution time: ${measure.duration.toFixed(2)}ms\n`);
     }
   } catch (error) {
     handleCliError(error);

@@ -1,43 +1,51 @@
 import { Command } from 'commander';
 import { WorkspaceRegistry } from '../../core/workspace/registry.js';
+import { refreshWorkspaceDaemon } from '../../core/workspace/daemon.js';
+import { initializeProject } from './init.js';
 import { RepositoryRuntime } from '../../core/workspace/runtime.js';
 
-export const repoCommand = new Command('repo').description(
-  'Manage local repositories and workspace membership'
-);
+export const repoCommand = new Command('project')
+  .alias('repo')
+  .description('Manage local repositories and workspace membership');
 repoCommand
   .command('add <path>')
   .description('Register and index a local repository')
-  .option('--workspace <name>', 'Workspace membership', 'default')
+  .option('--workspace <name>', 'Workspace membership')
+  .option('--group <name>', 'Group membership', 'default')
   .option('--name <name>', 'Unique repository display name')
   .option('--no-index', 'Register without indexing')
-  .action(async (root: string, opts: { workspace: string; name?: string; index: boolean }) => {
-    const registry = new WorkspaceRegistry();
-    let runtime: RepositoryRuntime | undefined;
-    try {
-      const repo = registry.register(root, opts);
-      console.log(
-        `Registered ${repo.name} (${repo.repoId}) in ${opts.workspace}: ${repo.rootPath}`
-      );
-      if (opts.index) {
-        runtime = new RepositoryRuntime(repo, registry);
-        await runtime.request({ action: 'index', force: true });
-        console.log(`Indexed ${repo.name}.`);
-      }
-    } finally {
-      await runtime?.close();
-      registry.close();
+  .action(
+    async (
+      root: string,
+      opts: { workspace?: string; group: string; name?: string; index: boolean }
+    ) => {
+      await initializeProject(root, {
+        ...opts,
+        group: opts.workspace ?? opts.group,
+        integrations: false
+      });
     }
-  });
+  );
 repoCommand
   .command('remove <repo>')
-  .description('Detach a repository without deleting its local data')
+  .description('Detach group membership or explicitly purge project data')
+  .option('--purge', 'Delete every stored view and knowledge record for this project')
   .option('--workspace <name>', 'Workspace membership', 'default')
-  .action(async (selector: string, opts: { workspace: string }) => {
+  .action(async (selector: string, opts: { workspace: string; purge?: boolean }) => {
     const registry = new WorkspaceRegistry();
     try {
+      if (opts.purge) {
+        const ids = registry.views(selector).map((view) => view.repoId);
+        await refreshWorkspaceDaemon('default', 'quiesce', ids);
+        try {
+          registry.purgeProject(selector);
+        } finally {
+          await refreshWorkspaceDaemon('default', 'resume', ids);
+        }
+        console.log(`Purged ${selector}. Source files retained.`);
+        return;
+      }
       registry.remove(selector, opts.workspace);
-      const { refreshWorkspaceDaemon } = await import('../../core/workspace/daemon.js');
       await refreshWorkspaceDaemon(opts.workspace);
       console.log(`Removed ${selector} from ${opts.workspace}. Local data retained.`);
     } finally {

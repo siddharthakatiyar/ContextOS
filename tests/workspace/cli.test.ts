@@ -76,10 +76,15 @@ describe('built CLI and workspace daemon', () => {
       expect(
         (all.structuredContent as { scope: { repoIds: string[] } }).scope.repoIds
       ).toHaveLength(4);
-      await backend.callTool({
+      const savedFact = await backend.callTool({
         name: 'ctx_remember',
-        arguments: { type: 'cross_session_fact', content: 'PaymentMemorySurvivesReindex' }
+        arguments: {
+          type: 'cross_session_fact',
+          content: 'PaymentMemorySurvivesReindex',
+          provenance: 'user'
+        }
       });
+      expect(savedFact.isError).not.toBe(true);
       run(['reindex', '--repo', 'backend']);
       const memory = await backend.callTool({
         name: 'get_context',
@@ -92,7 +97,12 @@ describe('built CLI and workspace daemon', () => {
         arguments: { prompt: 'payment status' }
       });
       expect(removed.isError).toBe(true);
-      expect(fs.existsSync(path.join(root, 'frontend', '.contextos', 'index.db'))).toBe(true);
+      expect(
+        fs.existsSync(
+          list.repositories.find((view: { name: string }) => view.name === 'frontend').dbPath
+        )
+      ).toBe(true);
+      expect(fs.existsSync(path.join(root, 'frontend', '.contextos'))).toBe(false);
       run(['repo', 'add', path.join(root, 'frontend')]);
       const restored = await frontend.callTool({
         name: 'get_context',

@@ -306,7 +306,7 @@ describe('independent updates and ownership', () => {
     } finally {
       await other.close();
     }
-    expect(fs.existsSync(path.join(source.rootPath, '.contextos', 'index-owner.json'))).toBe(true);
+    expect(fs.existsSync(path.join(path.dirname(source.dbPath), 'index-owner.json'))).toBe(true);
   });
   it('replays watcher edits and closes watcher resources', async () => {
     const source = registry.resolve('backend');
@@ -362,6 +362,20 @@ describe('MCP scope and connection state', () => {
       (noScopeLeak.structuredContent as { scope: { repoIds: string[] } }).scope.repoIds
     ).toEqual([registry.resolve('backend').repoId]);
   });
+  it('reports invalid expand paths as errors and does not expose outside files', async () => {
+    const client = await connect();
+    const secret = path.join(temp, 'secret.txt');
+    fs.writeFileSync(secret, 'OutsideSecretMarker');
+    fs.symlinkSync(secret, path.join(registry.resolve('backend').rootPath, 'outside-link'));
+    for (const file of ['../secret.txt', 'outside-link']) {
+      const result = await client.callTool({
+        name: 'ctx_expand',
+        arguments: { paths: [file], terms: ['OutsideSecretMarker'] }
+      });
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).not.toContain('OutsideSecretMarker');
+    }
+  });
   it('isolates sessions and memories between clients and repositories', async () => {
     const first = await connect('backend');
     const second = await connect('frontend');
@@ -369,10 +383,15 @@ describe('MCP scope and connection state', () => {
       name: 'ctx_remember',
       arguments: { type: 'session_note', content: 'UniquePaymentSessionMarker' }
     });
-    await first.callTool({
+    const savedFact = await first.callTool({
       name: 'ctx_remember',
-      arguments: { type: 'cross_session_fact', content: 'BackendPaymentFactMarker' }
+      arguments: {
+        type: 'cross_session_fact',
+        content: 'BackendPaymentFactMarker',
+        provenance: 'user'
+      }
     });
+    expect(savedFact.isError).not.toBe(true);
     const other = await second.callTool({
       name: 'get_context',
       arguments: { prompt: 'UniquePaymentSessionMarker BackendPaymentFactMarker', tier: 'full' }

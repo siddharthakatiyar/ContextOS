@@ -1,154 +1,187 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
-import { queryCommand } from '../../src/cli/commands/query.js';
+import type { RetrievalResult } from '../../src/core/retrieval/types.js';
+import type { RetrievalScope } from '../../src/core/workspace/registry.js';
+import type { CompilerDiagnostics } from '../../src/core/compiler/types.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { workspaceQuery } from '../../src/cli/commands/workspace-query.js';
+import { configFingerprint } from '../../src/core/workspace/runtime.js';
+import { WorkspaceRegistry, type RepositorySource } from '../../src/core/workspace/registry.js';
+import { ChunksRepo } from '../../src/core/storage/chunks-repo.js';
+import { DB } from '../../src/core/storage/database.js';
+import { hashContent } from '../../src/utils/hash.js';
 
-vi.mock('../../src/core/storage/database.js', () => ({
-  DB: {
-    resolveDatabases: vi.fn(() => [
-      {
-        getInstance: vi.fn(),
-        prepare: vi.fn(),
-        exec: vi.fn(),
-        close: vi.fn()
-      }
-    ])
-  },
-  getContextOSHome: vi.fn(() => '/mock/home')
-}));
+describe('CLI query scope and provenance', () => {
+  let home: string;
+  let originalCwd: string;
+  let roots: string[];
+  let homedirSpy: ReturnType<typeof vi.spyOn>;
+  let outputSpy: ReturnType<typeof vi.spyOn>;
+  let sources: RepositorySource[];
 
-vi.mock('../../src/core/storage/chunks-repo.js', () => ({
-  ChunksRepo: class {}
-}));
+  const addIndexedProject = (registry: WorkspaceRegistry, name: string, group?: string) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `contextos-query-${name}-`));
+    roots.push(root);
+    const source = registry.register(root, { name, group });
+    const relativePath = 'src/payment.ts';
+    const file = path.join(root, relativePath);
+    const content =
+      name === 'backend'
+        ? "export type PaymentStatus = 'pending' | 'paid';\nexport function processPaymentStatus(status: PaymentStatus) { return status === 'paid'; }\n"
+        : name === 'frontend'
+          ? "export type PaymentStatus = 'pending' | 'paid';\nexport function displayPaymentStatus(status: PaymentStatus) { return status.toUpperCase(); }\n"
+          : 'PaymentStatus in an unrelated infrastructure fixture.\n';
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
 
-vi.mock('../../src/core/storage/relationships-repo.js', () => ({
-  RelationshipsRepo: class {}
-}));
+    const db = new DB(source.dbPath);
+    try {
+      const instance = db.getInstance();
+      const fileHash = hashContent(content);
+      instance
+        .prepare(
+          'INSERT INTO files (repo_id,path,layer,workspace_name,hash,last_indexed,importance,chunk_count) VALUES (?,?,?,NULL,?,?,?,?)'
+        )
+        .run(source.repoId, file, 'repo', fileHash, Date.now(), 8, 1);
+      new ChunksRepo(instance).upsert({
+        id: 'reused-local-chunk-id',
+        sourceFile: file,
+        layer: 'repo',
+        workspaceName: null,
+        sectionTitle: `${name} PaymentStatus implementation`,
+        sectionDepth: 0,
+        content,
+        summary: `${name} payment status definition and implementation`,
+        keywords: 'PaymentStatus payment status process display',
+        hash: fileHash,
+        importance: 8,
+        tokenCount: Math.ceil(content.length / 4),
+        fileType: 'code',
+        language: 'typescript',
+        symbolName: name === 'infrastructure' ? null : 'PaymentStatus',
+        symbolKind: name === 'infrastructure' ? undefined : 'type',
+        startLine: 1,
+        endLine: 2,
+        fileStem: 'payment',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      });
+    } finally {
+      db.close();
+    }
+    registry.update(source.repoId, {
+      state: 'ready',
+      configFingerprint: configFingerprint(root),
+      lastSuccess: Date.now()
+    });
+    return source;
+  };
 
-vi.mock('../../src/core/storage/prompts-repo.js', () => ({
-  PromptsRepo: class {}
-}));
-
-vi.mock('../../src/core/session/session-store.js', () => ({
-  SessionStore: class {
-    addEvent = vi.fn();
-  }
-}));
-
-vi.mock('../../src/core/session/index.js', () => ({
-  SessionManager: class {
-    getSessionId = vi.fn(() => '1234');
-    getSessionContext = vi.fn().mockResolvedValue([]);
-  }
-}));
-
-vi.mock('../../src/core/retrieval/index.js', () => ({
-  RetrievalEngine: class {
-    retrieve = vi.fn().mockImplementation((_prompt: string, options?: { explain?: boolean }) =>
-      Promise.resolve({
-        chunks: [],
-        intent: { concepts: ['test'], identifiers: [], intentType: 'general', rawPrompt: 'test' },
-        expandedEntities: [],
-        latencyMs: 10,
-        ...(options?.explain
-          ? {
-              explanation: {
-                embeddingSearch: {
-                  configured: false,
-                  lowConfidenceFallback: true,
-                  available: false,
-                  searched: false,
-                  hitCount: null
-                },
-                graphExpansionEnabled: true,
-                chunks: {}
-              }
-            }
-          : {})
-      })
-    );
-  }
-}));
-
-vi.mock('../../src/core/compiler/index.js', () => ({
-  compile: vi.fn((_result: unknown, options?: { explain?: boolean }) => ({
-    output: 'Compiled result',
-    tokenCount: 10,
-    ...(options?.explain
-      ? {
-          diagnostics: {
-            tier: 'explore',
-            outputFormat: 'markdown',
-            configuredMaxTokens: 1000,
-            effectiveMaxTokens: 1000,
-            firstPassChunkBudget: 952,
-            framingReserve: 48,
-            signalTerms: ['test'],
-            includedChunks: [],
-            omittedChunkIds: []
-          }
-        }
-      : {})
-  }))
-}));
-
-describe('CLI query command', () => {
-  let consoleLogSpy: MockInstance;
+  const lastJson = () => {
+    const last = outputSpy.mock.calls.at(-1)?.[0];
+    return JSON.parse(String(last)) as Omit<RetrievalResult, 'scope' | 'explanation'> & {
+      scope: RetrievalScope;
+      context: string;
+      tokens: number;
+      explanation: {
+        retrieval: NonNullable<RetrievalResult['explanation']>;
+        compilation: CompilerDiagnostics;
+      };
+    };
+  };
 
   beforeEach(() => {
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-query-home-'));
+    originalCwd = process.cwd();
+    roots = [];
+    sources = [];
+    homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(home);
+    fs.mkdirSync(path.join(home, '.contextos'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.contextos', 'config.json'),
+      JSON.stringify({ embeddingsEnabled: false, embeddingsRetrieval: false })
+    );
+    outputSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const registry = new WorkspaceRegistry();
+    try {
+      registry.ensureGroup('payments');
+      sources.push(addIndexedProject(registry, 'backend', 'payments'));
+      sources.push(addIndexedProject(registry, 'frontend', 'payments'));
+      addIndexedProject(registry, 'infrastructure');
+      process.chdir(sources[0].rootPath);
+    } finally {
+      registry.close();
+    }
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
+    process.chdir(originalCwd);
+    vi.restoreAllMocks();
+    homedirSpy.mockRestore();
+    for (const root of roots) fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
   });
 
-  it('runs query and outputs result', async () => {
-    await queryCommand.parseAsync(['node', 'test', 'how does indexing work?']);
+  it('defaults to the active checkout and returns qualified evidence with explain provenance', async () => {
+    await workspaceQuery('PaymentStatus', { json: true, explain: true });
 
-    // Check if console.log was called which signifies command executed properly
-    expect(consoleLogSpy).toHaveBeenCalled();
-    const calls = consoleLogSpy.mock.calls.map((call) => call.join(' '));
-    expect(calls.some((c: string) => c.includes('Intent Detection'))).toBe(true);
-    expect(calls.some((c: string) => c.includes('Compiled Context'))).toBe(true);
-  });
-
-  it('adds retrieval and compilation diagnostics only when --explain is requested', async () => {
-    await queryCommand.parseAsync(['node', 'test', '--json', '--explain', 'test prompt']);
-
-    const jsonOutput = consoleLogSpy.mock.calls.map((call) => call.join(' ')).at(-1);
-    const parsed = JSON.parse(String(jsonOutput));
-    expect(Object.keys(parsed)).toEqual([
-      'intent',
-      'latencyMs',
-      'chunks',
-      'expandedEntities',
-      'context',
-      'tokens',
-      'explanation'
+    const result = lastJson();
+    expect(result).toHaveProperty('intent');
+    expect(result).toHaveProperty('latencyMs');
+    expect(result).toHaveProperty('chunks');
+    expect(result).toHaveProperty('expandedEntities');
+    expect(result).toHaveProperty('context');
+    expect(result).toHaveProperty('tokens');
+    expect(result.scope.sources.map((source: RepositorySource) => source.projectId)).toEqual([
+      sources[0].projectId
     ]);
-    expect(parsed.explanation.retrieval.embeddingSearch).toMatchObject({
-      configured: false,
-      searched: false,
-      hitCount: null
+    expect(result.scope.activeRepoId).toBe(sources[0].repoId);
+    expect(result.chunks).toHaveLength(1);
+    expect(result.chunks[0]).toMatchObject({
+      repoId: sources[0].repoId,
+      projectId: sources[0].projectId,
+      viewId: sources[0].viewId,
+      repoName: 'backend',
+      relativePath: 'src/payment.ts',
+      localId: 'reused-local-chunk-id'
     });
-    expect(parsed.explanation.compilation).toMatchObject({
-      tier: 'explore',
-      effectiveMaxTokens: 1000,
-      includedChunks: []
+    expect(result.chunks[0].id).toContain(sources[0].repoId);
+    expect(result.explanation.retrieval.chunks[result.chunks[0].id].repository).toMatchObject({
+      repoId: sources[0].repoId,
+      name: 'backend',
+      localityMultiplier: 1
     });
+    expect(result.explanation.compilation).toBeDefined();
   });
 
-  it('keeps the ordinary JSON response keys unchanged', async () => {
-    await queryCommand.parseAsync(['node', 'test', '--json', 'test prompt']);
+  it('searches the selected group and keeps identical local IDs in separate project namespaces', async () => {
+    await workspaceQuery('PaymentStatus', { group: 'payments', json: true, explain: true });
 
-    const jsonOutput = consoleLogSpy.mock.calls.map((call) => call.join(' ')).at(-1);
-    const parsed = JSON.parse(String(jsonOutput));
-    expect(Object.keys(parsed)).toEqual([
-      'intent',
-      'latencyMs',
-      'chunks',
-      'expandedEntities',
-      'context',
-      'tokens'
+    const result = lastJson();
+    expect(result.scope.groupId).toBeTruthy();
+    expect(result.scope.sources.map((source: RepositorySource) => source.name).sort()).toEqual([
+      'backend',
+      'frontend'
     ]);
+    expect(result.chunks).toHaveLength(2);
+    expect(result.chunks.map((chunk) => chunk.localId)).toEqual([
+      'reused-local-chunk-id',
+      'reused-local-chunk-id'
+    ]);
+    expect(new Set(result.chunks.map((chunk) => chunk.id)).size).toBe(2);
+    expect(new Set(result.chunks.map((chunk) => chunk.repoId).sort())).toEqual(
+      new Set([sources[0].repoId, sources[1].repoId])
+    );
+    expect(result.chunks.map((chunk) => chunk.repoName).sort()).toEqual(['backend', 'frontend']);
+    expect(result.chunks.every((chunk) => chunk.relativePath === 'src/payment.ts')).toBe(true);
+    expect(Object.keys(result.explanation.retrieval.chunks)).toEqual(
+      expect.arrayContaining(result.chunks.map((chunk) => chunk.id))
+    );
+    expect(
+      result.explanation.retrieval.chunks[result.chunks[0].id].repository?.localityMultiplier
+    ).toBe(1.1);
+    expect(result.chunks.some((chunk) => chunk.repoName === 'infrastructure')).toBe(false);
   });
 });

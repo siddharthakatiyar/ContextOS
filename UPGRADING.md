@@ -2,13 +2,31 @@
 
 This guide covers breaking changes and migration steps for upgrading ContextOS across major and minor versions.
 
-## 1.1.0 to 1.1.1
+## 1.1.0 to 1.1.1 (local testing candidate)
 
-Schema v7 adds repository ownership without replacing local chunk IDs or deleting embeddings, feedback, memories, or history. Existing single-repository commands need no registry setup. Register repositories with `contextos repo add <path>` to enable workspace search; legacy workspace configuration is imported into `~/.contextos/registry.db` with a backup.
+Version 1.1.1 changes new storage from a database inside each repository to a global project registry and separate indexes for checked-out worktrees and branch views. The candidate is not published; do not install it from npm. Build it from a source checkout using [the local testing guide](MULTI_REPOSITORY_TESTING.md).
 
-Stop any older live daemon before the new indexing owner manages that repository. Use `contextos serve --workspace default --repo <name>` for one workspace MCP server. Unfiltered queries still target the active repository; workspace-wide retrieval is explicit.
+Before trying the candidate with important saved data, stop older ContextOS daemons and make a backup of both `~/.contextos/` and any repository `.contextos` directories. On first registration, ContextOS discovers the project's currently checked-out Git worktrees and copies an existing local SQLite index into its corresponding global view. The original repository files are retained as migration sources. ContextOS leaves the old files in place; new indexes, facts, and runtime files are written under `~/.contextos/`. Legacy workspace registration is imported into `~/.contextos/registry.db` when found.
 
-See [the local testing guide](MULTI_REPOSITORY_TESTING.md).
+Initialize one project or create a group and initialize into it:
+
+```bash
+cd ~/projects/backend
+contextos init
+
+contextos group create payments
+contextos init --group payments
+contextos group add payments ~/projects/frontend
+contextos group add payments ~/projects/shared-types
+```
+
+Existing single-project commands continue to find the active registered checkout. `contextos repo` remains an alias for `contextos project`, and `--workspace` / `--all-repos` remain accepted as compatibility selectors for groups. New queries still use the active checkout by default; use `--group payments` to search a group. A group query selects one available checkout per project unless `--all-worktrees` is requested.
+
+Initialization now puts shared agent instructions in `AGENTS.md` and adds an `@AGENTS.md` import to `CLAUDE.md` when needed. Re-run `contextos init` to migrate recognizable generated ContextOS sections from older `CLAUDE.md` files. User-authored guidance in both files is preserved, and repeated initialization does not duplicate the instructions or import.
+
+Each project can belong to multiple groups without duplicating its index. Every checked-out worktree has a distinct view; a branch switch is reconciled before its new view is used. ContextOS does not create, switch, or remove Git worktrees. Use `contextos clean --dry-run` to inspect stored views for removed worktrees or deleted branches, then `contextos clean` to remove stale data. `contextos project remove <project> --purge` explicitly deletes all stored data for a project while retaining source files.
+
+The old release's published/runtime behavior should not be confused with this candidate. Publishing remains pending until local testing is complete and the user explicitly approves release.
 
 ## 0.9.x to 1.0.0
 

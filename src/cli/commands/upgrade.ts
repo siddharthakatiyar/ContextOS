@@ -3,10 +3,15 @@ import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compareVersions } from '../../core/updater/index.js';
 import { createUpgradeLock } from '../../core/updater/upgrade-lock.js';
-import { getDaemonControlSocketPath, assertNoSymlinkInPath } from '../../utils/secure-state.js';
+import {
+  getDaemonControlSocketPath,
+  assertNoSymlinkInPath,
+  ensurePrivateStateDir
+} from '../../utils/secure-state.js';
 
 const PACKAGE_NAME = '@siddharthakatiyar/contextos';
 const PACKAGE_PARTS = ['@siddharthakatiyar', 'contextos'];
@@ -18,6 +23,7 @@ export interface UpgradeDaemon {
   pid: number;
   projectDir: string;
   version: string;
+  legacy?: boolean;
 }
 
 export interface UpgradeWorkflowPlan {
@@ -170,7 +176,20 @@ export async function runUpgradeWorkflow(
       throw new Error(`Installed CLI did not report version ${plan.targetVersion}.`);
     }
 
-    for (const daemon of stopped) {
+    const upgradedDaemons = stopped.filter((daemon) => !daemon.legacy);
+    if (
+      stopped.some((daemon) => daemon.legacy) &&
+      !upgradedDaemons.some(
+        (daemon) => daemon.projectDir === path.join(os.homedir(), '.contextos', 'runtime')
+      )
+    ) {
+      upgradedDaemons.push({
+        ...stopped[0],
+        projectDir: path.join(os.homedir(), '.contextos', 'runtime'),
+        legacy: false
+      });
+    }
+    for (const daemon of upgradedDaemons) {
       const pid = await adapters.startDaemon(daemon.projectDir, plan.packageRoot, plan.token);
       newDaemons.set(daemonKey(daemon), { ...daemon, pid, version: plan.targetVersion });
       if (
@@ -778,6 +797,13 @@ export function processReferencesPackage(
 
 function scanPackageProcesses(packageRoot: string): ProcEntry[] {
   const entries: ProcEntry[] = [];
+  const sharedDir = path.join(os.homedir(), '.contextos', 'runtime');
+  let sharedPid = 0;
+  try {
+    sharedPid = Number(fs.readFileSync(path.join(sharedDir, 'daemon.pid'), 'utf8').trim());
+  } catch {
+    // A shared daemon is optional.
+  }
   const procEntries = fs.readdirSync('/proc', { withFileTypes: true });
   for (const entry of procEntries) {
     if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
@@ -812,6 +838,7 @@ function scanPackageProcesses(packageRoot: string): ProcEntry[] {
         ?.slice('CONTEXTOS_REPO_ROOT='.length);
       projectDir = envRoot || cwd;
       daemon = args.some((arg, index) => arg === 'daemon' && args[index + 1] === 'start');
+      if (daemon && pid === sharedPid) projectDir = sharedDir;
     } catch {
       projectDir = '';
     }
@@ -838,7 +865,12 @@ function requestDaemon(
   return new Promise((resolve) => {
     let settled = false;
     let response = '';
-    const socket = net.createConnection(getDaemonControlSocketPath(projectDir));
+    const sharedDir = path.join(os.homedir(), '.contextos', 'runtime');
+    const socketPath =
+      projectDir === sharedDir && process.platform !== 'win32'
+        ? path.join(sharedDir, 'daemon.sock')
+        : getDaemonControlSocketPath(projectDir);
+    const socket = net.createConnection(socketPath);
     const timer = setTimeout(() => {
       socket.destroy();
       finish({ ok: false, error: 'daemon control request timed out' });
@@ -925,6 +957,8 @@ async function startDaemon(
   packageRoot: string,
   token: string
 ): Promise<number> {
+  if (projectDir === path.join(os.homedir(), '.contextos', 'runtime'))
+    ensurePrivateStateDir(projectDir);
   const cliPath = path.join(packageRoot, 'dist', 'bin', 'contextos.js');
   const child = childProcess.spawn(process.execPath, [cliPath, 'daemon', 'start'], {
     cwd: projectDir,
@@ -1018,7 +1052,11 @@ async function installSelectedVersion(
             `Process ${entry.pid} is using this ContextOS package but is not a verifiable daemon. Close active ContextOS clients and retry; no files were changed.`
           );
         }
-        const pidPath = path.join(entry.projectDir, '.contextos', 'daemon.pid');
+        const sharedDir = path.join(os.homedir(), '.contextos', 'runtime');
+        const pidPath =
+          entry.projectDir === sharedDir
+            ? path.join(sharedDir, 'daemon.pid')
+            : path.join(entry.projectDir, '.contextos', 'daemon.pid');
         try {
           assertNoSymlinkInPath(pidPath);
           const recordedPid = Number(fs.readFileSync(pidPath, 'utf8').trim());
@@ -1028,7 +1066,12 @@ async function installSelectedVersion(
             `Could not verify daemon process ${entry.pid} in ${entry.projectDir}; no files were changed.`
           );
         }
-        daemons.push({ pid: entry.pid, projectDir: entry.projectDir, version: currentVersion });
+        daemons.push({
+          pid: entry.pid,
+          projectDir: entry.projectDir,
+          version: currentVersion,
+          legacy: entry.projectDir !== sharedDir
+        });
       }
     }
 
