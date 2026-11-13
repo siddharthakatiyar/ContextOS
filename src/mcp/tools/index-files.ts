@@ -14,7 +14,7 @@ export function registerIndexFilesTool(server: McpServer, db: DB) {
 
   server.tool(
     'reindex_context',
-    'Re-index context files when documentation has been updated. Run this after modifying any .contextos/ files, CLAUDE.md, or engineering documentation.',
+    'Re-index context files when documentation has been updated. Run this after modifying AGENTS.md, CLAUDE.md, or engineering documentation.',
     {
       path: z.string().describe('Specific file to re-index. Must be an absolute path.'),
       layer: z

@@ -48,8 +48,11 @@ export interface WatcherOptions {
    * instead of being lost until restart.
    */
   buffered?: boolean;
-  onIndexed?: () => void;
+  onIndexed?: (filePath: string) => void;
+  onReconciled?: () => void;
   onError?: (error: unknown) => void;
+  stateDir?: string;
+  assertCurrent?: () => void;
 }
 
 export type ContextOSWatcher = FSWatcher & {
@@ -75,7 +78,7 @@ export function startWatcher(
   const root = canonicalDirectory(projectDir || process.cwd());
   const config = loadConfig({ cwd: root });
   const indexIgnore = createIndexIgnore(root, config.ignorePatterns);
-  const indexer = new Indexer(db, indexIgnore.root, config.ignorePatterns);
+  const indexer = new Indexer(db, indexIgnore.root, config.ignorePatterns, options?.assertCurrent);
   const limit = pLimit(5); // Throttle concurrent parses during massive file changes
   const pendingOperations = new Set<Promise<void>>();
 
@@ -120,9 +123,12 @@ export function startWatcher(
 
     // BackgroundIndexer is single-flight per process, so this safely no-ops if
     // another full index is already running.
-    const bgIndexer = new BackgroundIndexer(db, root);
+    const bgIndexer = new BackgroundIndexer(db, root, options?.stateDir, options?.assertCurrent);
     bgIndexer
       .startFullIndex(config)
+      .then(() => {
+        if (!bgIndexer.lastError) options?.onReconciled?.();
+      })
       .catch(console.error)
       .finally(() => {
         bulkActive = false;
@@ -135,12 +141,13 @@ export function startWatcher(
       try {
         // Layer 'repo' matches the bulk/full-index path so scores don't flip-flop
         // depending on whether a file arrived via watch events or full indexing.
+        let changed = false;
         if (type === 'add' || type === 'change') {
-          await indexer.indexFile(filePath, 'repo');
+          changed = (await indexer.indexFile(filePath, 'repo')).filesProcessed > 0;
         } else if (type === 'unlink') {
-          await indexer.removeFile(filePath);
+          changed = await indexer.removeFile(filePath);
         }
-        options?.onIndexed?.();
+        if (changed) options?.onIndexed?.(filePath);
       } catch (error) {
         options?.onError?.(error);
       }
@@ -213,7 +220,8 @@ export function startWatcher(
     // Chokidar does not provide stats for unlink events. Let those events
     // through so handleEvent can remove rows even after an ignore rule changes.
     ignored: (p: string, stats?: import('node:fs').Stats) =>
-      isIgnoredDotPath(p) || (stats !== undefined && indexIgnore.ignores(p)),
+      isIgnoredDotPath(path.relative(root, canonicalPathForComparison(p))) ||
+      (stats !== undefined && indexIgnore.ignores(p)),
     persistent: true,
     ignoreInitial: true,
     ignorePermissionErrors: true,

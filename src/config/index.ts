@@ -1,3 +1,4 @@
+import { registeredProjectPaths } from '../core/workspace/project-paths.js';
 import fs from 'fs';
 import path from 'path';
 import { defaultConfig } from './defaults.js';
@@ -59,6 +60,20 @@ export function loadConfig(opts?: { forceReload?: boolean; cwd?: string }): Cont
     }
   }
 
+  const stored = registeredProjectPaths(cwd);
+  const projectConfigPath = stored ? path.join(stored.projectDir, 'config.json') : undefined;
+  if (stored) config.dbPath = stored.dbPath;
+  if (projectConfigPath && fs.existsSync(projectConfigPath)) {
+    try {
+      const validated = validateConfigJson(
+        JSON.parse(fs.readFileSync(projectConfigPath, 'utf8')),
+        projectConfigPath
+      );
+      if (validated) config = mergeDeep(config, validated);
+    } catch (error) {
+      console.error('Error loading project config:', error);
+    }
+  }
   cachedConfigs.set(cacheKey, config);
   return config;
 }

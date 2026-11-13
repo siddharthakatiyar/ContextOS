@@ -87,74 +87,100 @@ export const serveCommand = new Command('serve')
   .description('Start the ContextOS MCP server (stdio)')
   .option('--workspace <name>', 'Serve all members of a workspace')
   .option('--repo <repo>', 'Default active repository for this connection')
-  .action(async (options: { workspace?: string; repo?: string }) => {
-    if (options.workspace) {
+  .option('--group <name>', 'Serve a group (workspace alias)')
+  .option('--project <project>', 'Default project (repo alias)')
+  .option('--worktree <worktree>', 'Default worktree path or ID')
+  .action(
+    async (options: {
+      workspace?: string;
+      repo?: string;
+      group?: string;
+      project?: string;
+      worktree?: string;
+    }) => {
+      // Use CONTEXTOS_REPO_ROOT env var if set (MCP clients often spawn with CWD=/)
+      const envRoot = process.env.CONTEXTOS_REPO_ROOT?.trim();
+      let projectDir = envRoot && envRoot.length > 1 ? envRoot : process.cwd();
+
+      // If CWD is root (/) — which happens when MCP clients don't set CWD —
+      // fall back to home directory to avoid writing to filesystem root
+      if (projectDir === '/') {
+        const os = await import('os');
+        projectDir = os.default.homedir();
+      }
+
+      // Change into the project directory so all path resolution works correctly
+      try {
+        process.chdir(projectDir);
+      } catch {
+        // If we can't chdir, continue with whatever cwd we have
+      }
+
+      // Provide stdout/stderr handlers to prevent crashing
+      process.on('uncaughtException', (err) => {
+        process.stderr.write(`ContextOS uncaught exception: ${err.message}\n`);
+      });
+      process.on('unhandledRejection', (reason) => {
+        process.stderr.write(`ContextOS unhandled rejection: ${reason}\n`);
+      });
+
+      const wasAutoPatchReexec = process.env[AUTO_PATCH_REEXEC_ENV] === '1';
+      delete process.env[AUTO_PATCH_REEXEC_ENV];
+      if (!wasAutoPatchReexec && readAutoPatchPolicy() === 'auto-patch') {
+        const result = await runAutoPatchBeforeServe();
+        if (
+          result.status === 'skipped' &&
+          !result.latestVersion &&
+          !result.registryCheckAttempted
+        ) {
+          const updateNotice = formatUpdateNotice(await checkForUpdates());
+          if (updateNotice) process.stderr.write(updateNotice);
+        }
+        const notice = formatAutoPatchNotice(result);
+        if (notice) process.stderr.write(notice);
+        if (result.status === 'updated') {
+          await relaunchUpdatedServe(result.targetVersion);
+          return;
+        }
+      } else if (!wasAutoPatchReexec) {
+        const updateNotice = formatUpdateNotice(await checkForUpdates());
+        if (updateNotice) process.stderr.write(updateNotice);
+      }
+
+      // Serve now just connects to the daemon or spawns it
       const { WorkspaceRegistry } = await import('../../core/workspace/registry.js');
-      const { workspaceStateDirectory } = await import('../../core/workspace/daemon.js');
       const registry = new WorkspaceRegistry();
       try {
-        const ws = registry.workspace(options.workspace);
-        const source = options.repo
-          ? registry.resolve(options.repo)
-          : registry.active(process.env.CONTEXTOS_REPO_ROOT || process.cwd());
-        if (!source || !registry.list(ws.id).some((repo) => repo.repoId === source.repoId))
-          throw new Error('Select an active workspace repository with --repo <repo>.');
-        await runDaemonClient(workspaceStateDirectory(ws.id), {
-          name: ws.name,
-          id: ws.id,
+        const group =
+          options.group ??
+          options.workspace ??
+          (process.env.CONTEXTOS_GROUP?.trim() ||
+            process.env.CONTEXTOS_WORKSPACE?.trim() ||
+            'default');
+        const workspace = registry.workspace(group);
+        const selector = options.worktree ?? options.project ?? options.repo;
+        let source = selector ? registry.resolve(selector) : registry.active(projectDir);
+        if (
+          !source &&
+          (fs.existsSync(path.join(projectDir, '.git')) ||
+            fs.existsSync(path.join(projectDir, '.contextos', 'index.db')))
+        )
+          source = registry.register(projectDir);
+        if (!source)
+          throw new Error(
+            'No initialized project selected. Run contextos init in your project or select --group and --project.'
+          );
+        if (!registry.list(workspace.id, true).some((view) => view.projectId === source.projectId))
+          throw new Error(
+            'The active project is not in the selected group. Use contextos group add.'
+          );
+        await runDaemonClient(source.rootPath, {
+          name: workspace.name,
+          id: workspace.id,
           activeRepoId: source.repoId
         });
       } finally {
         registry.close();
       }
-      return;
     }
-    if (options.repo) throw new Error('serve --repo requires --workspace.');
-    // Use CONTEXTOS_REPO_ROOT env var if set (MCP clients often spawn with CWD=/)
-    const envRoot = process.env.CONTEXTOS_REPO_ROOT?.trim();
-    let projectDir = envRoot && envRoot.length > 1 ? envRoot : process.cwd();
-
-    // If CWD is root (/) — which happens when MCP clients don't set CWD —
-    // fall back to home directory to avoid writing to filesystem root
-    if (projectDir === '/') {
-      const os = await import('os');
-      projectDir = os.default.homedir();
-    }
-
-    // Change into the project directory so all path resolution works correctly
-    try {
-      process.chdir(projectDir);
-    } catch {
-      // If we can't chdir, continue with whatever cwd we have
-    }
-
-    // Provide stdout/stderr handlers to prevent crashing
-    process.on('uncaughtException', (err) => {
-      process.stderr.write(`ContextOS uncaught exception: ${err.message}\n`);
-    });
-    process.on('unhandledRejection', (reason) => {
-      process.stderr.write(`ContextOS unhandled rejection: ${reason}\n`);
-    });
-
-    const wasAutoPatchReexec = process.env[AUTO_PATCH_REEXEC_ENV] === '1';
-    delete process.env[AUTO_PATCH_REEXEC_ENV];
-    if (!wasAutoPatchReexec && readAutoPatchPolicy() === 'auto-patch') {
-      const result = await runAutoPatchBeforeServe();
-      if (result.status === 'skipped' && !result.latestVersion && !result.registryCheckAttempted) {
-        const updateNotice = formatUpdateNotice(await checkForUpdates());
-        if (updateNotice) process.stderr.write(updateNotice);
-      }
-      const notice = formatAutoPatchNotice(result);
-      if (notice) process.stderr.write(notice);
-      if (result.status === 'updated') {
-        await relaunchUpdatedServe(result.targetVersion);
-        return;
-      }
-    } else if (!wasAutoPatchReexec) {
-      const updateNotice = formatUpdateNotice(await checkForUpdates());
-      if (updateNotice) process.stderr.write(updateNotice);
-    }
-
-    // Serve now just connects to the daemon or spawns it
-    await runDaemonClient(projectDir);
-  });
+  );

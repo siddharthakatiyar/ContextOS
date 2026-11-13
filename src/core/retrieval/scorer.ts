@@ -157,9 +157,9 @@ export function scoreChunks(
     workspace: 1.1,
     global: 1.0
   };
-  const maxGraphBoost = config.maxGraphBoost || 10;
-  const diversityDecay = config.diversityDecay || 0.7;
-  const diversityPenaltyStart = config.diversityPenaltyStart || 3;
+  const maxGraphBoost = config.maxGraphBoost ?? 10;
+  const diversityDecay = config.diversityDecay ?? 0.7;
+  const diversityPenaltyStart = config.diversityPenaltyStart ?? 3;
   const applyDiversity = opts?.diversityFilter !== false;
   const repoRoot = opts?.repoRoot || process.cwd();
   const matchTokens = (opts?.matchTokens || [])
@@ -313,7 +313,7 @@ export function scoreChunks(
       }
 
       // Layer boost (Multiplicative) — post-fusion
-      finalScore *= layerBoosts[chunk.layer as keyof typeof layerBoosts] || 1.0;
+      finalScore *= layerBoosts[chunk.layer as keyof typeof layerBoosts] ?? 1.0;
 
       // Recency: prefer newer updated_at (mild, post-fusion)
       if (chunk.updatedAt) {

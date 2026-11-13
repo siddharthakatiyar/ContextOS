@@ -2,8 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { collectDoctorReport } from '../../src/cli/commands/doctor.js';
+import { WorkspaceRegistry } from '../../src/core/workspace/registry.js';
+import { WorkspaceDaemon } from '../../src/core/workspace/daemon.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -14,12 +16,45 @@ function temporaryDirectory(): string {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const directory of temporaryDirectories.splice(0)) {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 
 describe('contextos doctor', () => {
+  it('inspects the registered global view without creating project-local state', async () => {
+    const root = temporaryDirectory();
+    const homeDirectory = temporaryDirectory();
+    vi.spyOn(os, 'homedir').mockReturnValue(homeDirectory);
+    const registry = new WorkspaceRegistry();
+    const source = registry.register(root);
+    registry.close();
+    const report = await collectDoctorReport({ cwd: root, homeDirectory });
+    const check = report.checks.find((item) => item.id === 'index-database');
+    expect(check?.status).toBe('pass');
+    expect(check?.details?.path).toBe(source.dbPath);
+    expect(fs.existsSync(path.join(root, '.contextos'))).toBe(false);
+  });
+
+  it('probes the shared daemon using the registered project handshake', async () => {
+    const root = temporaryDirectory();
+    const homeDirectory = temporaryDirectory();
+    vi.spyOn(os, 'homedir').mockReturnValue(homeDirectory);
+    vi.stubEnv('CONTEXTOS_EMBEDDINGS', '0');
+    const registry = new WorkspaceRegistry();
+    registry.register(root);
+    registry.close();
+    const daemon = new WorkspaceDaemon('default');
+    try {
+      await daemon.start();
+      const report = await collectDoctorReport({ cwd: root, homeDirectory });
+      expect(report.checks.find((item) => item.id === 'daemon-mcp')?.status).toBe('pass');
+    } finally {
+      await daemon.stop();
+      vi.unstubAllEnvs();
+    }
+  });
   it('reports missing state as unknown without creating files or directories', async () => {
     const root = temporaryDirectory();
     const homeDirectory = path.join(root, 'home');

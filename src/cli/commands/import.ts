@@ -6,6 +6,24 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { getErrorMessage } from '../../utils/errors.js';
 
+function canonicalImportPath(input: string): string {
+  let ancestor = input;
+  const missing: string[] = [];
+  while (true) {
+    try {
+      fs.lstatSync(ancestor);
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) break;
+    missing.unshift(path.basename(ancestor));
+    ancestor = parent;
+  }
+  return path.join(fs.realpathSync(ancestor), ...missing);
+}
+
 export const importCommand = new Command('import')
   .description('Import a ContextOS graph from a JSON file')
   .argument('<infile>', 'Input JSON file path')
@@ -22,7 +40,16 @@ export const importCommand = new Command('import')
       const fileData = fs.readFileSync(inPath, 'utf8');
       const importData = JSON.parse(fileData);
 
-      if (!importData.data || !importData.data.chunks) {
+      if (
+        !importData?.data ||
+        !['files', 'chunks', 'relationships'].every(
+          (table) =>
+            Array.isArray(importData.data[table]) &&
+            importData.data[table].every(
+              (row: unknown) => row !== null && typeof row === 'object' && !Array.isArray(row)
+            )
+        )
+      ) {
         throw new Error('Invalid export format');
       }
 
@@ -30,10 +57,15 @@ export const importCommand = new Command('import')
       const local = dbInstance
         .prepare("SELECT value FROM repository_metadata WHERE key='repo_id'")
         .get() as { value: string } | undefined;
+      const root = dbInstance
+        .prepare("SELECT value FROM repository_metadata WHERE key='root_path'")
+        .get() as { value: string } | undefined;
       const incomingIds = new Set<string>(
         [
           importData.repository?.repo_id,
-          ...importData.data.chunks.map((chunk: { repo_id?: string }) => chunk.repo_id)
+          ...['files', 'chunks', 'relationships'].flatMap((table) =>
+            importData.data[table].map((row: { repo_id?: string }) => row.repo_id)
+          )
         ].filter(Boolean)
       );
       if (incomingIds.size && (incomingIds.size !== 1 || !local || !incomingIds.has(local.value))) {
@@ -41,6 +73,26 @@ export const importCommand = new Command('import')
           'This export belongs to another repository. Import into its registered repository to preserve provenance; unrelated indexes cannot be merged.'
         );
       }
+      if (!local || !root)
+        throw new Error('The destination repository has no registered identity.');
+      const canonicalRoot = fs.realpathSync(root.value);
+      const validatePath = (value: unknown): string => {
+        if (typeof value !== 'string' || !value || value.includes('\0'))
+          throw new Error(
+            'Invalid export format: repository source paths must be nonempty strings.'
+          );
+        const resolved = path.resolve(canonicalRoot, value);
+        const canonical = canonicalImportPath(resolved);
+        if (!canonical.startsWith(canonicalRoot + path.sep))
+          throw new Error(
+            'This export contains source paths outside the destination repository. Import into its original repository to preserve provenance.'
+          );
+        return resolved;
+      };
+      for (const file of importData.data.files)
+        if (file.layer !== 'global') file.path = validatePath(file.path);
+      for (const chunk of importData.data.chunks)
+        if (chunk.layer !== 'global') chunk.source_file = validatePath(chunk.source_file);
 
       dbInstance.transaction(() => {
         // Insert Files
@@ -99,8 +151,8 @@ export const importCommand = new Command('import')
             start_line: null,
             end_line: null,
             file_stem: null,
-            repo_id: local?.value ?? null,
-            ...chunk
+            ...chunk,
+            repo_id: local.value
           });
         }
 

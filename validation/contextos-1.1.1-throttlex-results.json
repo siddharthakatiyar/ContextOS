@@ -1,0 +1,241 @@
+{
+  "date": "2026-11-13",
+  "version": "1.1.1",
+  "nodeVersion": "v22.23.2",
+  "platform": "Linux",
+  "installation": "global npm install from local tarball, not npm publication",
+  "branch": "codex/groups-worktrees-1.1.1",
+  "project": {
+    "root": "/home/siddharthakatiyar/throttleX",
+    "name": "throttleX",
+    "group": "throttlex",
+    "gitLayout": "single monorepo with eight component directories",
+    "files": 139,
+    "chunks": 1073,
+    "relationships": 7433,
+    "embeddedChunks": 1073,
+    "embeddingDimensions": 384
+  },
+  "automated": {
+    "build": "passed",
+    "lint": "passed",
+    "format": "passed",
+    "coverageCommand": "npx vitest run --coverage --testTimeout 120000",
+    "testFilesPassed": 73,
+    "testsPassed": 381,
+    "coverage": {
+      "Statements": 73.25,
+      "Branches": 66.07,
+      "Functions": 79.62,
+      "Lines": 75.47
+    },
+    "priorTimeouts": {
+      "count": 2,
+      "log": ".tmp/throttlex-validation/full-coverage-io-timeouts.log",
+      "context": "high measured server disk-I/O pressure; integration deadline increased and suite rerun with a longer default timeout"
+    }
+  },
+  "integrationChecks": {
+    "realCli": {
+      "passed": 28,
+      "failed": 0
+    },
+    "actualMcp": {
+      "passed": 8,
+      "failed": 0
+    },
+    "defaultMcp": {
+      "passed": 15,
+      "total": 15
+    },
+    "legacyMcp": {
+      "passed": 17,
+      "total": 17
+    },
+    "stdio": {
+      "passed": 5,
+      "total": 5
+    },
+    "worktrees": {
+      "passed": 11,
+      "total": 11
+    },
+    "lifecycle": {
+      "passed": 17,
+      "failed": 0
+    },
+    "importEdges": {
+      "passed": 9,
+      "failed": 0
+    },
+    "crossProjectGraph": {
+      "passed": 7,
+      "failed": 0
+    }
+  },
+  "actualAutomaticMcpStartup": {
+    "passed": true,
+    "startupAndQueryMs": 6575.8775049999995,
+    "tokens": 161,
+    "source": [
+      "/home/siddharthakatiyar/throttleX"
+    ],
+    "stopExitCode": 0,
+    "stderr": ""
+  },
+  "actualMcp": {
+    "passed": 8,
+    "failed": 0
+  },
+  "embeddings": {
+    "counts": {
+      "files": 139,
+      "chunks": 1073,
+      "relationships": 7433,
+      "chunk_embeddings": 1073
+    },
+    "embeddingModels": [
+      [
+        "sentence-transformers/all-MiniLM-L6-v2",
+        384,
+        1073
+      ]
+    ]
+  },
+  "workspacePerformance": {
+    "version": "1.1.1",
+    "baselineVersion": "1.1.0",
+    "nodeVersion": "v22.23.2",
+    "corpus": "four-repository payment fixture",
+    "embeddingMode": "disabled for deterministic keyword baseline",
+    "warmupIterations": 20,
+    "measuredIterations": 100,
+    "scopedComparisons": 400,
+    "identicalScopedRankings": 400,
+    "paymentRoleRecallAt10": 1,
+    "latencyMs": {
+      "baselineSingleP95": 8.269187999999758,
+      "candidateSingleP95": 8.393505000000005,
+      "workspaceP95": 32.277908000000025,
+      "individualSumP95": 32.408022000000074,
+      "singleRatio": 1.0150337614769733,
+      "workspaceRatio": 0.9959851298545759
+    },
+    "gates": {
+      "identicalScopedRankings": true,
+      "paymentRoleCoverage": true,
+      "singleLatency": true,
+      "workspaceLatency": true
+    }
+  },
+  "monorepoWarmPerformance": {
+    "iterations": 100,
+    "warmup": 20,
+    "keywordOnly": true,
+    "chunks": 1073,
+    "medianMs": 20.025822000000062,
+    "p95Ms": 50.78838700000006,
+    "fdBefore": 24,
+    "fdOpen": 28,
+    "fdAfterClose": 21,
+    "rssBefore": 74686464,
+    "rssAfter": 200110080,
+    "samples": [
+      {
+        "iteration": 0,
+        "fd": 28,
+        "rss": 152915968
+      },
+      {
+        "iteration": 20,
+        "fd": 28,
+        "rss": 199839744
+      },
+      {
+        "iteration": 40,
+        "fd": 28,
+        "rss": 202067968
+      },
+      {
+        "iteration": 60,
+        "fd": 28,
+        "rss": 207835136
+      },
+      {
+        "iteration": 80,
+        "fd": 28,
+        "rss": 209145856
+      },
+      {
+        "iteration": 100,
+        "fd": 28,
+        "rss": 210325504
+      }
+    ]
+  },
+  "installedBuildComparison": {
+    "differentFiles": [],
+    "matched": true
+  },
+  "artifact": {
+    "path": ".tmp/groups-worktrees-1.1.1/siddharthakatiyar-contextos-1.1.1.tgz",
+    "bytes": 364826,
+    "sha256": "021729aaa4e70554ab9a5734630ac2e7b7bab88d2f80f67dcf673fb5c3fe5149"
+  },
+  "remainingLimits": [
+    "adaptiveResponse is a reserved compatibility setting, not an active workspace runtime switch",
+    "globalContextDir is not automatically scanned by the workspace server; shared indexed global content retrieval works",
+    "two-scan throttle applies per process, not across independent CLI processes",
+    "export/import is per view, not a full-state backup",
+    "raw .proto files are outside default indexable patterns",
+    "editor UI, visualization browser rendering, Windows and macOS not exercised",
+    "actual package upgrade/publication/release not performed"
+  ],
+  "publicationPerformed": false,
+  "releaseAuthorizedByThisTestRequest": false,
+  "reproducibleHarnessDirectory": ".tmp/throttlex-validation",
+  "finalSourceVerification": {
+    "trackedFiles": 211,
+    "changedTrackedFiles": [],
+    "gitStatus": "?? .mcp.json\n?? CLAUDE.md\n",
+    "worktrees": "worktree /home/siddharthakatiyar/throttleX\nHEAD 9cb3904cc26bf8f59a0cf25e804275cd55ba064d\nbranch refs/heads/main\n\n",
+    "localStateDirectoryExists": false
+  },
+  "finalProjectStatus": [
+    {
+      "repoId": "37b0a3c1-9dbf-4bc8-97eb-3e9103f7ec53",
+      "projectId": "8b1fd829-7c7a-413e-be27-59abc0e1c70f",
+      "worktreeId": "a98f90b2-bfcc-4d55-b004-d3e85548a241",
+      "viewId": "37b0a3c1-9dbf-4bc8-97eb-3e9103f7ec53",
+      "branch": "main",
+      "head": "9cb3904cc26bf8f59a0cf25e804275cd55ba064d",
+      "gitDir": "/home/siddharthakatiyar/throttleX/.git",
+      "commonDir": "/home/siddharthakatiyar/throttleX/.git",
+      "active": true,
+      "checkoutGeneration": 0,
+      "name": "throttleX",
+      "rootPath": "/home/siddharthakatiyar/throttleX",
+      "dbPath": "/home/siddharthakatiyar/.contextos/projects/8b1fd829-7c7a-413e-be27-59abc0e1c70f/views/37b0a3c1-9dbf-4bc8-97eb-3e9103f7ec53/index.db",
+      "state": "ready",
+      "generation": 5,
+      "lastSuccess": 1794565194763,
+      "lastError": null,
+      "configFingerprint": "8ec7855b27886614b1403a038f5869bb39a449a1a936dec2ee5eeef4b13b5250",
+      "progress": {
+        "fullIndexCompleted": true,
+        "lastIndexTime": 1794565194588,
+        "indexerVersion": 1
+      },
+      "files": 139,
+      "chunks": 1073,
+      "owner": null
+    }
+  ],
+  "retrievalBenchmark": {
+    "failed": false,
+    "reportLog": ".tmp/throttlex-validation/retrieval-benchmark-final.log"
+  },
+  "allOriginalPropertiesFulfilled": false,
+  "acceptanceStatus": "Core integration checks pass; disclosed inactive legacy options and absence of a machine-wide scan quota remain.",
+  "contextosProcessesStoppedAtCleanup": []
+}

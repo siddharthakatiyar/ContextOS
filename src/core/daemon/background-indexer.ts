@@ -23,9 +23,13 @@ const activeFullIndexes = new Map<string, Promise<void>>();
 const scheduleFullIndex = pLimit(2);
 
 export async function waitForBackgroundIndexing(root?: string): Promise<void> {
-  const key = root ? canonicalDirectory(root) : undefined;
-  while (key ? activeFullIndexes.has(key) : activeFullIndexes.size > 0) {
-    await Promise.all(key ? [activeFullIndexes.get(key)] : [...activeFullIndexes.values()]);
+  const prefix = root ? canonicalDirectory(root) + '\0' : undefined;
+  while (true) {
+    const pending = [...activeFullIndexes.entries()]
+      .filter(([key]) => !prefix || key.startsWith(prefix))
+      .map(([, job]) => job);
+    if (!pending.length) return;
+    await Promise.all(pending);
   }
 }
 
@@ -47,7 +51,12 @@ export class BackgroundIndexer {
   public processedFiles = 0;
   public startTime = 0;
 
-  constructor(db: DB, projectDir: string) {
+  constructor(
+    db: DB,
+    projectDir: string,
+    private stateDir?: string,
+    private assertCurrent?: () => void
+  ) {
     this.db = db;
     // Explicit canonical traversal root — never depend on process.cwd() or a
     // symlink spelling matching the daemon's project directory.
@@ -55,7 +64,7 @@ export class BackgroundIndexer {
   }
 
   public startFullIndex(config: IndexConfig): Promise<void> {
-    const key = this.projectDir;
+    const key = this.projectDir + '\0' + this.db.getInstance().name;
     const active = activeFullIndexes.get(key);
     if (active) return active;
     this.isIndexing = true;
@@ -71,7 +80,10 @@ export class BackgroundIndexer {
   public lastError: string | null = null;
 
   private async runFullIndex(config: IndexConfig): Promise<void> {
-    const statusFile = path.join(this.projectDir, '.contextos', 'status.json');
+    const statusFile = path.join(
+      this.stateDir ?? path.dirname(this.db.getInstance().name),
+      'status.json'
+    );
     this.startTime = Date.now();
     this.processedFiles = 0;
     this.totalFiles = 0;
@@ -80,7 +92,13 @@ export class BackgroundIndexer {
 
     try {
       const indexIgnore = createIndexIgnore(this.projectDir, config.ignorePatterns || []);
-      this.indexer = new Indexer(this.db, this.projectDir, config.ignorePatterns || []);
+      this.assertCurrent?.();
+      this.indexer = new Indexer(
+        this.db,
+        this.projectDir,
+        config.ignorePatterns || [],
+        this.assertCurrent
+      );
 
       const allRepoFiles = new Set<string>();
       for (const pattern of config.indexablePatterns) {
@@ -172,6 +190,7 @@ export class BackgroundIndexer {
       let failedFiles = 0;
 
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        this.assertCurrent?.();
         const batch = files.slice(i, i + BATCH_SIZE);
 
         await Promise.all(
@@ -217,6 +236,7 @@ export class BackgroundIndexer {
 
       if (failedFiles > 0)
         throw new Error(`${failedFiles} file(s) failed to index; retry the scan.`);
+      this.assertCurrent?.();
       // A successful scan is also a reconciliation point. Remove rows from a
       // previous full scan when a source was deleted or became ignored. Keep
       // other layers (manual facts/workspace/global indexes) untouched.

@@ -15,7 +15,9 @@ export function generateCursorConfig(options: {
   const command = process.env.CONTEXTOS_MCP_COMMAND || 'contextos';
   const args = process.env.CONTEXTOS_MCP_ARGS
     ? process.env.CONTEXTOS_MCP_ARGS.split(' ').filter(Boolean)
-    : ['serve'];
+    : options.workspaceName
+      ? ['serve', '--group', options.workspaceName]
+      : ['serve'];
 
   return {
     mcpServers: {

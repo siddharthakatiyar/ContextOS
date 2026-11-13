@@ -1,4 +1,6 @@
 import path from 'node:path';
+import fs from 'node:fs';
+import { DB, getContextOSHome } from '../core/storage/database.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -16,12 +18,17 @@ import { FeedbackTracker } from '../core/feedback/tracker.js';
 import { registerReadFileTool } from './tools/read-file.js';
 import { registerExpandTool } from './tools/expand.js';
 import { registerExecuteTool } from './tools/execute.js';
-import { registerGetGraphTools } from './tools/get-graph.js';
-import { registerListTopicsTool } from './tools/list-topics.js';
+import { registerGetGraphTools, registerLegacyGetGraphTools } from './tools/get-graph.js';
+import { registerListTopicsTool, registerLegacyListTopicsTool } from './tools/list-topics.js';
 import { registerUpdateStatusTool } from './tools/update-status.js';
 import { resolveWithinWorkspace } from '../utils/fs-guard.js';
 import { getErrorMessage } from '../utils/errors.js';
 import crypto from 'node:crypto';
+import { registerLegacyReadTopicTool } from './tools/read-topic.js';
+import { registerSaveContextTool } from './tools/save-context.js';
+import { ChunksRepo } from '../core/storage/chunks-repo.js';
+import { GraphStore } from '../core/knowledge/graph-store.js';
+import { registerWorkspaceKnowledgeTools } from './tools/knowledge.js';
 
 type Handler = (args: Record<string, unknown>) => Promise<CallToolResult>;
 type Definition = { name: string; description: string; schema: z.ZodRawShape; handler: Handler };
@@ -43,7 +50,7 @@ const failure = (error: unknown): CallToolResult => ({
 export function registerWorkspaceTools(
   server: McpServer,
   runtime: WorkspaceRuntime,
-  options: { cwd: string; activeRepoId?: string }
+  options: { cwd: string; activeRepoId?: string; workspace?: string }
 ): void {
   const originalServer = server;
   server = {
@@ -76,12 +83,24 @@ export function registerWorkspaceTools(
     return value;
   };
   const select = (selectors: ScopeSelectors = {}) =>
-    runtime.select(selectors, options.cwd, options.activeRepoId);
+    runtime.select(
+      selectors,
+      options.cwd,
+      runtime.registry.active(options.cwd)?.repoId ?? options.activeRepoId,
+      options.workspace
+    );
+  const graph = () =>
+    new GraphStore({
+      resolve: (viewId) => {
+        const source = runtime.registry.resolve(viewId);
+        return { source, db: runtime.get(source).db.getInstance() };
+      }
+    });
   const choose = (selector?: string, file?: string): RepositorySource => {
     if (selector) return select({ repo: [selector] }).sources[0];
     if (file && path.isAbsolute(file)) {
-      const candidates = runtime.workspace
-        ? runtime.registry.list(runtime.workspace)
+      const candidates = options.workspace
+        ? runtime.registry.list(options.workspace, true)
         : select().sources;
       const owner = candidates
         .filter((source) => resolveWithinWorkspace(source.rootPath, file))
@@ -96,10 +115,15 @@ export function registerWorkspaceTools(
     'Retrieve engineering context from the active repository, explicit repositories, or the entire workspace. Use repo/workspace/all_repos to select scope.',
     {
       prompt: z.string(),
+      group: z.string().optional(),
+      project: z.union([z.string(), z.array(z.string())]).optional(),
+      worktree: z.string().optional(),
+      branch: z.string().optional(),
+      all_worktrees: z.boolean().optional(),
       repo: z.union([z.string(), z.array(z.string())]).optional(),
       workspace: z.string().optional(),
       all_repos: z.boolean().optional(),
-      max_tokens: z.number().int().positive().max(8000).optional().default(1200),
+      max_tokens: z.number().int().positive().max(8000).optional(),
       layers: z
         .array(z.enum(['global', 'workspace', 'repo', 'session']))
         .optional()
@@ -113,9 +137,23 @@ export function registerWorkspaceTools(
         const scope = select({
           repo: typeof args.repo === 'string' ? [args.repo] : args.repo,
           workspace: args.workspace,
-          allRepos: args.all_repos
+          allRepos: args.all_repos,
+          group: args.group,
+          project: typeof args.project === 'string' ? [args.project] : args.project,
+          worktree: args.worktree,
+          branch: args.branch,
+          allWorktrees: args.all_worktrees
         });
+        const knowledgeGraph = graph();
+        let graphRevision: number;
+        try {
+          knowledgeGraph.pruneInvalid({ viewIds: scope.repoIds });
+          graphRevision = knowledgeGraph.revision();
+        } finally {
+          knowledgeGraph.close();
+        }
         const key = JSON.stringify([
+          graphRevision,
           args,
           scope.repoIds,
           scope.activeRepoId,
@@ -123,40 +161,90 @@ export function registerWorkspaceTools(
           scope.sources.map((s) => s.generation)
         ]);
         const cached = cache.get(key);
-        if (cached && Date.now() - cached.at < 30_000) return cached.result;
+        if (cached && Date.now() - cached.at < 30_000) {
+          try {
+            for (const source of scope.sources) runtime.get(source).assertReadable();
+            if (!cached.result.structuredContent?.partial) return cached.result;
+          } catch {
+            /* Recompute to isolate unavailable sources instead of returning stale cached content. */
+          }
+          cache.delete(key);
+        }
         const result = await retrieveWorkspace(runtime, scope, args.prompt, {
           layers: args.layers,
           explain: args.explain
         });
+        const markUnavailable = (source: RepositorySource, error: unknown) => {
+          result.unavailableSources ??= [];
+          if (!result.unavailableSources.some((item) => item.repoId === source.repoId))
+            result.unavailableSources.push({
+              repoId: source.repoId,
+              name: source.name,
+              error: getErrorMessage(error)
+            });
+          result.partial = true;
+        };
         for (const source of scope.sources) {
           if (result.unavailableSources?.some((s) => s.repoId === source.repoId)) continue;
-          const repo = runtime.get(source);
-          const state = session(source);
-          const sessionChunks = args.layers.includes('session')
-            ? await state.manager.getSessionContext()
-            : [];
-          const facts = args.layers.includes('repo')
-            ? new KnowledgeStore(repo.db).searchFacts(args.prompt, 2)
-            : [];
-          const memories = mergeMemoryPipeline([], sessionChunks, facts, result.intent).map(
-            (chunk) => ({
-              ...chunk,
-              id: entityRef(source.repoId, 'memory', chunk.id),
-              localId: chunk.id,
-              repoId: source.repoId,
-              repoName: source.name,
-              relativePath: chunk.sourceFile,
-              layer: chunk.sourceFile === 'memory.fact' ? ('repo' as const) : chunk.layer
-            })
-          );
-          result.chunks.push(...memories);
-          state.store.addEvent({
-            sessionId: state.manager.getSessionId(),
-            eventType: 'user_prompt',
-            content: args.prompt.slice(0, 2000),
-            relatedFiles: null
-          });
+          try {
+            const repo = runtime.get(source);
+            const state = session(source);
+            const sessionChunks = args.layers.includes('session')
+              ? await state.manager.getSessionContext()
+              : [];
+            repo.assertReadable();
+            const facts = args.layers.includes('repo')
+              ? new KnowledgeStore(repo.db).searchFacts(args.prompt, 2)
+              : [];
+            const memories = mergeMemoryPipeline([], sessionChunks, facts, result.intent).map(
+              (chunk) => ({
+                ...chunk,
+                id: entityRef(source.repoId, 'memory', chunk.id),
+                localId: chunk.id,
+                repoId: source.repoId,
+                repoName: source.name,
+                relativePath: chunk.sourceFile,
+                layer: chunk.sourceFile === 'memory.fact' ? ('repo' as const) : chunk.layer
+              })
+            );
+            result.chunks.push(...memories);
+            state.store.addEvent({
+              sessionId: state.manager.getSessionId(),
+              eventType: 'user_prompt',
+              content: args.prompt.slice(0, 2000),
+              relatedFiles: null
+            });
+          } catch (error) {
+            markUnavailable(source, error);
+          }
         }
+        // Session retrieval is asynchronous: a checkout can change after the core search.
+        for (const source of scope.sources) {
+          if (result.unavailableSources?.some((item) => item.repoId === source.repoId)) continue;
+          try {
+            runtime.get(source).assertReadable();
+          } catch (error) {
+            markUnavailable(source, error);
+          }
+        }
+        const failed = new Set(result.unavailableSources?.map((source) => source.repoId));
+        result.chunks = result.chunks.filter((chunk) => !chunk.repoId || !failed.has(chunk.repoId));
+        result.expandedEntities = result.expandedEntities.filter(
+          (entity) => !entity.repoId || !failed.has(entity.repoId)
+        );
+        result.knowledgeLinks = result.knowledgeLinks?.filter((link) =>
+          link.evidence.every((item) => !failed.has(item.viewId))
+        );
+        if (result.explanation) {
+          for (const ref of Object.keys(result.explanation.chunks)) {
+            const owner = /^contextos:([^:]+):/.exec(ref)?.[1];
+            if (owner && failed.has(owner)) delete result.explanation.chunks[ref];
+          }
+        }
+        if (scope.sources.every((source) => failed.has(source.repoId)))
+          throw new Error(
+            'All selected views changed or became unavailable during retrieval; refresh and retry.'
+          );
         for (const chunk of result.chunks) {
           if (!chunk.repoId || !chunk.localId || !chunk.relativePath) continue;
           const fileKey = chunk.repoId + ':' + chunk.sourceFile;
@@ -165,10 +253,19 @@ export function registerWorkspaceTools(
           else recent.set(fileKey, { ids: [chunk.localId], at: Date.now() });
         }
         if (recent.size > 200) recent.clear();
-        const budget = args.tier === 'stub' ? Math.min(args.max_tokens, 250) : args.max_tokens;
+        const responseSource =
+          scope.sources.find((s) => s.repoId === scope.activeRepoId && !failed.has(s.repoId)) ??
+          scope.sources.find((s) => !failed.has(s.repoId))!;
+        const responseConfig = runtime.get(responseSource).config;
+        const requestedBudget = args.max_tokens ?? Math.min(responseConfig.maxTokenBudget, 8000);
+        const budget = args.tier === 'stub' ? Math.min(requestedBudget, 250) : requestedBudget;
         const compiled = compile(result, {
           maxTokens: budget,
-          maxExactTokens: budget,
+          maxExactTokens:
+            args.max_tokens !== undefined || args.tier === 'stub'
+              ? budget
+              : Math.min(responseConfig.maxExactTokenBudget, 8000),
+          framingReserve: responseConfig.framingReserve,
           sentRegistry: sent,
           outputFormat: args.output_format,
           explain: args.explain
@@ -212,6 +309,20 @@ export function registerWorkspaceTools(
             unavailableSources: result.unavailableSources,
             omittedRepositories: omitted,
             tokens: compiled.tokenCount,
+            chunks: result.chunks.map((chunk) => ({
+              ref: chunk.id,
+              viewId: chunk.repoId,
+              projectId: chunk.projectId,
+              worktreeId: chunk.worktreeId,
+              branch: chunk.branch,
+              head: chunk.head,
+              relativePath: chunk.relativePath,
+              sourceFile: chunk.sourceFile,
+              startLine: chunk.startLine,
+              endLine: chunk.endLine
+            })),
+            sources: scope.sources,
+            knowledgeLinks: result.knowledgeLinks,
             ...(args.explain
               ? { explanation: result.explanation, compilation: compiled.diagnostics }
               : {})
@@ -225,10 +336,53 @@ export function registerWorkspaceTools(
       }
     }
   );
+  const viewSchema = {
+    repo: z.string().optional(),
+    project: z.string().optional(),
+    worktree: z.string().optional(),
+    branch: z.string().optional()
+  };
+  const chooseView = (args: Record<string, unknown>, file?: string) => {
+    if (args.project || args.worktree || args.branch) {
+      const scope = select({
+        project: args.project ? [String(args.project)] : undefined,
+        repo: args.repo ? [String(args.repo)] : undefined,
+        worktree: args.worktree as string | undefined,
+        branch: args.branch as string | undefined
+      });
+      if (scope.sources.length !== 1)
+        throw new Error('This operation requires one project/worktree view.');
+      return scope.sources[0];
+    }
+    return choose(typeof args.repo === 'string' ? args.repo : undefined, file);
+  };
+  const provenance = (source: RepositorySource, args: Record<string, unknown>, file?: string) => {
+    const chunks =
+      typeof args.symbolName === 'string' || file
+        ? new ChunksRepo(runtime.get(source).db.getInstance())
+        : undefined;
+    const records =
+      typeof args.symbolName === 'string'
+        ? chunks!.findBySymbolName(args.symbolName)
+        : file
+          ? chunks!.getByIds(chunks!.getIdsBySource(path.resolve(source.rootPath, file)))
+          : [];
+    return {
+      source,
+      chunks: records.map((chunk) => ({
+        ref: entityRef(source.repoId, 'chunk', chunk.id),
+        file: chunk.sourceFile,
+        startLine: chunk.startLine,
+        endLine: chunk.endLine
+      }))
+    };
+  };
+  let legacyEnabled = false;
   const definitions = (source: RepositorySource) => {
     const repo = runtime.get(source);
     return capture((mock) => {
       registerReadFileTool(mock, source.rootPath, (file) => {
+        repo.assertReadable();
         const entry = recent.get(source.repoId + ':' + file);
         if (entry && Date.now() - entry.at < 300_000) {
           const tracker = new FeedbackTracker(repo.db);
@@ -241,43 +395,94 @@ export function registerWorkspaceTools(
       registerExecuteTool(mock, source.rootPath);
       registerGetGraphTools(mock, repo.db);
       registerListTopicsTool(mock, repo.db);
+      if (legacyEnabled) {
+        registerLegacyGetGraphTools(mock, repo.db);
+        registerLegacyListTopicsTool(mock, repo.db);
+        registerLegacyReadTopicTool(mock, repo.db);
+        registerSaveContextTool(mock, repo.db);
+      }
     });
   };
   // Capture schemas without opening a repository. Factories only access DBs for symbol tools;
   // use a selected repository, which serve validates before accepting connections.
   const initial = choose();
+  legacyEnabled = runtime.get(initial).config.legacyTools;
   for (const definition of definitions(initial)) {
     server.tool(
       definition.name,
       definition.description,
       {
         ...definition.schema,
-        repo: z.string().optional().describe('Repository ID or name; defaults to active repository')
+        ...viewSchema
       },
       async (args: Record<string, unknown>) => {
         try {
           const file = typeof args.filePath === 'string' ? args.filePath : undefined;
-          const source = choose(typeof args.repo === 'string' ? args.repo : undefined, file);
+          const source = chooseView(args, file);
+          if (definition.name === 'save_context') {
+            const owner = runtime.get(source);
+            await owner.prepareRead();
+            const relatedFiles = typeof args.related_files === 'string' ? args.related_files : null;
+            if (
+              relatedFiles
+                ?.split(',')
+                .some((file) => !resolveWithinWorkspace(source.rootPath, file.trim()))
+            )
+              throw new Error('Related files must stay within the selected project/worktree.');
+            owner.assertReadable();
+            const state = session(source);
+            state.store.addEvent({
+              sessionId: state.manager.getSessionId(),
+              eventType: 'system_response',
+              content: String(args.note),
+              relatedFiles
+            });
+            cache.clear();
+            return {
+              ...response('Saved connection-specific session note.'),
+              structuredContent: { source }
+            };
+          }
           if (definition.name === 'ctx_expand') {
             const paths = args.paths as string[];
             const outputs: CallToolResult[] = [];
             for (const file of paths) {
-              const target = choose(typeof args.repo === 'string' ? args.repo : undefined, file);
+              const target = chooseView(args, file);
+              if (!resolveWithinWorkspace(target.rootPath, file))
+                throw new Error('Access denied: path is outside the selected project/worktree.');
+              const owner = runtime.get(target);
+              await owner.prepareRead();
               const tool = definitions(target).find((d) => d.name === definition.name)!;
-              outputs.push(await tool.handler({ ...args, paths: [file] }));
+              const output = await tool.handler({ ...args, paths: [file] });
+              owner.assertReadable();
+              output.structuredContent = provenance(target, args, file);
+              output.content.unshift({
+                type: 'text',
+                text: `Project: ${target.name}; branch: ${target.branch ?? 'detached/non-Git'}; worktree: ${target.worktreeId}; view: ${target.repoId}`
+              });
+              outputs.push(output);
+            }
+            for (const output of outputs) {
+              const source = output.structuredContent?.source as RepositorySource | undefined;
+              if (source) runtime.get(source).assertReadable();
             }
             return {
               content: outputs.flatMap((o) => o.content),
-              isError: outputs.some((o) => o.isError)
+              isError: outputs.some((o) => o.isError),
+              structuredContent: { sources: outputs.map((o) => o.structuredContent) }
             };
           }
+          const reading = definition.name !== 'ctx_execute';
+          const owner = runtime.get(source);
+          if (reading) await owner.prepareRead();
           const tool = definitions(source).find((d) => d.name === definition.name)!;
           const output = await tool.handler(args);
-          if (definition.name === 'ctx_symbol' || definition.name === 'ctx_topics')
-            output.content.unshift({
-              type: 'text',
-              text: `Repository: ${source.name} (${source.repoId})`
-            });
+          if (reading) owner.assertReadable();
+          output.structuredContent = provenance(source, args, file);
+          output.content.unshift({
+            type: 'text',
+            text: `Project: ${source.name}; branch: ${source.branch ?? 'detached/non-Git'}; worktree: ${source.worktreeId}; view: ${source.repoId}`
+          });
           return output;
         } catch (error) {
           return failure(error);
@@ -290,13 +495,13 @@ export function registerWorkspaceTools(
     'Index a file in the selected repository through its indexing owner.',
     {
       path: z.string(),
-      repo: z.string().optional(),
+      ...viewSchema,
       layer: z.enum(['global', 'workspace', 'repo', 'session']).optional().default('repo'),
       workspaceName: z.string().optional()
     },
     async (args) => {
       try {
-        const source = choose(args.repo, args.path);
+        const source = chooseView(args, args.path);
         const result = await runtime.get(source).request({
           action: 'file',
           file: args.path,
@@ -316,8 +521,10 @@ export function registerWorkspaceTools(
       toolName,
       'Show selected repository or workspace indexing status.',
       {
-        repo: z.string().optional(),
+        ...viewSchema,
+        group: z.string().optional(),
         workspace: z.string().optional(),
+        all_worktrees: z.boolean().optional(),
         all_repos: z.boolean().optional()
       },
       async (args) => {
@@ -325,7 +532,12 @@ export function registerWorkspaceTools(
           const scope = select({
             repo: args.repo ? [args.repo] : undefined,
             workspace: args.workspace,
-            allRepos: args.all_repos
+            allRepos: args.all_repos,
+            group: args.group,
+            project: args.project ? [args.project] : undefined,
+            worktree: args.worktree,
+            branch: args.branch,
+            allWorktrees: args.all_worktrees
           });
           const rows = scope.sources.map((source) => {
             try {
@@ -346,44 +558,132 @@ export function registerWorkspaceTools(
         }
       }
     );
-  server.tool(
-    'ctx_remember',
-    'Store repository-specific facts or connection-specific session notes.',
-    {
-      type: z.enum(['session_note', 'cross_session_fact', 'forget_fact']),
-      content: z.string(),
-      category: z.string().optional(),
-      repo: z.string().optional()
-    },
-    async (args) => {
-      try {
-        const ref = parseRef(args.content);
-        const source = choose(args.repo ?? ref?.repoId);
-        if (ref && ref.repoId !== source.repoId)
-          throw new Error('Memory reference belongs to another repository');
-        const repo = runtime.get(source);
-        const store = new KnowledgeStore(repo.db);
-        cache.clear();
-        if (args.type === 'forget_fact')
-          return response(
-            store.forgetFact(ref?.localId ?? args.content) ? 'Fact removed.' : 'Fact not found.'
-          );
-        if (args.type === 'cross_session_fact')
-          return response(
-            `Saved fact: ${entityRef(source.repoId, 'memory', store.learnFact(args.content, args.category))}`
-          );
+  const knowledgeDefinitions = capture((mock) =>
+    registerWorkspaceKnowledgeTools(mock, {
+      select,
+      graph,
+      clearCache: () => cache.clear(),
+      defaultGroup: options.workspace,
+      catalog: () => {
+        const views = options.workspace
+          ? runtime.registry.list(options.workspace, true)
+          : runtime.registry.listAll().filter((source) => source.active);
+        const projects = new Set(views.map((source) => source.projectId));
+        return {
+          groups: options.workspace
+            ? [runtime.registry.workspace(options.workspace)]
+            : runtime.registry.workspaces(),
+          projects: runtime.registry.projects().filter((project) => projects.has(project.id)),
+          worktrees: runtime.registry
+            .worktrees()
+            .filter((worktree) => projects.has(worktree.projectId)),
+          views
+        };
+      },
+      saveSession: (source, content) => {
         const state = session(source);
         state.store.addEvent({
           sessionId: state.manager.getSessionId(),
           eventType: 'system_response',
-          content: args.content,
+          content,
           relatedFiles: null
         });
-        return response('Saved session note.');
-      } catch (error) {
-        return failure(error);
       }
-    }
+    })
   );
+  for (const definition of knowledgeDefinitions)
+    server.tool(definition.name, definition.description, definition.schema, definition.handler);
+  if (legacyEnabled) {
+    const remember = knowledgeDefinitions.find((definition) => definition.name === 'ctx_remember')!;
+    server.tool(
+      'learn_fact',
+      'Deprecated alias for verified ctx_remember. Code facts require evidence and expected_generations. Use provenance=user only for an explicit user decision or preference.',
+      {
+        ...Object.fromEntries(
+          Object.entries(remember.schema).filter(([key]) => !['content', 'type'].includes(key))
+        ),
+        fact: z.string()
+      },
+      (args) => remember.handler({ ...args, content: args.fact, type: 'cross_session_fact' })
+    );
+    const forget = knowledgeDefinitions.find((definition) => definition.name === 'ctx_forget')!;
+    server.tool(
+      'forget_fact',
+      'Deprecated alias for ctx_forget; removes one fact within the selected scope.',
+      forget.schema,
+      forget.handler
+    );
+    server.tool(
+      'rate_chunk',
+      'Rate a chunk in its owning project/worktree. Qualified chunk references are preferred; historical bare IDs resolve against the active or selected view.',
+      {
+        ...viewSchema,
+        chunk_id: z.string(),
+        adjustment: z.number().min(-5).max(5),
+        reason: z.string().optional()
+      },
+      async (args) => {
+        try {
+          const ref = parseRef(args.chunk_id);
+          if (ref && ref.kind !== 'chunk')
+            throw new Error('Feedback requires a qualified chunk reference.');
+          const explicit = args.repo || args.project || args.worktree || args.branch;
+          if (ref?.repoId === 'global') {
+            if (explicit)
+              throw new Error('Global chunks cannot be rated with a project/worktree selector.');
+            const globalPath = path.join(getContextOSHome(), 'index.db');
+            if (!fs.existsSync(globalPath)) throw new Error('Global index is unavailable.');
+            const globalDb = new DB(globalPath);
+            try {
+              const chunk = new ChunksRepo(globalDb.getInstance()).getByIds([ref.localId])[0];
+              if (!chunk || chunk.layer !== 'global')
+                throw new Error('Global chunk does not exist in the shared global index.');
+              const id = new FeedbackTracker(globalDb).recordFeedback(
+                ref.localId,
+                args.adjustment,
+                args.reason
+              );
+              cache.clear();
+              return {
+                ...response('Recorded feedback.'),
+                structuredContent: {
+                  source: { repoId: 'global' },
+                  ref: entityRef('global', 'feedback', id),
+                  chunk: args.chunk_id
+                }
+              };
+            } finally {
+              globalDb.close();
+            }
+          }
+          const source = ref && !explicit ? choose(ref.repoId) : chooseView(args);
+          if (ref && ref.repoId !== source.repoId)
+            throw new Error('Chunk belongs to another selected project/worktree.');
+          const owner = runtime.get(source);
+          await owner.prepareRead();
+          const localId = ref?.localId ?? args.chunk_id;
+          if (!new ChunksRepo(owner.db.getInstance()).getByIds([localId]).length)
+            throw new Error('Chunk does not exist in the selected view.');
+          owner.assertReadable();
+          const id = new FeedbackTracker(owner.db).recordFeedback(
+            localId,
+            args.adjustment,
+            args.reason
+          );
+          cache.clear();
+          return {
+            ...response('Recorded feedback.'),
+            structuredContent: {
+              source,
+              ref: entityRef(source.repoId, 'feedback', id),
+              chunk: entityRef(source.repoId, 'chunk', localId)
+            }
+          };
+        } catch (error) {
+          return failure(error);
+        }
+      }
+    );
+  }
   registerUpdateStatusTool(originalServer);
 }

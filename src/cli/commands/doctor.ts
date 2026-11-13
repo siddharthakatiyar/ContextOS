@@ -8,7 +8,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { INDEXER_VERSION } from '../../core/daemon/background-indexer.js';
 import { getPackageVersion } from '../../utils/version.js';
-import { canonicalDirectory } from '../../utils/secure-state.js';
+import { canonicalDirectory, unixSocketPath } from '../../utils/secure-state.js';
+import { registeredProjectPaths } from '../../core/workspace/project-paths.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'unknown';
 
@@ -413,8 +414,10 @@ function inspectMcpConfigs(root: string, cliVersion: string): DoctorCheck[] {
   return checks;
 }
 
-function inspectIndexDatabase(root: string): DoctorCheck {
-  const databasePath = path.join(root, '.contextos', 'index.db');
+function inspectIndexDatabase(
+  root: string,
+  databasePath = path.join(root, '.contextos', 'index.db')
+): DoctorCheck {
   if (!fs.existsSync(databasePath)) {
     return {
       id: 'index-database',
@@ -527,8 +530,10 @@ function inspectIndexDatabase(root: string): DoctorCheck {
   }
 }
 
-function inspectIndexStatus(root: string): DoctorCheck {
-  const statusPath = path.join(root, '.contextos', 'status.json');
+function inspectIndexStatus(
+  root: string,
+  statusPath = path.join(root, '.contextos', 'status.json')
+): DoctorCheck {
   if (!fs.existsSync(statusPath)) {
     return {
       id: 'index-status',
@@ -639,8 +644,10 @@ function inspectIndexStatus(root: string): DoctorCheck {
   };
 }
 
-function inspectDaemonPid(root: string): DaemonPidResult {
-  const pidPath = path.join(root, '.contextos', 'daemon.pid');
+function inspectDaemonPid(
+  root: string,
+  pidPath = path.join(root, '.contextos', 'daemon.pid')
+): DaemonPidResult {
   if (!fs.existsSync(pidPath)) {
     return {
       check: {
@@ -728,7 +735,7 @@ function daemonSocketPath(root: string, homeDirectory: string): string {
     return path.join('\\\\?\\pipe', `contextos-${Buffer.from(root).toString('hex')}`);
   }
   const hash = crypto.createHash('md5').update(root).digest('hex').slice(0, 12);
-  return path.join(homeDirectory, '.contextos', 'run', `d-${hash}.sock`);
+  return unixSocketPath(path.join(homeDirectory, '.contextos', 'run'), `d-${hash}.sock`, false);
 }
 
 function unpackRpcError(message: Record<string, unknown>): Error | null {
@@ -736,7 +743,11 @@ function unpackRpcError(message: Record<string, unknown>): Error | null {
   return new Error(asString(message.error.message) ?? 'MCP request failed');
 }
 
-async function probeDaemon(socketPath: string, cliVersion: string): Promise<DaemonProbeResult> {
+async function probeDaemon(
+  socketPath: string,
+  cliVersion: string,
+  sharedRoot?: string
+): Promise<DaemonProbeResult> {
   const socket = net.createConnection(socketPath);
   const pending = new Map<
     number,
@@ -812,6 +823,7 @@ async function probeDaemon(socketPath: string, cliVersion: string): Promise<Daem
 
   try {
     await waitForConnection;
+    if (sharedRoot) socket.write(JSON.stringify({ action: 'doctor', cwd: sharedRoot }) + '\n');
     const initializeResponse = await request(1, 'initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
@@ -901,18 +913,35 @@ export async function collectDoctorReport(
   const root = canonicalDirectory(options.cwd ?? process.cwd());
   const homeDirectory = options.homeDirectory ?? os.homedir();
   const cliVersion = getPackageVersion();
+  const registered = registeredProjectPaths(root, homeDirectory);
   const checks = inspectMcpConfigs(root, cliVersion);
-  checks.push(inspectIndexDatabase(root));
-  checks.push(inspectIndexStatus(root));
+  checks.push(inspectIndexDatabase(registered?.rootPath ?? root, registered?.dbPath));
+  checks.push(
+    inspectIndexStatus(
+      root,
+      registered ? path.join(path.dirname(registered.dbPath), 'status.json') : undefined
+    )
+  );
 
-  const daemonPid = inspectDaemonPid(root);
+  const sharedDir = path.join(homeDirectory, '.contextos', 'runtime');
+  const sharedPid = path.join(sharedDir, 'daemon.pid');
+  const usingShared = fs.existsSync(sharedPid);
+  const daemonPid = inspectDaemonPid(root, usingShared ? sharedPid : undefined);
   checks.push(daemonPid.check);
 
   let daemon: DaemonProbeResult | null = null;
-  const socketPath = daemonSocketPath(root, homeDirectory);
+  const socketPath = usingShared
+    ? process.platform === 'win32'
+      ? daemonSocketPath(sharedDir, homeDirectory)
+      : unixSocketPath(sharedDir, 'daemon.sock', false)
+    : daemonSocketPath(root, homeDirectory);
   if (fs.existsSync(socketPath)) {
     try {
-      daemon = await probeDaemon(socketPath, cliVersion);
+      daemon = await probeDaemon(
+        socketPath,
+        cliVersion,
+        usingShared ? (registered?.rootPath ?? root) : undefined
+      );
       checks.push({
         id: 'daemon-mcp',
         status: 'pass',

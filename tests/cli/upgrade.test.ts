@@ -364,6 +364,23 @@ describe('portable upgrade planning', () => {
 });
 
 describe('upgrade staging and rollback workflow', () => {
+  it('restarts multiple legacy daemons as one shared daemon after upgrade', async () => {
+    const plan = makePlan({
+      daemons: [
+        { ...daemon, pid: 111, projectDir: '/tmp/old-one', legacy: true },
+        { ...daemon, pid: 222, projectDir: '/tmp/old-two', legacy: true }
+      ]
+    });
+    const adapters = makeAdapters(plan);
+    await expect(runUpgradeWorkflow(plan, adapters)).resolves.toMatchObject({ upgraded: true });
+    expect(adapters.requestDaemon).toHaveBeenCalledTimes(4);
+    expect(adapters.startDaemon).toHaveBeenCalledOnce();
+    expect(adapters.startDaemon).toHaveBeenCalledWith(
+      expect.stringMatching(/\.contextos[/\\]runtime$/),
+      plan.packageRoot,
+      plan.token
+    );
+  });
   it('stops, swaps, verifies, and restarts each daemon once', async () => {
     const plan = makePlan();
     const adapters = makeAdapters(plan);

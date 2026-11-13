@@ -18,7 +18,7 @@ Instead of relying on ripgrep and whole-file context, ContextOS understands your
 - ✓ **Hybrid search** — FTS5 + symbol/filename boosts + RRF fusion (optional local embeddings)
 - ✓ **Automatic dependency expansion** via the relationship graph
 - ✓ **Precision-first compile** — top-K full bodies + path:line stubs under a token budget
-- ✓ **Cheap expand path** — stubs carry line ranges; `ctx_read_file` supports ranged reads; `get_symbol` for one symbol
+- ✓ **Cheap expand path** — stubs carry line ranges; `ctx_read_file` supports ranged reads; `ctx_symbol` for one symbol
 - ✓ **Cross-session memory**
 - ✓ **Incremental indexing** with stable chunk IDs and line ranges
 - ✓ **Local-first (SQLite + FTS5 + optional sqlite-vec)**
@@ -32,7 +32,7 @@ npm install -g @siddharthakatiyar/contextos
 
 cd my-project
 
-# Initializes the repository and adds the MCP server to your AI client's config
+# Registers the project, indexes its checked-out worktrees, and configures supported clients
 contextos init
 ```
 
@@ -55,24 +55,63 @@ Open your preferred AI Agent and start asking questions! That's it.
 
 After upgrading, restart your MCP client. The daemon automatically schedules a
 background rebuild when the indexer format changes; use `contextos reindex` only
-when you explicitly want to clear and rebuild the local index.
+when you explicitly want to rebuild the active project's index. Reindexing keeps
+memories and history.
 
-## Local multi-repository support (1.1.1)
+## Groups, projects, and worktrees (1.1.1 candidate)
 
-One workspace MCP server can search multiple local repositories while keeping their indexes and updates independent:
+Use a group to search related local projects together. A project can belong to several groups, and ContextOS automatically discovers the Git worktrees that are already checked out on this machine.
 
 ```bash
-contextos repo add ~/projects/backend
-contextos repo add ~/projects/frontend
-contextos repo add ~/projects/shared-types
-contextos repo list
-contextos query "Where is payment status defined, processed, and displayed?" --all-repos
-contextos serve --workspace default --repo backend
+contextos group create payments
+
+cd ~/projects/backend
+contextos init --group payments
+
+contextos group add payments ~/projects/frontend
+contextos group add payments ~/projects/shared-types
+contextos group show payments
+contextos worktree list --project backend
+
+contextos query "Where is payment status defined, processed, and displayed?" --group payments
 ```
 
-Queries default to the active repository. Use `--repo` to choose repositories or `--workspace` to search a named workspace. MCP `get_context` accepts matching `repo`, `workspace`, and `all_repos` filters. Results include repository-qualified references, and existing single-repository setups continue to work.
+`contextos init` registers the current project and indexes its available worktrees. `group add` does the same for a new project, or adds an existing project to another group. Repeating either command reuses the existing project identity and index. `contextos repo` remains an alias for `contextos project` for existing scripts.
 
-`repo remove` detaches workspace membership and retains local data. See [the local testing guide](MULTI_REPOSITORY_TESTING.md) for migration details, MCP configuration, independent update checks, and laptop testing instructions.
+By default, a query searches the current checkout. `--group payments` searches one live checkout per project; add `--all-worktrees` to include every available checkout in the selected group. Use `--project backend --worktree <path-or-id>` to select a particular checkout. Results carry project, branch, worktree, and source-file details.
+
+One MCP server can use a group while keeping a chosen project active by default:
+
+```bash
+contextos serve --group payments --project backend
+```
+
+The agent can request a group or a particular project/worktree for an individual retrieval. ContextOS keeps each connection's default scope separate.
+
+### Agent-maintained knowledge
+
+ContextOS indexes source files and also stores durable facts and verified links between projects and worktrees. Agents can use `ctx_scope`, `ctx_links`, `ctx_link`, `ctx_remember`, `ctx_unlink`, and `ctx_forget` to inspect or maintain that knowledge. A link is saved with supporting evidence only when the agent has established the connection; uncertain or ambiguous matches remain unsaved. Branch-specific knowledge stays with its worktree view, and retrieval follows links only within the selected scope.
+
+### Global storage
+
+New ContextOS data lives under `~/.contextos/`, not in a new `.contextos` folder in every project:
+
+```text
+~/.contextos/
+  registry.db
+  graph.db
+  config.json
+  projects/<project-id>/
+    config.json
+    views/<view-id>/index.db
+  runtime/
+```
+
+The registry tracks groups, projects, worktrees, and branch views. Each view has its own index; the graph stores verified cross-project knowledge. This keeps branch contents and local IDs isolated while allowing group retrieval. Existing `.contextos` data is read during migration and left in place; the new index is written globally.
+
+Removing a project from a group keeps its indexes and knowledge. `contextos clean --dry-run` previews views left behind by removed worktrees or deleted branches. `contextos project remove <project> --purge` explicitly deletes the project's stored indexes and knowledge while leaving source files untouched.
+
+**Release status:** the 1.1.1 redesign is a local testing candidate. It is not available from npm; test it from a source checkout as described in [the testing guide](MULTI_REPOSITORY_TESTING.md). Do not publish a release until local testing is complete and the user has approved it.
 
 ## The Problem: Traditional vs. ContextOS
 
@@ -214,7 +253,7 @@ On upsert, chunks are embedded with a local MiniLM model (`@huggingface/transfor
 ### Retrieval
 
 **Multi-strategy matching + RRF**  
-FTS5 (porter tokenizer, operator-preserving sanitizer), exact/prefix symbol lookup, filename and path-stem boosts, and intent-aware queries are fused with Reciprocal Rank Fusion. Legacy foreign workspace chunks are down-ranked. Explicitly selected repositories use their local strategy ranks, with a modest preference for the active repository.
+FTS5 (porter tokenizer, operator-preserving sanitizer), exact/prefix symbol lookup, filename and path-stem boosts, and intent-aware queries are fused with Reciprocal Rank Fusion. Group retrieval ranks evidence within each selected view before combining results, and gives a modest preference to the active checkout.
 
 **Graph expansion**  
 Seeds from identifiers and top hits expand through the relationship graph (depth/node caps are configurable), including import edges.
@@ -226,13 +265,13 @@ If both a class outline and its methods survive ranking, oversized class bodies 
 
 **Tiered, precision-first output**  
 - Top-K chunks (adaptive, usually up to 3) render as **full bodies**
-- Remaining hits become **stubs with path + line ranges** (`symbol — path/file.ts:12-84`) so agents can `ctx_read_file` or `get_symbol` instead of whole-file Reads
+- Remaining hits become **stubs with path + line ranges** (`symbol — path/file.ts:12-84`) so agents can `ctx_read_file` or `ctx_symbol` instead of whole-file Reads
 - Query-aware truncation preserves high-signal lines, comments/JSDoc, and branch headers
 - Related entities capped; File Structure capped to one chunk
 - Framing (headers / fences) counts toward the token budget (`gpt-tokenizer`)
 
 **Diagnostic header**  
-`get_context` prefixes a single line: `ContextOS | tokens: N/M`. When stubs remain, a one-line footer steers agents to `get_symbol` / ranged `ctx_read_file`.
+`get_context` prefixes a single line: `ContextOS | tokens: N/M`. When stubs remain, a one-line footer steers agents to `ctx_symbol` / ranged `ctx_read_file`.
 
 ### Memory
 
@@ -240,10 +279,10 @@ If both a class outline and its methods survive ranking, oversized class bodies 
 Agents can rate chunks; feedback adjusts future scores (including implicit signals).
 
 **Cross-session memory**  
-Facts learned via `learn_fact` / knowledge tools persist across sessions and can appear in `get_context`.
+Verified facts saved with `ctx_remember` persist across sessions and can appear in `get_context`. Code facts require current source evidence; explicit user decisions use user provenance. View facts stay branch/worktree-specific, while project/group user decisions apply across branches.
 
 **Backup & Recovery**  
-ContextOS can rebuild source-derived chunks, but the SQLite files can also contain manual knowledge, feedback, and session history. Back up both the repository database (`<repo>/.contextos/index.db`) and the shared global database (`~/.contextos/index.db`) when that data matters; copy the database together with its `-wal` and `-shm` sidecars after stopping the relevant daemon. On corruption, a repository database may be rebuilt automatically when no live daemon is using it, which loses database-resident knowledge and feedback. Stop the daemon and make a copy before deleting or rebuilding a shared/global database; shared-state recovery deliberately refuses destructive cleanup while another daemon may still be connected.
+Source-derived indexes can be rebuilt, but `~/.contextos/` also holds memories, verified links, feedback, and session history. Stop the ContextOS daemon before backing up this directory, and copy SQLite databases together with any `-wal` and `-shm` sidecars. Existing repository `.contextos` files are migration sources; new index writes go to global per-view databases. Use `contextos clean --dry-run` before removing obsolete worktree views.
 
 ### Developer Experience
 
@@ -304,20 +343,21 @@ Resolve the issue and run `contextos serve` again. Notices and skip reasons go
 to stderr.
 
 **Concurrency**  
-Repository indexing now runs with bounded concurrency to overlap CPU-intensive parsing and disk I/O, dramatically speeding up `init` and `reindex` on large codebases.
+Project and worktree indexing is coordinated through one shared user daemon with bounded scan concurrency. Different views keep their indexes isolated while avoiding a separate long-lived indexing service per repository.
 
 **MCP tools**  
-The default stable tools are `get_context`, `reindex_context`, `contextos_status`, `contextos_update_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, `ctx_remember`, `learn_fact`, `forget_fact`, `rate_chunk`, `ctx_symbol`, `get_neighbors`, and `get_symbol`. Deprecated compatibility tools such as `save_context`, `ctx_list_topics`, and `ctx_read_topic` are available only when `legacyTools` is enabled.
+The default tools include `get_context`, `ctx_scope`, `ctx_link`, `ctx_links`, `ctx_unlink`, `ctx_remember`, `ctx_forget`, `reindex_context`, `contextos_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, and `ctx_symbol`. Knowledge writes require current evidence references and view generations. Deprecated compatibility tools: enabling `legacyTools` adds `get_symbol`, `get_neighbors`, `save_context`, `ctx_list_topics`, `ctx_read_topic`, `rate_chunk`, `learn_fact`, and `forget_fact` alongside the default tools. These aliases retain the selected project/worktree scope. `learn_fact` follows the same evidence and provenance requirements as `ctx_remember`; an old call with an unsupported claim is rejected rather than silently saved.
 
 **Zero-config setup**  
-`contextos init` indexes the repo, writes MCP config if missing (does not overwrite an existing `contextos` MCP entry), and can start the background daemon.
+`contextos init` registers and indexes the active project and its checked-out worktrees, installs shared agent guidance in `AGENTS.md`, and adds `@AGENTS.md` to `CLAUDE.md` for Claude Code compatibility if it is missing. Existing user guidance is preserved; older generated ContextOS sections move from `CLAUDE.md` to `AGENTS.md`. Initialization also updates supported MCP configuration while preserving existing entries. Use `--no-index` to register without starting a scan. `group add` indexes and groups another project without changing its agent configuration.
 
 ## Configuration
 
 Defaults live in `src/config/defaults.ts` and can be overridden via:
 
 - `~/.contextos/config.json` (global)
-- `.contextos/config.json` (repo)
+- `~/.contextos/projects/<project-id>/config.json` (project)
+- `.contextos/config.json` (read only as a legacy configuration during migration)
 - Env: `CONTEXTOS_EMBEDDINGS=0` disables embedding; `CONTEXTOS_EMBEDDINGS_RETRIEVAL=1` enables emb fusion at query time
 
 Array keys in config use a `!` **suffix** to override (replace rather than merge) where documented — e.g. `"ignorePatterns!": ["only/**"]`.
@@ -357,18 +397,29 @@ The optional `pipeline` object in config enables toggling specific query-time pi
 | `layers` | `session`, `workspace`, `repo` | Add `global` only when you need shared/third-party context |
 | `tier` | `stub` | Use `full` when implementation bodies are required |
 | `output_format` | `markdown` | Or `xml` |
+| `group` / `project` | active group / active project | Select a group or one or more projects |
+| `worktree` / `branch` | active view | Select a checkout or checked-out branch |
+| `all_worktrees` | `false` | Include every available worktree in scope |
+| `workspace` / `repo` / `all_repos` | compatibility aliases | Existing clients may continue using these selectors |
 
 ## CLI cheatsheet
 
 ```bash
-contextos init                 # Index + MCP config (preserves existing contextos MCP entry)
-contextos reindex              # Stop daemon, wipe local DB, and schedule a fresh init
+contextos init                 # Register/index project worktrees and install agent guidance
+contextos group create payments
+contextos group add payments ~/projects/frontend
+contextos group show payments
+contextos project list         # `contextos repo` remains an alias
+contextos worktree list --project backend
+contextos clean --dry-run      # Review removed-worktree and deleted-branch views
+contextos project remove backend --purge # Remove stored data, keeping source files
+contextos reindex              # Rebuild the selected index; retain memories/history
 contextos reindex --embeddings # Backfill vectors without wiping the DB
-contextos serve                # MCP stdio server (Run automatically by your AI client. Do not run manually.)
+contextos serve --group payments --project backend # MCP stdio server, run by the client
 contextos query "..."          # Test retrieval locally
 contextos query "..." --explain # Show retrieval and compilation diagnostics
 contextos query "..." --json --explain # Include diagnostics in the JSON output
-contextos status               # Index stats
+contextos status --group payments # Project/worktree indexing status
 contextos doctor               # Read-only configuration, index, and daemon checks
 contextos doctor --json        # Machine-readable diagnostic report
 contextos upgrade              # Stage and install the latest compatible release (global npm on Linux)

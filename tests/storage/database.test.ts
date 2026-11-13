@@ -1,10 +1,21 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DB } from '../../src/core/storage/database.js';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
 
 describe('database', () => {
+  let isolated: string;
+  beforeEach(() => {
+    isolated = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-storage-'));
+    const home = path.join(isolated, 'home');
+    fs.mkdirSync(home);
+    vi.spyOn(os, 'homedir').mockReturnValue(home);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(isolated, { recursive: true, force: true });
+  });
   it('should initialize an in-memory database', () => {
     const db = new DB(':memory:');
     const instance = db.getInstance();
@@ -33,6 +44,7 @@ describe('database', () => {
     expect(cols).toContain('start_line');
     expect(cols).toContain('end_line');
     expect(cols).toContain('file_stem');
+    db.close();
   });
 
   it('should give fresh databases the porter+prefix chunks_fts index', () => {
@@ -77,7 +89,11 @@ describe('database', () => {
 
   it('should resolve hierarchical databases', () => {
     // resolveDatabases returns an array, fallback to global or local
-    const dbs = DB.resolveDatabases(os.tmpdir());
+    const root = path.join(isolated, 'project');
+    fs.mkdirSync(root);
+    const dbs = DB.resolveDatabases(root);
+    expect(fs.existsSync(path.join(root, '.contextos'))).toBe(false);
+    expect(dbs[0].getInstance().name).toContain(path.join('projects'));
     expect(dbs.length).toBeGreaterThanOrEqual(1);
     for (const db of dbs) db.close();
   });
@@ -86,7 +102,8 @@ describe('database', () => {
     const fs = require('fs');
     const path = require('path');
 
-    const tmpdir = os.tmpdir();
+    const tmpdir = path.join(isolated, 'bad-project');
+    fs.mkdirSync(tmpdir);
     const badPath = path.join(tmpdir, '.contextos', 'index.db');
 
     // Ensure it's a directory

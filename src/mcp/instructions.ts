@@ -1,7 +1,6 @@
-export const MCP_SERVER_INSTRUCTIONS =
-  'Before searching or exploring code in this workspace with grep, file search, or a general-purpose ' +
-  'search/explore agent, call get_context first for questions about where or how something is ' +
-  'implemented, service relationships, or conventions. It returns precise, indexed answers directly ' +
-  'from this workspace and is faster and more accurate than ad-hoc file search for those questions. ' +
-  'Fall back to broad file search only for tasks get_context does not cover (e.g. renaming across ' +
-  'files, running commands, or content get_context returns no results for).';
+/** Shared by the MCP handshake and managed AGENTS.md instructions (imported by CLAUDE.md). */
+export const MCP_SERVER_INSTRUCTIONS = `Use ContextOS as the persistent engineering knowledge store.
+Before broad code search or architectural exploration, call get_context. Use ctx_scope to identify the current group, project, worktree, branch, view IDs and indexing generations. Select the correct view before inspecting or saving knowledge. If retrieval does not answer the question, inspect source files with ctx_read_file, ctx_expand or ctx_symbol.
+As you work, always save useful, durable discoveries when you have verified them: use ctx_link for concrete relationships and ctx_remember for facts. Ordinary evidence-backed knowledge writes do not require an additional user confirmation. Inspect both sides and the routing, contract, dependency or configuration evidence needed to establish a cross-project connection. A matching symbol, route string, topic name or semantic similarity alone does not establish a dependency. Do not overstate what the evidence proves.
+Use qualified chunk references and current expected_generations from ctx_scope. Do not save candidates, ambiguous matches, guesses or confidence percentages. If uncertain, leave the connection unsaved and continue the task. Check ctx_links or get_context before creating duplicates. Keep branch-specific knowledge in its view; broader project or group facts need evidence supporting that scope. Explicit user decisions and preferences may use user provenance and project or group scope when they apply across branches; view scope stays branch/worktree-specific. Do not label inferred code facts as user decisions.
+Correct established mistakes using ctx_unlink or ctx_forget. Keep temporary task notes separate from durable facts. Before finishing a task, save any useful verified discoveries established during the work. ContextOS validates references and evidence freshness; you remain responsible for interpreting the evidence correctly.`;
