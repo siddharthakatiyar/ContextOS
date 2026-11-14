@@ -36,6 +36,12 @@ cd my-project
 contextos init
 ```
 
+A global npm install adds ContextOS instructions to detected supported coding agents by default. Each project still needs `contextos init`. The global guidance asks an agent to check setup and ask you before initializing a new project, including in automatic mode. Local npm installs do not change global instructions. Set `CONTEXTOS_GLOBAL_INSTRUCTIONS=0` during installation to opt out; use `contextos enable` to refresh instructions after installing another agent.
+
+Supported global instruction files cover Codex, Claude Code, Grok Build, OpenCode, Gemini CLI, Antigravity (`agy`), Amp, GitHub Copilot CLI and Windsurf. Cursor requires adding User Rules in its settings; `contextos enable --agent cursor` prints the block to copy. Existing user text is preserved. Global setup does not change client permissions or register projects.
+
+For an agent-friendly setup check, run `contextos setup --check --json`. It reads registration, instructions, indexing readiness and MCP configuration without initializing the project. `contextos init --json` returns structured project/view details after setup. Restart the agent or reconnect MCP to load newly installed configuration.
+
 On Linux x64, `onnxruntime-node` may try to fetch its optional CUDA provider
 files during installation. ContextOS works with the bundled CPU runtime, so a
 CPU-only installation can skip that optional download:
@@ -91,6 +97,28 @@ The agent can request a group or a particular project/worktree for an individual
 ### Agent-maintained knowledge
 
 ContextOS indexes source files and also stores durable facts and verified links between projects and worktrees. Agents can use `ctx_scope`, `ctx_links`, `ctx_link`, `ctx_remember`, `ctx_unlink`, and `ctx_forget` to inspect or maintain that knowledge. A link is saved with supporting evidence only when the agent has established the connection; uncertain or ambiguous matches remain unsaved. Branch-specific knowledge stays with its worktree view, and retrieval follows links only within the selected scope.
+
+Use `ctx_trace` to follow recorded relationships across a group. It returns ordered shortest witness paths, project/branch citations, edge direction and source evidence. Select `outgoing`, `incoming` or `both`; reverse steps are explicitly labeled. Missing connections, stale or unavailable evidence, and depth/node/edge/path limits are reported. A trace describes the recorded graph; it does not claim that every dependency has been discovered.
+
+Discovery grows during normal agent work. `ctx_resolve_import` inspects one exact JavaScript/TypeScript local import or Go module replacement, returning indexed export locations and manifest evidence. `ctx_contract` inspects indexed OpenAPI JSON/YAML or protobuf operations, including HTTP methods, paths, schema definitions and gRPC streaming signatures. Neither tool saves relationships or runs a discovery pass. Agents inspect the binding, routing or call-site evidence and use `ctx_link` once a connection is established.
+
+Combined retrieval examines a bounded set of retrieved files for literal local JS/TS imports. When fresh source, target and explicit dependency mappings establish an exact file dependency, it saves a link marked with deterministic provenance and returns it in `learnedLinks`. Repeated queries preserve existing agent-authored links. Unresolved local imports appear in `linkSuggestions` without a guessed target and are never stored. Other connections still need agent verification: for a configuration-to-Postgres relationship, inspect the mapping, entrypoint and consumer together before saving the link. Similar names alone are insufficient.
+
+Import inspection currently supports relative JS/TS imports, explicit `file:`/`link:` package dependencies, exact package export subpaths/conditions, and local Go `replace` directives. Registry dependencies, unresolved `workspace:*` references, wildcard exports, re-exports and source-map guesses require agent inspection. Locating an exported symbol does not by itself prove that the source consumes it. Contract inspection retains external `$ref` values without fetching them; OpenAPI citations cover the complete source contract, while protobuf RPCs retain their source line ranges.
+
+Example MCP calls, after obtaining qualified chunk references from `get_context` or `ctx_symbol`:
+
+```json
+{"name":"ctx_trace","arguments":{"group":"payments","start":"<frontend chunk ref>","target":"<worker chunk ref>","direction":"both","max_depth":6}}
+```
+
+```json
+{"name":"ctx_resolve_import","arguments":{"group":"payments","source":"<importing chunk ref>","specifier":"@payments/shared-types","symbol":"PaymentStatus","mode":"types"}}
+```
+
+```json
+{"name":"ctx_contract","arguments":{"group":"payments","ref":"<contract chunk ref>","operation":"POST /checkout","include_schemas":true}}
+```
 
 ### Global storage
 
@@ -287,7 +315,7 @@ Source-derived indexes can be rebuilt, but `~/.contextos/` also holds memories, 
 ### Developer Experience
 
 **CLI**  
-`init`, `reindex`, `serve`, `query`, `status`, `doctor`, `watch`, `visualize`, and more.
+`init`, `setup`, `enable`, `reindex`, `serve`, `query`, `status`, `doctor`, `watch`, `visualize`, and more.
 *Commands support graceful cancellation (Ctrl+C / SIGINT) to safely abort long-running indexing operations and rollback in-flight database transactions without causing lock-ups.*
 
 **Diagnostics**
@@ -298,9 +326,14 @@ and daemon state without changing files. It reports each result as `pass`,
 command exits with code 1 only when a check confirms a failure. Use
 `contextos doctor --json` for a machine-readable report. Add `--explain` to
 `contextos query` to inspect the ranking signals recorded for retrieved chunks
-and the compiler's tier, token budgets, and included or omitted chunks. The
-existing query JSON payload stays unchanged unless both `--json` and
-`--explain` are supplied, in which case an `explanation` object is added.
+and the compiler's tier, token budgets, and included or omitted chunks.
+`contextos doctor --client codex --noninteractive` also inventories instruction
+files/imports, MCP registrations and local per-tool permissions. Instruction
+discovery and tool approval are separate checks: loading `AGENTS.md` cannot
+override a client that denies a call or requires an unanswered approval prompt.
+Doctor reports the registered project, branch/worktree and index readiness;
+effective session loading and runtime/organization policy remain unknown when
+they cannot be observed. Diagnostic reports never change permissions.
 
 **Updates**
 
@@ -346,7 +379,7 @@ to stderr.
 Project and worktree indexing is coordinated through one shared user daemon with bounded scan concurrency. Different views keep their indexes isolated while avoiding a separate long-lived indexing service per repository.
 
 **MCP tools**  
-The default tools include `get_context`, `ctx_scope`, `ctx_link`, `ctx_links`, `ctx_unlink`, `ctx_remember`, `ctx_forget`, `reindex_context`, `contextos_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, and `ctx_symbol`. Knowledge writes require current evidence references and view generations. Deprecated compatibility tools: enabling `legacyTools` adds `get_symbol`, `get_neighbors`, `save_context`, `ctx_list_topics`, `ctx_read_topic`, `rate_chunk`, `learn_fact`, and `forget_fact` alongside the default tools. These aliases retain the selected project/worktree scope. `learn_fact` follows the same evidence and provenance requirements as `ctx_remember`; an old call with an unsupported claim is rejected rather than silently saved.
+The default tools include `get_context`, `ctx_scope`, `ctx_link`, `ctx_links`, `ctx_trace`, `ctx_resolve_import`, `ctx_contract`, `ctx_unlink`, `ctx_remember`, `ctx_forget`, `reindex_context`, `contextos_status`, `ctx_execute`, `ctx_read_file`, `ctx_expand`, `ctx_topics`, and `ctx_symbol`. Knowledge writes require current evidence references and view generations. Deprecated compatibility tools: enabling `legacyTools` adds `get_symbol`, `get_neighbors`, `save_context`, `ctx_list_topics`, `ctx_read_topic`, `rate_chunk`, `learn_fact`, and `forget_fact` alongside the default tools. These aliases retain the selected project/worktree scope. `learn_fact` follows the same evidence and provenance requirements as `ctx_remember`; an old call with an unsupported claim is rejected rather than silently saved.
 
 **Zero-config setup**  
 `contextos init` registers and indexes the active project and its checked-out worktrees, installs shared agent guidance in `AGENTS.md`, and adds `@AGENTS.md` to `CLAUDE.md` for Claude Code compatibility if it is missing. Existing user guidance is preserved; older generated ContextOS sections move from `CLAUDE.md` to `AGENTS.md`. Initialization also updates supported MCP configuration while preserving existing entries. Use `--no-index` to register without starting a scan. `group add` indexes and groups another project without changing its agent configuration.
@@ -406,6 +439,10 @@ The optional `pipeline` object in config enables toggling specific query-time pi
 
 ```bash
 contextos init                 # Register/index project worktrees and install agent guidance
+contextos init --json          # Structured setup result, indexing progress on stderr
+contextos setup --check --json # Read-only project onboarding check
+contextos enable              # Refresh user-wide instructions for detected agents
+contextos enable --dry-run    # Preview instruction-file changes
 contextos group create payments
 contextos group add payments ~/projects/frontend
 contextos group show payments
@@ -422,6 +459,7 @@ contextos query "..." --json --explain # Include diagnostics in the JSON output
 contextos status --group payments # Project/worktree indexing status
 contextos doctor               # Read-only configuration, index, and daemon checks
 contextos doctor --json        # Machine-readable diagnostic report
+contextos doctor --client codex --noninteractive # Instruction discovery and tool permission observations
 contextos upgrade              # Stage and install the latest compatible release (global npm on Linux)
 contextos upgrade --version 1.2.3 # Select a release; add --allow-major for major-version changes
 contextos upgrade --dry-run    # Print a portable manual upgrade plan without changes

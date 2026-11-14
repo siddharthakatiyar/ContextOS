@@ -106,7 +106,9 @@ try {
     individualSumP95 = p95(individualSums);
   const metrics = {
     version: '1.1.1',
-    baselineVersion: '1.1.0',
+    baselineVersion: JSON.parse(fs.readFileSync(path.join(baseline, 'package.json'), 'utf8'))
+      .version,
+    baselineReference: arg('--baseline-reference', 'built baseline checkout'),
     nodeVersion: process.version,
     corpus: 'four-repository payment fixture',
     embeddingMode: 'disabled for deterministic keyword baseline',

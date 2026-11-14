@@ -4,6 +4,7 @@ import { DB } from '../../core/storage/database.js';
 import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
 import { SessionStore } from '../../core/session/session-store.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import { KnowledgeInspector } from '../../core/knowledge/inspector.js';
 
 export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
   const primaryDb = dbs[0];
@@ -122,6 +123,7 @@ export function registerWorkspaceKnowledgeTools(
       selectors?: import('../../core/workspace/registry.js').ScopeSelectors
     ) => import('../../core/workspace/registry.js').RetrievalScope;
     graph: () => import('../../core/knowledge/graph-store.js').GraphStore;
+    resolve?: (viewId: string) => import('../../core/knowledge/graph-store.js').GraphSource;
     clearCache: () => void;
     saveSession: (
       source: import('../../core/workspace/registry.js').RepositorySource,
@@ -153,7 +155,10 @@ export function registerWorkspaceKnowledgeTools(
       allRepos: args.all_repos
     } as import('../../core/workspace/registry.js').ScopeSelectors);
   const result = (value: unknown) => ({
-    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }]
+    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+    ...(value && typeof value === 'object' && !Array.isArray(value)
+      ? { structuredContent: value as Record<string, unknown> }
+      : {})
   });
   const wrap =
     (
@@ -229,6 +234,102 @@ export function registerWorkspaceKnowledgeTools(
       const scope = scopeFor(args);
       return {
         links: graph.listLinks({ viewIds: scope.repoIds, refs: args.refs as string[] | undefined }),
+        scope
+      };
+    })
+  );
+  server.tool(
+    'ctx_trace',
+    'Trace saved, evidence-backed relationships across selected projects and worktrees. Returns ordered shortest witness paths, citations and explicit gaps; does not discover or invent connections. Incoming/outgoing follow stored edge direction; both can traverse edges in reverse and labels those steps.',
+    {
+      ...selectors,
+      start: z.string(),
+      target: z.string().optional(),
+      direction: z.enum(['outgoing', 'incoming', 'both']).default('both'),
+      relationships: z
+        .array(
+          z.enum([
+            'imports',
+            'implements_contract',
+            'calls_api',
+            'publishes_event',
+            'consumes_event',
+            'reads_resource',
+            'writes_resource'
+          ])
+        )
+        .optional(),
+      max_depth: z.number().int().min(1).max(12).default(6),
+      max_nodes: z.number().int().min(1).max(500).default(50),
+      max_edges: z.number().int().min(1).max(1000).default(100),
+      max_paths: z.number().int().min(1).max(100).default(20)
+    },
+    wrap((args, graph) => {
+      const scope = scopeFor(args);
+      const trace = graph.trace(
+        {
+          start: args.start as string,
+          target: args.target as string | undefined,
+          direction: args.direction as 'outgoing' | 'incoming' | 'both',
+          relationships: args.relationships as
+            import('../../core/knowledge/graph-store.js').LinkType[] | undefined,
+          maxDepth: args.max_depth as number,
+          maxNodes: args.max_nodes as number,
+          maxEdges: args.max_edges as number,
+          maxPaths: args.max_paths as number
+        },
+        scope.repoIds
+      );
+      return { ...trace, scope };
+    })
+  );
+  server.tool(
+    'ctx_resolve_import',
+    'Inspect one exact local import on demand. Supports relative JS/TS imports, explicit file:/link: package dependencies and local Go module replacements. Returns indexed export locations and manifest evidence without saving edges. Inspect source binding/call-site use before asserting a symbol is consumed; unsupported or ambiguous mappings fail closed.',
+    {
+      ...selectors,
+      source: z.string(),
+      specifier: z.string().min(1),
+      symbol: z.string().min(1).optional(),
+      mode: z.enum(['import', 'require', 'types']).default('import')
+    },
+    wrap(async (args, graph) => {
+      const scope = scopeFor(args);
+      if (!context.resolve) throw new Error('Import inspection requires a workspace runtime.');
+      const inspector = new KnowledgeInspector(graph, scope.sources, context.resolve);
+      return {
+        ...(await inspector.resolveImport({
+          source: args.source as string,
+          specifier: args.specifier as string,
+          symbol: args.symbol as string | undefined,
+          mode: args.mode as 'import' | 'require' | 'types'
+        })),
+        scope
+      };
+    })
+  );
+  server.tool(
+    'ctx_contract',
+    'Inspect an indexed OpenAPI JSON/YAML or protobuf contract on demand. Returns HTTP methods, paths, schemas, or fully qualified gRPC operations and streaming signatures with fresh source evidence. Does not infer client/server connections, fetch external references or save edges; use ctx_link after establishing the connection.',
+    {
+      ...selectors,
+      ref: z.string(),
+      operation: z.string().min(1).optional(),
+      limit: z.number().int().min(1).max(100).default(20),
+      include_schemas: z.boolean().default(false)
+    },
+    wrap((args, graph) => {
+      const scope = scopeFor(args);
+      if (!context.resolve) throw new Error('Contract inspection requires a workspace runtime.');
+      return {
+        ...new KnowledgeInspector(graph, scope.sources, context.resolve).contract(
+          args.ref as string,
+          {
+            operation: args.operation as string | undefined,
+            limit: args.limit as number,
+            includeSchemas: args.include_schemas as boolean
+          }
+        ),
         scope
       };
     })

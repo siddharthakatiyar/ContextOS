@@ -2,13 +2,14 @@ import Database from 'better-sqlite3';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { getContextOSHome } from '../storage/database.js';
 import type { RepositorySource } from '../workspace/registry.js';
 import { parseRef } from '../workspace/identity.js';
 import { hashContent } from '../../utils/hash.js';
 import { resolveWithinWorkspace } from '../../utils/fs-guard.js';
 import { preparePrivateStateFile, tightenPrivateStateFile } from '../../utils/secure-state.js';
+import { traceVerifiedGraph, type TraceOptions, type TraceResult } from './trace.js';
+import { readGitCommit } from '../../utils/git-head.js';
 
 export const LINK_TYPES = [
   'imports',
@@ -36,6 +37,8 @@ export interface VerifiedLink {
   type: LinkType;
   rationale: string;
   evidence: Evidence[];
+  /** Missing on historical records, which were agent verified. */
+  provenance?: { kind: 'agent' | 'deterministic'; resolver?: string };
   createdAt: number;
   updatedAt: number;
 }
@@ -86,6 +89,7 @@ type StoredRow = { id: string; payload: string };
 /** Only established knowledge is stored. Freshness checks remove unsupported records on reads. */
 export class GraphStore {
   private db: Database.Database;
+  private fileHashes = new Map<string, { stamp: string; hash: string }>();
   constructor(private options: GraphOptions) {
     const file = preparePrivateStateFile(path.join(options.home ?? getContextOSHome(), 'graph.db'));
     this.db = new Database(file);
@@ -97,6 +101,9 @@ export class GraphStore {
       CREATE TABLE IF NOT EXISTS verified_facts (id TEXT PRIMARY KEY, identity TEXT NOT NULL UNIQUE, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS graph_metadata (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
       INSERT OR IGNORE INTO graph_metadata VALUES ('revision', 0);`);
+    this.db
+      .exec(`CREATE INDEX IF NOT EXISTS verified_links_source ON verified_links(json_extract(payload,'$.source'));
+      CREATE INDEX IF NOT EXISTS verified_links_target ON verified_links(json_extract(payload,'$.target'));`);
   }
   close(): void {
     this.db.close();
@@ -118,6 +125,18 @@ export class GraphStore {
     if (!allowed.includes(parsed.repoId))
       throw new Error('Knowledge endpoint is outside the selected views.');
     return parsed.repoId;
+  }
+  private fileHash(file: string): string {
+    // Request/store-local memoization. ctime catches edits that preserve mtime/size;
+    // inode catches atomic replacement. Freshness is checked again on every access.
+    const stat = fs.statSync(file, { bigint: true });
+    const stamp = [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(':');
+    const cached = this.fileHashes.get(file);
+    if (cached?.stamp === stamp) return cached.hash;
+    const hash = hashContent(fs.readFileSync(file, 'utf8'));
+    if (this.fileHashes.size >= 512) this.fileHashes.clear();
+    this.fileHashes.set(file, { stamp, hash });
+    return hash;
   }
   captureEvidence(ref: string, expectedGeneration?: number): Evidence {
     const parsed = parseRef(ref);
@@ -155,17 +174,7 @@ export class GraphStore {
       const expectedHead = source.branch ? `ref: refs/heads/${source.branch}` : source.head;
       if (!expectedHead || head !== expectedHead)
         throw new Error('Evidence checkout changed; refresh the view and reindex.');
-      let commit: string | null = null;
-      try {
-        commit = execFileSync('git', ['-C', source.rootPath, 'rev-parse', '--verify', 'HEAD'], {
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'ignore'],
-          timeout: 5000,
-          env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }
-        }).trim();
-      } catch {
-        /* unborn branch */
-      }
+      const commit = readGitCommit(source.gitDir, source.commonDir ?? source.gitDir, head);
       if (commit !== source.head || metadata.get('head') !== (source.head ?? ''))
         throw new Error('Evidence checkout commit changed; refresh the view and reindex.');
     }
@@ -179,7 +188,7 @@ export class GraphStore {
     if (!file) throw new Error('Evidence escapes its registered project root.');
     const indexed = db.prepare('SELECT hash FROM files WHERE path=?').get(chunk.source_file) as
       { hash: string } | undefined;
-    const fileHash = hashContent(fs.readFileSync(file, 'utf8'));
+    const fileHash = this.fileHash(file);
     if (!indexed || indexed.hash !== fileHash)
       throw new Error('Evidence file changed since indexing; reindex and inspect it first.');
     return {
@@ -267,21 +276,54 @@ export class GraphStore {
     return count;
   }
   link(input: LinkInput, permittedViewIds: string[]): VerifiedLink {
+    return this.saveLink(input, permittedViewIds, { kind: 'agent' }).link;
+  }
+  /** Internal resolver entrypoint: never overwrite a live agent-authored connection. */
+  linkResolvedImport(
+    input: LinkInput,
+    permittedViewIds: string[]
+  ): { link: VerifiedLink; created: boolean } {
+    if (input.type !== 'imports') throw new Error('The import resolver can only save imports.');
+    return this.saveLink(
+      input,
+      permittedViewIds,
+      {
+        kind: 'deterministic',
+        resolver: 'literal-local-import-v1'
+      },
+      true
+    );
+  }
+  private saveLink(
+    input: LinkInput,
+    permittedViewIds: string[],
+    provenance: NonNullable<VerifiedLink['provenance']>,
+    insertOnly = false
+  ): { link: VerifiedLink; created: boolean } {
     if (!LINK_TYPES.includes(input.type)) throw new Error('Unsupported relationship type.');
     if (!input.rationale.trim()) throw new Error('A verified connection requires a rationale.');
-    const refs = [...new Set([input.source, input.target, ...(input.evidenceRefs ?? [])])];
-    const evidence = refs.map((ref) => {
-      const viewId = this.assertScope(ref, permittedViewIds);
-      const generation = input.expectedGenerations[viewId];
-      if (!Number.isInteger(generation))
-        throw new Error('expected_generations must include every evidence view.');
-      return this.captureEvidence(ref, generation);
-    });
     const identity = JSON.stringify([input.source, input.target, input.type]);
     const old = this.db
       .prepare('SELECT payload FROM verified_links WHERE identity=?')
       .get(identity) as { payload: string } | undefined;
     const previous = old ? (JSON.parse(old.payload) as VerifiedLink) : undefined;
+    const refs = [...new Set([input.source, input.target, ...(input.evidenceRefs ?? [])])];
+    for (const ref of refs) {
+      const viewId = this.assertScope(ref, permittedViewIds);
+      const generation = input.expectedGenerations[viewId];
+      if (!Number.isInteger(generation))
+        throw new Error('expected_generations must include every evidence view.');
+    }
+    if (
+      insertOnly &&
+      previous &&
+      previous.evidence.every((item) => permittedViewIds.includes(item.viewId)) &&
+      this.visible('verified_links', previous)
+    )
+      return { link: previous, created: false };
+    const evidence = refs.map((ref) =>
+      this.captureEvidence(ref, input.expectedGenerations[parseRef(ref)!.repoId])
+    );
     const now = Date.now();
     const result: VerifiedLink = {
       id: previous?.id ?? crypto.randomUUID(),
@@ -290,23 +332,35 @@ export class GraphStore {
       type: input.type,
       rationale: input.rationale.trim(),
       evidence,
+      provenance,
       createdAt: previous?.createdAt ?? now,
       updatedAt: now
     };
-    this.db.transaction(() => {
-      this.db
+    return this.db.transaction(() => {
+      const change = this.db
         .prepare(
-          'INSERT INTO verified_links VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload'
+          insertOnly
+            ? 'INSERT INTO verified_links VALUES (?,?,?) ON CONFLICT(identity) DO NOTHING'
+            : 'INSERT INTO verified_links VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload'
         )
         .run(result.id, identity, JSON.stringify(result));
+      if (!change.changes) {
+        const winner = this.db
+          .prepare('SELECT payload FROM verified_links WHERE identity=?')
+          .get(identity) as { payload: string };
+        return { link: JSON.parse(winner.payload) as VerifiedLink, created: false };
+      }
       this.touch();
+      return { link: result, created: true };
     })();
-    return result;
   }
-  listLinks(options: { viewIds?: string[]; refs?: string[] } = {}): VerifiedLink[] {
+  listLinks(
+    options: { viewIds?: string[]; refs?: string[]; excludeIds?: Set<string> } = {}
+  ): VerifiedLink[] {
     return this.records<VerifiedLink>('verified_links')
       .filter(
         (link) =>
+          !options.excludeIds?.has(link.id) &&
           (!options.viewIds || link.evidence.every((e) => options.viewIds!.includes(e.viewId))) &&
           (!options.refs ||
             options.refs.includes(link.source) ||
@@ -317,9 +371,10 @@ export class GraphStore {
   expand(
     refs: string[],
     permittedViewIds: string[],
-    limit = 12
+    limit = 12,
+    excludeIds?: Set<string>
   ): { links: VerifiedLink[]; refs: string[] } {
-    const links = this.listLinks({ viewIds: permittedViewIds, refs }).slice(
+    const links = this.listLinks({ viewIds: permittedViewIds, refs, excludeIds }).slice(
       0,
       Math.max(0, Math.min(limit, 100))
     );
@@ -335,6 +390,63 @@ export class GraphStore {
     if (!link) return false;
     link.evidence.forEach((item) => this.assertScope(item.ref, permittedViewIds));
     return this.remove('verified_links', id);
+  }
+  trace(options: TraceOptions, permittedViewIds: string[]): TraceResult {
+    if (options.relationships?.some((type) => !LINK_TYPES.includes(type)))
+      throw new Error('Unsupported relationship type.');
+    return traceVerifiedGraph(options, {
+      inspect: (ref) => {
+        const view = this.assertScope(ref, permittedViewIds);
+        const evidence = this.captureEvidence(ref);
+        const { source, db } = this.options.resolve(view);
+        const chunk = db
+          .prepare('SELECT symbol_name,start_line,end_line FROM chunks WHERE id=?')
+          .get(parseRef(ref)!.localId) as {
+          symbol_name: string | null;
+          start_line: number | null;
+          end_line: number | null;
+        };
+        return {
+          ref,
+          viewId: view,
+          projectId: source.projectId,
+          project: source.name,
+          worktreeId: source.worktreeId,
+          branch: source.branch ?? null,
+          head: source.head ?? null,
+          relativePath: path.relative(source.rootPath, evidence.file).split(path.sep).join('/'),
+          symbol: chunk.symbol_name ?? undefined,
+          startLine: chunk.start_line ?? undefined,
+          endLine: chunk.end_line ?? undefined,
+          evidence
+        };
+      },
+      adjacent: (ref, direction, limit) => {
+        const clause =
+          direction === 'outgoing'
+            ? "json_extract(payload,'$.source')=@ref"
+            : direction === 'incoming'
+              ? "json_extract(payload,'$.target')=@ref"
+              : "(json_extract(payload,'$.source')=@ref OR json_extract(payload,'$.target')=@ref)";
+        const rows = this.db
+          .prepare(`SELECT payload FROM verified_links WHERE ${clause} ORDER BY id`)
+          .iterate({ ref });
+        const links: VerifiedLink[] = [];
+        for (const row of rows) {
+          const link = JSON.parse((row as StoredRow).payload) as VerifiedLink;
+          if (!link.evidence.every((item) => permittedViewIds.includes(item.viewId))) continue;
+          if (options.relationships && !options.relationships.includes(link.type)) continue;
+          links.push(link);
+          if (links.length > limit) break;
+        }
+        return { links: links.slice(0, limit), truncated: links.length > limit };
+      },
+      status: (link) => {
+        const status = this.evidenceStatus(link.evidence);
+        if (status === 'invalid') this.remove('verified_links', link.id);
+        return status;
+      }
+    });
   }
   remember(input: FactInput, permittedViewIds: string[], access: FactAccess = {}): VerifiedFact {
     if (!input.content.trim() || !input.scopeId)

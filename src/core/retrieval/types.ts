@@ -87,6 +87,8 @@ export interface ScoredChunk extends Chunk {
 
 export interface RetrievalResult {
   knowledgeLinks?: import('../knowledge/graph-store.js').VerifiedLink[];
+  learnedLinks?: import('../knowledge/graph-store.js').VerifiedLink[];
+  linkSuggestions?: import('../knowledge/import-learning.js').LinkSuggestion[];
   scope?: import('../workspace/registry.js').RetrievalScope;
   unavailableSources?: Array<{ repoId: string; name: string; error: string }>;
   partial?: boolean;

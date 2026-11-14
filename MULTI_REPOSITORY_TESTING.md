@@ -50,6 +50,10 @@ contextos project status --workspace payments
 
 Check that `init` places one managed ContextOS section in `AGENTS.md` and an `@AGENTS.md` import in `CLAUDE.md`, preserving user-written text in both. Repeat initialization to confirm neither is duplicated. For an older project, confirm its recognizable generated ContextOS section moves out of `CLAUDE.md` into `AGENTS.md`.
 
+Global npm installation now installs instructions for detected supported agents by default. Preview with `contextos enable --dry-run --json`; refresh after installing another agent with `contextos enable`. Use `CONTEXTOS_GLOBAL_INSTRUCTIONS=0` during install to opt out. Local installs must leave global instruction files unchanged. Check Cursor's reported manual User Rules step if installed.
+
+Before initialization, `contextos setup --check --json` must report `not_initialized` without creating a registry. After `contextos init --json`, stdout must contain one JSON result with a ready view and current generation; indexing progress belongs on stderr. Run `contextos doctor --client codex --noninteractive` (or `claude`, `grok`, `opencode`, `agy`) to inspect instructions and MCP/permission observations separately. Existing user text and permission settings must remain intact. The global onboarding guidance asks before initializing an unregistered project, including in automatic mode.
+
 Add infrastructure to a separate group or the default group if you want it available to broad searches. A project can join multiple groups without duplicating its index.
 
 ## Check scope and ranking
@@ -83,6 +87,11 @@ Confirm it has a separate view ID and index. Change a file in the feature checko
 Also try a detached worktree and uncommitted tracked and untracked files. ContextOS should report the checked-out view and branch/commit state. It should discover worktrees already present on disk; it should not create or switch Git worktrees itself.
 
 ## Test one MCP server and agent knowledge
+
+For the new on-demand `ctx_trace`, `ctx_resolve_import` and `ctx_contract` tools,
+see [the cross-project tracing validation and local-use guide](validation/cross-project-tracing.md).
+Agents inspect and save established connections during ordinary work; there is
+no separate automatic agent discovery pass.
 
 Configure one MCP connection to serve the group with backend as its active project:
 

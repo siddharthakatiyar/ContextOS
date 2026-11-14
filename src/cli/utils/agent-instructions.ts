@@ -8,7 +8,7 @@ export function agentInstructionsBlock(): string {
   return `${AGENT_BLOCK_START}\n## ContextOS (managed instructions v1.1.1)\n\n${MCP_SERVER_INSTRUCTIONS}\n${AGENT_BLOCK_END}`;
 }
 /** Rewrites only recognizable generated sections, preserving user-authored guidance. */
-function rewriteManagedInstructions(previous: string, replacement: string): string {
+export function rewriteManagedInstructions(previous: string, replacement: string): string {
   const managed = /<!-- contextos:managed:start -->[\s\S]*?<!-- contextos:managed:end -->/g;
   const legacy =
     /<!-- (?:CONTEXTOS|contextos)(?::| )START -->[\s\S]*?<!-- (?:CONTEXTOS|contextos)(?::| )END -->/g;
@@ -36,7 +36,7 @@ function rewriteManagedInstructions(previous: string, replacement: string): stri
   return !inserted && replacement ? appendSection(next, replacement) : next;
 }
 
-function appendSection(previous: string, section: string): string {
+export function appendSection(previous: string, section: string): string {
   return `${previous}${previous && !previous.endsWith('\n') ? '\n' : ''}${previous ? '\n' : ''}${section}\n`;
 }
 
@@ -56,7 +56,7 @@ function readInstructions(file: string): string {
 }
 
 /** Claude imports are active outside Markdown code spans and fenced code blocks. */
-function hasAgentsImport(content: string): boolean {
+export function hasAgentsImport(content: string): boolean {
   let fence: { character: string; length: number } | undefined;
   const prose: string[] = [];
   for (const line of content.split(/\r?\n/)) {

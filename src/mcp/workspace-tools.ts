@@ -235,6 +235,12 @@ export function registerWorkspaceTools(
         result.knowledgeLinks = result.knowledgeLinks?.filter((link) =>
           link.evidence.every((item) => !failed.has(item.viewId))
         );
+        result.learnedLinks = result.learnedLinks?.filter((link) =>
+          link.evidence.every((item) => !failed.has(item.viewId))
+        );
+        result.linkSuggestions = result.linkSuggestions?.filter(
+          (item) => !failed.has(parseRef(item.source)?.repoId ?? '')
+        );
         if (result.explanation) {
           for (const ref of Object.keys(result.explanation.chunks)) {
             const owner = /^contextos:([^:]+):/.exec(ref)?.[1];
@@ -323,6 +329,8 @@ export function registerWorkspaceTools(
             })),
             sources: scope.sources,
             knowledgeLinks: result.knowledgeLinks,
+            learnedLinks: result.learnedLinks,
+            linkSuggestions: result.linkSuggestions,
             ...(args.explain
               ? { explanation: result.explanation, compilation: compiled.diagnostics }
               : {})
@@ -562,6 +570,10 @@ export function registerWorkspaceTools(
     registerWorkspaceKnowledgeTools(mock, {
       select,
       graph,
+      resolve: (viewId) => {
+        const source = runtime.registry.resolve(viewId);
+        return { source, db: runtime.get(source).db.getInstance() };
+      },
       clearCache: () => cache.clear(),
       defaultGroup: options.workspace,
       catalog: () => {

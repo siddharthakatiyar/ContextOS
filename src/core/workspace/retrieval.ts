@@ -13,6 +13,7 @@ import { detectIntent } from '../retrieval/intent-detector.js';
 import { WorkspaceRuntime } from './runtime.js';
 import type { RepositorySource, RetrievalScope } from './registry.js';
 import { GraphStore } from '../knowledge/graph-store.js';
+import { learnRetrievedImports } from '../knowledge/import-learning.js';
 import { parseRef } from './identity.js';
 import { entityRef } from './identity.js';
 import { loadConfig } from '../../config/index.js';
@@ -135,9 +136,11 @@ export async function retrieveWorkspace(
     }
   }
   const knowledgeLinks: NonNullable<RetrievalResult['knowledgeLinks']> = [];
+  let learnedLinks: NonNullable<RetrievalResult['learnedLinks']> = [];
+  let linkSuggestions: NonNullable<RetrievalResult['linkSuggestions']> = [];
   if (
     (!opts.layers || opts.layers.includes('repo')) &&
-    fs.existsSync(path.join(runtime.registry.home, 'graph.db'))
+    (scope.sources.length > 1 || fs.existsSync(path.join(runtime.registry.home, 'graph.db')))
   ) {
     const graph = new GraphStore({
       home: runtime.registry.home,
@@ -150,16 +153,29 @@ export async function retrieveWorkspace(
       const permitted = scope.sources
         .filter((source) => !unavailableSources.some((failed) => failed.repoId === source.repoId))
         .map((source) => source.repoId);
+      const learned = await learnRetrievedImports(
+        graph,
+        scope.sources.filter((source) => permitted.includes(source.repoId)),
+        (id) => {
+          const source = runtime.registry.resolve(id);
+          return { source, db: runtime.get(source).db.getInstance() };
+        },
+        chunks,
+        signal
+      );
+      learnedLinks = learned.learnedLinks;
+      linkSuggestions = learned.linkSuggestions;
       const seen = new Set(chunks.map((chunk) => chunk.id));
       let frontier = chunks
         .slice()
         .sort((a, b) => b.score - a.score)
         .slice(0, 10)
         .map((chunk) => chunk.id);
+      frontier = [...new Set([...frontier, ...learned.sourceRefs])];
       const seedScore = Math.max(1, ...chunks.map((chunk) => chunk.score));
       const seenLinks = new Set<string>();
       for (let depth = 1; depth <= 2 && frontier.length; depth++) {
-        const expanded = graph.expand(frontier, permitted, 12);
+        const expanded = graph.expand(frontier, permitted, 12, seenLinks);
         for (const link of expanded.links)
           if (!seenLinks.has(link.id)) {
             seenLinks.add(link.id);
@@ -242,6 +258,8 @@ export async function retrieveWorkspace(
   chunks.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
   return {
     knowledgeLinks,
+    learnedLinks,
+    linkSuggestions,
     chunks: chunks.slice(0, opts.maxChunks ?? config.maxRetrievalResults),
     intent: detectIntent(prompt),
     expandedEntities,

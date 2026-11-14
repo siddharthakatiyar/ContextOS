@@ -45,6 +45,10 @@ export interface ParsedCodeDocument {
   symbols: CodeSymbol[];
   /** Module paths / imported names extracted from import statements. */
   imports?: string[];
+  /** Actual module specifiers, excluding secondary imported symbol names. */
+  importSpecifiers?: string[];
+  /** Literal top-level JS/TS imports, with the resolution condition established by syntax. */
+  importReferences?: { specifier: string; mode: 'import' | 'types'; startLine: number }[];
   /** Original file text — used for whole-file fallback chunks. */
   rawContent?: string;
 }

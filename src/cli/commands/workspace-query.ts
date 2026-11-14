@@ -49,6 +49,14 @@ export async function workspaceQuery(
           `Partial results: ${result.unavailableSources?.map((source) => `${source.name}: ${source.error}`).join('; ')}`
         );
       console.log(compiled.output);
+      if (result.learnedLinks?.length)
+        console.log(
+          `Saved ${result.learnedLinks.length} exact local module connection(s) with source evidence.`
+        );
+      for (const suggestion of result.linkSuggestions ?? [])
+        console.log(
+          `Unverified import ${JSON.stringify(suggestion.specifier)} at ${suggestion.source}; inspect with ctx_resolve_import before saving a connection.`
+        );
       if (omittedRepositories.length)
         console.log(
           `No compiled evidence for: ${omittedRepositories.join(', ')} (no matching result or token budget).`

@@ -14,7 +14,7 @@ interface IndexConfig {
   indexablePatterns: string[];
 }
 
-export const INDEXER_VERSION = 1;
+export const INDEXER_VERSION = 2;
 
 // Single-flight guard at module level: the daemon's startup indexer and any
 // watcher-burst indexer share one process, so a per-instance flag allowed two
@@ -55,7 +55,8 @@ export class BackgroundIndexer {
     db: DB,
     projectDir: string,
     private stateDir?: string,
-    private assertCurrent?: () => void
+    private assertCurrent?: () => void,
+    private log: (message: string) => void = (message) => console.log(message)
   ) {
     this.db = db;
     // Explicit canonical traversal root — never depend on process.cwd() or a
@@ -88,7 +89,7 @@ export class BackgroundIndexer {
     this.processedFiles = 0;
     this.totalFiles = 0;
 
-    console.log('[BackgroundIndexer] Starting full repository index...');
+    this.log('[BackgroundIndexer] Starting full repository index...');
 
     try {
       const indexIgnore = createIndexIgnore(this.projectDir, config.ignorePatterns || []);
@@ -176,7 +177,7 @@ export class BackgroundIndexer {
         return;
       }
 
-      console.log(`[BackgroundIndexer] Found ${this.totalFiles} files to index.`);
+      this.log(`[BackgroundIndexer] Found ${this.totalFiles} files to index.`);
       writeJsonAtomic(statusFile, {
         fullIndexCompleted: false,
         processed: 0,
@@ -216,7 +217,7 @@ export class BackgroundIndexer {
         await new Promise((resolve) => setImmediate(resolve));
 
         if (this.processedFiles % 1000 === 0) {
-          console.log(`[BackgroundIndexer] Progress: ${this.processedFiles} / ${this.totalFiles}`);
+          this.log(`[BackgroundIndexer] Progress: ${this.processedFiles} / ${this.totalFiles}`);
           writeJsonAtomic(statusFile, {
             fullIndexCompleted: false,
             processed: this.processedFiles,
@@ -227,7 +228,7 @@ export class BackgroundIndexer {
       }
 
       if (skippedTooLarge > 0) {
-        console.log(
+        this.log(
           `[BackgroundIndexer] Skipped ${skippedTooLarge} file(s) larger than ${Math.round(
             MAX_INDEXABLE_FILE_BYTES / 1024
           )}KB.`
@@ -248,7 +249,7 @@ export class BackgroundIndexer {
         lastIndexTime: Date.now(),
         indexerVersion: INDEXER_VERSION
       });
-      console.log(
+      this.log(
         `[BackgroundIndexer] Full index completed in ${(Date.now() - this.startTime) / 1000}s`
       );
     } catch (error) {

@@ -25,6 +25,8 @@ export const defaultConfig: ContextOSConfig = {
     '**/*.jsx',
     '**/*.py',
     '**/*.go',
+    '**/go.mod',
+    '**/*.proto',
     '**/*.rs',
     '**/*.java',
     '**/*.c',

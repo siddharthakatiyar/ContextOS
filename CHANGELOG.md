@@ -10,6 +10,14 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Add `ctx_trace` for bounded, directed traversal of recorded verified links, with ordered witness paths, citations, explicit gaps and scope isolation.
+- Add on-demand `ctx_resolve_import` and `ctx_contract` tools. Agents can inspect exact local dependencies and OpenAPI/gRPC operations during normal work, then save established relationships with `ctx_link`. No background agent discovery or model calls are added.
+- Index protobuf RPC signatures, OpenAPI operations/schemas and Go module manifests. Advance the indexer version so selected views rebuild with the updated parser.
+- Save exact local JS/TS file dependencies during combined retrieval with deterministic provenance and fresh mapping evidence. Surface unresolved local imports as transient suggestions; preserve existing agent-authored links.
+- Global npm installs enable managed instructions for detected supported coding agents by default; local installs do not. Add `contextos enable` for refresh and `CONTEXTOS_GLOBAL_INSTRUCTIONS=0` to opt out during installation.
+- Add read-only `contextos setup --check --json`, structured `init --json`, and native project MCP registration for installed Codex, Grok and OpenCode clients. Project enrollment remains an explicit user decision.
+- Extend doctor with instruction/import inventories, project/worktree readiness, client registration and separate retrieval/write permission observations; preserve unknown runtime policy rather than guessing.
+
 ## [1.1.1] — local testing candidate; not released
 
 ### Added

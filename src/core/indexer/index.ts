@@ -16,6 +16,7 @@ import { chunkCode } from '../chunker/code-chunker.js';
 import { extractRelationships, extractImportRelationships } from '../graph/extractor.js';
 import { scoreFileImportance } from './importance-scorer.js';
 import { hashContent } from '../../utils/hash.js';
+import { parseOpenApi, parseProtobuf } from '../parser/contracts.js';
 import { isBinaryFile, isGeneratedFile } from '../../utils/file-heuristics.js';
 import { Layer, Chunk, Relationship } from '../storage/types.js';
 import { indexChunkEmbeddings } from '../embeddings/index.js';
@@ -213,12 +214,16 @@ export class Indexer {
 
     // Parse and chunk based on file type
     signal?.throwIfAborted();
-    if (isCode) {
+    if (ext === '.proto') {
+      chunks = chunkCode(parseProtobuf(filePath, content), chunkOptions);
+    } else if (isCode) {
       const parsed = await parseCode(filePath, content);
       imports = parsed.imports || [];
       chunks = chunkCode(parsed, chunkOptions);
     } else if (isConfig) {
-      const parsed = parseConfig(filePath, content);
+      const parsed = ['.json', '.yaml', '.yml'].includes(ext)
+        ? (parseOpenApi(filePath, content) ?? parseConfig(filePath, content))
+        : parseConfig(filePath, content);
       chunks = chunkCode(parsed, chunkOptions); // Config files are structurally similar to code
     } else if (isMarkdown) {
       const parsed = parseMarkdown(filePath, content);

@@ -1,0 +1,152 @@
+{
+  "generatedAt": "2026-11-14T04:09:53.675Z",
+  "checkout": {
+    "root": "/home/siddharthakatiyar/ContextOS",
+    "branch": "codex/verified-cross-project-tracing"
+  },
+  "fixture": {
+    "root": "/home/siddharthakatiyar/ContextOS/.tmp/fresh-agent-release",
+    "workspace": "/home/siddharthakatiyar/ContextOS/.tmp/fresh-agent-release/workspace",
+    "repos": [
+      "api-contract",
+      "service-map",
+      "payment-api",
+      "pg-store"
+    ]
+  },
+  "budgets": {
+    "timeoutMs": 90000,
+    "maxTurns": {
+      "claude": 6,
+      "grok": 6,
+      "codex": "external timeout"
+    }
+  },
+  "clients": [
+    {
+      "client": "codex",
+      "status": "blocked",
+      "auth": {
+        "client": "codex",
+        "authenticated": true,
+        "statusCode": 0
+      },
+      "phases": {
+        "initial": {
+          "code": 0,
+          "signal": null,
+          "timedOut": false
+        },
+        "restrictive": {
+          "code": null,
+          "skipped": "no link was requested"
+        },
+        "reuse": {
+          "code": null,
+          "skipped": "no link was requested"
+        },
+        "invalidation": {
+          "code": null,
+          "skipped": "no link was requested"
+        }
+      },
+      "checks": {
+        "retrievalBeforeBroadSearch": false,
+        "broadSearchObserved": true,
+        "correctLinkRequested": false,
+        "correctLinkSaved": false,
+        "misleadingLegacyLinkSaved": false,
+        "reusedInNewSession": false,
+        "evidenceInvalidationChecked": false,
+        "endpointPaths": {
+          "source": null,
+          "target": null
+        },
+        "savedLinkId": null
+      },
+      "reason": "Native noninteractive approval policy blocked MCP calls; no client permission was changed."
+    },
+    {
+      "client": "claude",
+      "status": "blocked",
+      "reason": "native authentication is not available",
+      "auth": {
+        "client": "claude",
+        "authenticated": false,
+        "statusCode": 1
+      },
+      "checks": {
+        "retrievalBeforeBroadSearch": false,
+        "broadSearchObserved": false,
+        "correctLinkRequested": false,
+        "correctLinkSaved": false,
+        "misleadingLegacyLinkSaved": false,
+        "reusedInNewSession": false,
+        "evidenceInvalidationChecked": false,
+        "endpointPaths": {
+          "source": null,
+          "target": null
+        },
+        "savedLinkId": null
+      }
+    },
+    {
+      "client": "grok",
+      "status": "blocked",
+      "reason": "native authentication is not available",
+      "auth": {
+        "client": "grok",
+        "authenticated": false,
+        "statusCode": 0
+      },
+      "checks": {
+        "retrievalBeforeBroadSearch": false,
+        "broadSearchObserved": false,
+        "correctLinkRequested": false,
+        "correctLinkSaved": false,
+        "misleadingLegacyLinkSaved": false,
+        "reusedInNewSession": false,
+        "evidenceInvalidationChecked": false,
+        "endpointPaths": {
+          "source": null,
+          "target": null
+        },
+        "savedLinkId": null
+      }
+    }
+  ],
+  "protocol": {
+    "retrievalBeforeBroadSearch": false,
+    "broadSearchObserved": true,
+    "correctLinkRequested": false,
+    "correctLinkSaved": false,
+    "misleadingLegacyLinkSaved": false,
+    "reusedInNewSession": false,
+    "evidenceInvalidationChecked": false,
+    "endpointPaths": {
+      "source": null,
+      "target": null
+    },
+    "savedLinkId": null
+  },
+  "evidenceInvalidation": {
+    "fileEdited": "pg-store/src/captures.ts",
+    "outcomes": []
+  },
+  "releaseReady": false,
+  "cleanup": [
+    {
+      "client": "codex",
+      "status": "stopped",
+      "code": 0
+    },
+    {
+      "client": "claude",
+      "status": "not-started"
+    },
+    {
+      "client": "grok",
+      "status": "not-started"
+    }
+  ]
+}

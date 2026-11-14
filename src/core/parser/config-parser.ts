@@ -76,6 +76,7 @@ export function parseConfig(filePath: string, content: string): ParsedCodeDocume
   return {
     filePath,
     language,
-    symbols
+    symbols,
+    rawContent: content
   };
 }

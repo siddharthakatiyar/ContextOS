@@ -162,7 +162,12 @@ export class RepositoryRuntime {
   };
   async prepareRead(): Promise<void> {
     const current = this.registry.resolve(this.source.repoId);
-    if (current.state === 'registered' || current.state === 'indexing') await this.index();
+    if (
+      current.state === 'registered' ||
+      current.state === 'indexing' ||
+      (current.state === 'ready' && current.configFingerprint !== this.fingerprint)
+    )
+      await this.index();
     this.assertReadable();
   }
   assertReadable(): void {
@@ -365,7 +370,7 @@ export class RepositoryRuntime {
       graph.close();
     }
   }
-  async index(force = false): Promise<void> {
+  async index(force = false, log?: (message: string) => void): Promise<void> {
     if (this.scan) return this.scan;
     const owner = await this.acquire();
     if (owner.token !== this.owner?.token) {
@@ -385,7 +390,8 @@ export class RepositoryRuntime {
         this.db,
         this.source.rootPath,
         path.dirname(this.source.dbPath),
-        this.assertCurrent
+        this.assertCurrent,
+        log
       );
       await indexer.startFullIndex(this.config);
       if (indexer.lastError) throw new Error(indexer.lastError);

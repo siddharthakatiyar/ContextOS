@@ -50,6 +50,73 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   fs.rmSync(temp, { recursive: true, force: true });
 });
+it('exposes on-demand import and contract inspection without discovering or saving links', async () => {
+  const backend = registry.resolve('backend');
+  const frontend = registry.resolve('frontend');
+  fs.writeFileSync(
+    path.join(backend.rootPath, 'package.json'),
+    JSON.stringify({ name: '@fixture/backend', exports: './payment.ts' })
+  );
+  fs.writeFileSync(
+    path.join(frontend.rootPath, 'package.json'),
+    JSON.stringify({ dependencies: { '@fixture/backend': 'file:../backend' } })
+  );
+  fs.appendFileSync(
+    path.join(frontend.rootPath, 'payment.ts'),
+    '\nimport { processPaymentStatus } from "@fixture/backend";\nexport function submitCheckout() { return processPaymentStatus("pending"); }\n'
+  );
+  fs.writeFileSync(
+    path.join(backend.rootPath, 'api.yaml'),
+    'openapi: 3.1.0\npaths:\n  /checkout:\n    post:\n      operationId: createCheckout\n      responses:\n        "200":\n          description: OK\n'
+  );
+  await runtime.get(backend).index(true);
+  await runtime.get(frontend).index(true);
+  const sourceChunk = new ChunksRepo(runtime.get(frontend).db.getInstance()).findBySymbolName(
+    'submitCheckout'
+  )[0];
+  const source = entityRef(frontend.repoId, 'chunk', sourceChunk.id);
+  const resolved = await client.callTool({
+    name: 'ctx_resolve_import',
+    arguments: {
+      group: 'default',
+      source,
+      specifier: '@fixture/backend',
+      symbol: 'processPaymentStatus'
+    }
+  });
+  expect(resolved.isError).not.toBe(true);
+  expect(resolved.structuredContent).toMatchObject({
+    resolved: true,
+    saved: false,
+    targetProject: 'backend'
+  });
+  const denied = await client.callTool({
+    name: 'ctx_resolve_import',
+    arguments: { project: 'frontend', source, specifier: '@fixture/backend' }
+  });
+  expect(denied.isError).toBe(true);
+  const row = runtime
+    .get(backend)
+    .db.getInstance()
+    .prepare('SELECT id FROM chunks WHERE source_file=? LIMIT 1')
+    .get(path.join(backend.rootPath, 'api.yaml')) as { id: string };
+  const contract = await client.callTool({
+    name: 'ctx_contract',
+    arguments: {
+      project: 'backend',
+      ref: entityRef(backend.repoId, 'chunk', row.id),
+      operation: 'POST /checkout'
+    }
+  });
+  expect(contract.isError).not.toBe(true);
+  expect(contract.structuredContent).toMatchObject({
+    format: 'openapi',
+    saved: false,
+    operations: [{ id: 'createCheckout' }]
+  });
+  const links = await client.callTool({ name: 'ctx_links', arguments: { group: 'default' } });
+  expect(links.structuredContent).toMatchObject({ links: [] });
+});
 it('uses selected view token settings while preserving explicit request limits', async () => {
   const owner = runtime.get(registry.resolve('backend'));
   owner.config.maxTokenBudget = 100;
@@ -120,6 +187,28 @@ it('lets an agent inspect qualified evidence, save a connection, retrieve it and
     }
   });
   expect(linked.isError).not.toBe(true);
+  const traced = await client.callTool({
+    name: 'ctx_trace',
+    arguments: {
+      group: 'default',
+      start: source.chunks[0].ref,
+      target: target.chunks[0].ref
+    }
+  });
+  expect(traced.isError).not.toBe(true);
+  expect(traced.structuredContent).toMatchObject({
+    found: true,
+    coverage: 'recorded_verified_links_only'
+  });
+  const denied = await client.callTool({
+    name: 'ctx_trace',
+    arguments: {
+      project: 'backend',
+      start: source.chunks[0].ref,
+      target: target.chunks[0].ref
+    }
+  });
+  expect(denied.isError).toBe(true);
   const args = {
     prompt: 'processPaymentStatus displayPaymentStatus',
     group: 'default',

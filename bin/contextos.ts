@@ -28,6 +28,8 @@ function findPackageManifest(start: string): { path: string; version: string } {
 function skipsStartupNotice(args: string[]): boolean {
   const commands = new Set([
     'init',
+    'setup',
+    'enable',
     'serve',
     'query',
     'workspace',
@@ -52,6 +54,8 @@ function skipsStartupNotice(args: string[]): boolean {
   const command = commandIndex >= 0 ? args[commandIndex] : undefined;
   return (
     command === 'doctor' ||
+    command === 'enable' ||
+    command === 'setup' ||
     command === 'upgrade' ||
     command === 'updates' ||
     command === 'serve' ||
@@ -64,7 +68,15 @@ function skipsStartupNotice(args: string[]): boolean {
 }
 
 function skipsFirstUseAutoPatchNotice(args: string[]): boolean {
-  const maintenanceCommands = new Set(['doctor', 'upgrade', 'updates', 'daemon', 'help']);
+  const maintenanceCommands = new Set([
+    'doctor',
+    'enable',
+    'setup',
+    'upgrade',
+    'updates',
+    'daemon',
+    'help'
+  ]);
   const command = args.find((arg) => !arg.startsWith('-'));
   return (
     (command !== undefined && maintenanceCommands.has(command)) ||
@@ -117,6 +129,8 @@ async function main(): Promise<void> {
 
   const commands = await Promise.all([
     import('../src/cli/commands/init.js'),
+    import('../src/cli/commands/setup.js'),
+    import('../src/cli/commands/enable.js'),
     import('../src/cli/commands/serve.js'),
     import('../src/cli/commands/query.js'),
     import('../src/cli/commands/workspace.js'),
@@ -138,6 +152,8 @@ async function main(): Promise<void> {
   ]);
   const [
     init,
+    setup,
+    enable,
     serve,
     query,
     workspace,
@@ -177,6 +193,8 @@ async function main(): Promise<void> {
 
   for (const command of [
     init.initCommand,
+    setup.setupCommand,
+    enable.enableCommand,
     serve.serveCommand,
     query.queryCommand,
     workspace.workspaceCommand,
