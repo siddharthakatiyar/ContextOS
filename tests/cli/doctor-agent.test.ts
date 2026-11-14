@@ -9,7 +9,8 @@ import { WorkspaceRegistry } from '../../src/core/workspace/registry.js';
 
 const directories: string[] = [];
 function directory() {
-  const result = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-doctor-agent-'));
+  // macOS temporary directories can be reached through the /var symlink.
+  const result = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-doctor-agent-')));
   directories.push(result);
   return result;
 }

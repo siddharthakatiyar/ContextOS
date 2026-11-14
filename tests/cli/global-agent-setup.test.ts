@@ -7,7 +7,8 @@ import { enableGlobalAgentInstructions } from '../../src/cli/utils/global-agent-
 
 const homes: string[] = [];
 function fixture() {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-global-'));
+  // Keep fixture homes canonical while testing symlink rejection below the home.
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-global-')));
   homes.push(home);
   const bin = path.join(home, 'bin');
   fs.mkdirSync(bin);
