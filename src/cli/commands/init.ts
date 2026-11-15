@@ -4,6 +4,7 @@ import path from 'node:path';
 import { discoverProject } from '../../core/workspace/discovery.js';
 import { WorkspaceRegistry } from '../../core/workspace/registry.js';
 import { WorkspaceRuntime } from '../../core/workspace/runtime.js';
+import { refreshWorkspaceDaemon } from '../../core/workspace/daemon.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
 import { mergeContextosMcpConfig, validateJsonConfigs } from '../utils/mcp-config.js';
 import { installAgentInstructions } from '../utils/agent-instructions.js';
@@ -109,6 +110,11 @@ export async function initializeProject(
     await runtime.close();
     registry.close();
   }
+  // Release this command's indexing leases before handing new memberships to
+  // the live service. Waiting for its refresh prevents immediate reads racing
+  // the periodic watcher's first scan after a project is re-added.
+  if (options.index !== false)
+    await refreshWorkspaceDaemon(options.group ?? options.workspace ?? 'default');
 }
 
 export const initCommand = new Command('init')

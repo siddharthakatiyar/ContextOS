@@ -14,6 +14,7 @@ import {
 import { WorkspaceRegistry } from '../../src/core/workspace/registry.js';
 import { createUpgradeLock } from '../../src/core/updater/upgrade-lock.js';
 import { applyMigrations } from '../../src/core/storage/schema.js';
+import { getPackageVersion } from '../../src/utils/version.js';
 
 describe('automatic existing-project setup', () => {
   let temporary: string;
@@ -180,21 +181,26 @@ describe('automatic existing-project setup', () => {
   });
   it('migrates from CLI first use and keeps machine-readable output clean', () => {
     legacy();
+    fs.writeFileSync(
+      path.join(project, 'payment.ts'),
+      'export type PaymentStatus = "pending" | "paid";\n'
+    );
     const result = spawnSync(
       process.execPath,
-      [path.resolve('dist/bin/contextos.js'), 'status', '--json'],
+      [path.resolve('dist/bin/contextos.js'), 'query', 'PaymentStatus', '--json'],
       {
         cwd: project,
-        env: { ...process.env, HOME: home },
+        env: { ...process.env, HOME: home, CONTEXTOS_EMBEDDINGS: '0' },
         encoding: 'utf8',
-        timeout: 15000
+        timeout: 60_000
       }
     );
     expect(result.status, result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout).views).toHaveLength(1);
+    expect(JSON.parse(result.stdout).context).toContain('PaymentStatus');
     expect(result.stderr).toContain('Updated 1 project checkout');
+    expect(result.stderr).toContain('[BackgroundIndexer]');
     expect(fs.existsSync(path.join(project, 'AGENTS.md'))).toBe(true);
-  });
+  }, 65_000);
   function daemon() {
     const file = path.join(home, 'daemon.pid');
     fs.writeFileSync(file, '44512');
@@ -233,6 +239,28 @@ describe('automatic existing-project setup', () => {
     expect(adapters.verified).toHaveBeenCalledTimes(2);
     expect(adapters.terminate).toHaveBeenCalledWith(44512);
     expect(adapters.wait).toHaveBeenCalledWith(44512);
+  });
+  it('restarts an owner reporting the replaced manifest version during a new setup revision', async () => {
+    const { file, adapters } = daemon();
+    const version = getPackageVersion();
+    vi.mocked(adapters.request).mockResolvedValue({ ok: true, version });
+    await stopInstallationDaemon(project, file, 'token', true, adapters);
+    expect(adapters.request).toHaveBeenNthCalledWith(
+      2,
+      project,
+      'prepare-upgrade',
+      'token',
+      version,
+      120_000
+    );
+    expect(adapters.wait).toHaveBeenCalledWith(44512);
+  });
+  it('retains a current owner after the setup revision has completed', async () => {
+    const { file, adapters } = daemon();
+    vi.mocked(adapters.request).mockResolvedValue({ ok: true, version: getPackageVersion() });
+    await stopInstallationDaemon(project, file, 'token', false, adapters);
+    expect(adapters.request).toHaveBeenCalledTimes(1);
+    expect(adapters.wait).not.toHaveBeenCalled();
   });
   it('never signals an unverified, reused or unresponsive PID', async () => {
     const { file, adapters } = daemon();

@@ -1,0 +1,253 @@
+{
+  "metadata": {
+    "harnessGitSha": "f8a87b3b4600a156abc8aa61eba2f66b25047411",
+    "productVersion": "1.2.0",
+    "tokenizer": "cl100k_base",
+    "nodeVersion": "v22.23.2",
+    "timestamp": "2026-11-15T15:40:38.134Z"
+  },
+  "corpus": "retrieval-examples",
+  "generatedAt": "2026-11-15T15:40:38.071Z",
+  "nodeVersion": "v22.23.2",
+  "totalQueries": 9,
+  "passedQueries": 9,
+  "failedQueries": 0,
+  "passRate": 1,
+  "passRatePercent": 100,
+  "averageRecall": 1,
+  "averageRecallPercent": 100,
+  "expectedFilesFound": 20,
+  "expectedFileCount": 20,
+  "expectedFileRecall": 1,
+  "expectedFileRecallPercent": 100,
+  "anyHitQueries": 9,
+  "anyHitRate": 1,
+  "anyHitRatePercent": 100,
+  "metricDefinitions": {
+    "averageRecall": "Mean of per-query expected-file recall values.",
+    "expectedFileRecall": "All expected files found divided by all expected files across queries.",
+    "anyHitRate": "Queries with at least one expected file retrieved divided by all queries.",
+    "passRate": "Queries meeting their benchmark minRecall threshold divided by all queries."
+  },
+  "queries": [
+    {
+      "fixture": "cyclic-dependencies",
+      "query": "What does doSomethingInA call?",
+      "expectedFiles": [
+        "a.ts",
+        "b.ts"
+      ],
+      "retrievedFiles": [
+        "a.ts",
+        "queries.md",
+        "benchmark.json",
+        "b.ts",
+        "README.md"
+      ],
+      "expectedFilesFound": 2,
+      "expectedFileCount": 2,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 139
+    },
+    {
+      "fixture": "express-auth-routing",
+      "query": "How does authentication work for the profile route?",
+      "expectedFiles": [
+        "routes.ts",
+        "middleware/auth.ts",
+        "services/jwt.ts"
+      ],
+      "retrievedFiles": [
+        "controllers/user.ts",
+        "routes.ts",
+        "queries.md",
+        "benchmark.json",
+        "middleware/auth.ts",
+        "README.md",
+        "models/user.ts",
+        "services/jwt.ts"
+      ],
+      "expectedFilesFound": 3,
+      "expectedFileCount": 3,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 200
+    },
+    {
+      "fixture": "express-auth-routing",
+      "query": "Where is the database accessed for the user profile?",
+      "expectedFiles": [
+        "controllers/user.ts",
+        "models/user.ts"
+      ],
+      "retrievedFiles": [
+        "models/user.ts",
+        "controllers/user.ts",
+        "queries.md",
+        "benchmark.json",
+        "routes.ts",
+        "services/jwt.ts",
+        "middleware/auth.ts",
+        "README.md"
+      ],
+      "expectedFilesFound": 2,
+      "expectedFileCount": 2,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 104
+    },
+    {
+      "fixture": "fastapi-dependencies",
+      "query": "How are users authenticated in the /me route?",
+      "expectedFiles": [
+        "routers/users.py",
+        "dependencies.py"
+      ],
+      "retrievedFiles": [
+        "routers/users.py",
+        "dependencies.py",
+        "models/user.py",
+        "main.py",
+        "README.md",
+        "queries.md",
+        "benchmark.json"
+      ],
+      "expectedFilesFound": 2,
+      "expectedFileCount": 2,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 118
+    },
+    {
+      "fixture": "fastapi-dependencies",
+      "query": "What fields are returned when fetching the current user?",
+      "expectedFiles": [
+        "routers/users.py",
+        "models/user.py"
+      ],
+      "retrievedFiles": [
+        "dependencies.py",
+        "models/user.py",
+        "routers/users.py",
+        "main.py",
+        "queries.md",
+        "README.md",
+        "benchmark.json"
+      ],
+      "expectedFilesFound": 2,
+      "expectedFileCount": 2,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 165
+    },
+    {
+      "fixture": "go-interfaces",
+      "query": "Where is the UserStore interface defined, and how is it implemented in Postgres?",
+      "expectedFiles": [
+        "internal/store/store.go",
+        "internal/store/postgres.go"
+      ],
+      "retrievedFiles": [
+        "internal/store/postgres.go",
+        "internal/store/store.go",
+        "main.go",
+        "queries.md",
+        "benchmark.json",
+        "README.md"
+      ],
+      "expectedFilesFound": 2,
+      "expectedFileCount": 2,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 110
+    },
+    {
+      "fixture": "go-interfaces",
+      "query": "What fields exist on the User struct that the PostgresStore returns?",
+      "expectedFiles": [
+        "internal/store/postgres.go",
+        "internal/store/store.go"
+      ],
+      "retrievedFiles": [
+        "internal/store/postgres.go",
+        "internal/store/store.go",
+        "main.go",
+        "benchmark.json",
+        "queries.md",
+        "README.md"
+      ],
+      "expectedFilesFound": 2,
+      "expectedFileCount": 2,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 98
+    },
+    {
+      "fixture": "nextjs-rsc-boundaries",
+      "query": "How does login work from the form to the database?",
+      "expectedFiles": [
+        "components/auth-form.tsx",
+        "actions/db.ts"
+      ],
+      "retrievedFiles": [
+        "components/auth-form.tsx",
+        "app/page.tsx",
+        "queries.md",
+        "actions/db.ts",
+        "benchmark.json",
+        "README.md",
+        "lib/session.ts",
+        "app/layout.tsx"
+      ],
+      "expectedFilesFound": 2,
+      "expectedFileCount": 2,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 203
+    },
+    {
+      "fixture": "nextjs-rsc-boundaries",
+      "query": "How is the user session loaded in the root layout?",
+      "expectedFiles": [
+        "app/layout.tsx",
+        "lib/session.ts",
+        "actions/db.ts"
+      ],
+      "retrievedFiles": [
+        "app/layout.tsx",
+        "lib/session.ts",
+        "actions/db.ts",
+        "queries.md",
+        "benchmark.json",
+        "components/auth-form.tsx",
+        "README.md"
+      ],
+      "expectedFilesFound": 3,
+      "expectedFileCount": 3,
+      "recall": 1,
+      "anyHit": true,
+      "minRecall": 1,
+      "passed": true,
+      "tokens": 164
+    }
+  ],
+  "failed": false,
+  "reportPath": "../../../tmp/contextos-bench-report-TwpNKj"
+}

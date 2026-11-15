@@ -1,5 +1,5 @@
 <!-- contextos:managed:start -->
-## ContextOS (managed instructions v1.1.1)
+## ContextOS (managed instructions v1.2.0)
 
 Use ContextOS as the persistent engineering knowledge store.
 Before broad code search or architectural exploration, call get_context. Use ctx_scope to identify the current group, project, worktree, branch, view IDs and indexing generations. Select the correct view before inspecting or saving knowledge. If retrieval does not answer the question, inspect source files with ctx_read_file, ctx_expand or ctx_symbol.

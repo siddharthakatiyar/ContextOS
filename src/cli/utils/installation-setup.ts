@@ -209,7 +209,7 @@ export async function stopInstallationDaemon(
   projectDir: string,
   pidFile: string,
   token: string,
-  legacy: boolean,
+  restartCurrentVersion: boolean,
   adapters = daemonAdapters
 ): Promise<void> {
   assertNoSymlinkInPath(pidFile);
@@ -224,7 +224,7 @@ export async function stopInstallationDaemon(
     throw new Error(
       `Cannot verify daemon control for PID ${pid}; stop it manually before retrying.`
     );
-  if (!legacy && version.version === getPackageVersion()) return;
+  if (!restartCurrentVersion && version.version === getPackageVersion()) return;
   const response = await adapters.request(
     projectDir,
     'prepare-upgrade',
@@ -283,7 +283,10 @@ export async function upgradeExistingProjects(
       path.join(stateHome, 'runtime'),
       path.join(stateHome, 'runtime', 'daemon.pid'),
       token,
-      false
+      // Older owners read their version from disk after npm replaces the package.
+      // Before any checkout completes this setup revision, restart that verified
+      // owner even when it now reports the newly installed manifest's version.
+      completed.size === 0
     );
     for (const root of roots)
       await stopInstallationDaemon(root, path.join(root, '.contextos', 'daemon.pid'), token, true);

@@ -41,11 +41,17 @@ jobs:
       - name: Reject critical production advisories
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
         run: npm audit --omit=dev --audit-level=critical
-      - name: Smoke-test packed CLI
+      - name: Validate installed release package
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
         run: |
           PACKAGE_TARBALL=$(npm pack --pack-destination "$RUNNER_TEMP" --silent)
-          npm install --prefix "$RUNNER_TEMP/contextos-smoke" "$RUNNER_TEMP/$PACKAGE_TARBALL" --no-audit --no-fund
-          EXPECTED_VERSION=$(node -p "require('./package.json').version")
-          "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --version | grep -Fx "$EXPECTED_VERSION"
-          "$RUNNER_TEMP/contextos-smoke/node_modules/.bin/contextos" --help >/dev/null
+          PREVIOUS_TARBALL=$(npm pack @siddharthakatiyar/contextos@1.1.1 --pack-destination "$RUNNER_TEMP" --silent)
+          node scripts/release-package-test.mjs "$RUNNER_TEMP/$PACKAGE_TARBALL" "$RUNNER_TEMP/release-package-test.json" "$RUNNER_TEMP/$PREVIOUS_TARBALL"
+
+      - name: Upload installed-package validation report
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package-validation
+          path: ${{ runner.temp }}/release-package-test.json
+          if-no-files-found: ignore

@@ -70,7 +70,7 @@ Existing users normally only need to install the new package and reconnect their
 coding agent:
 
 ```bash
-npm install -g @siddharthakatiyar/contextos@1.1.1
+npm install -g @siddharthakatiyar/contextos@1.2.0
 ```
 
 Global installation automatically refreshes known projects. It gracefully stops

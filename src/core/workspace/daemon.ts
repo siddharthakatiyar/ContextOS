@@ -35,6 +35,7 @@ export function workspaceSocketPath(): string {
 }
 
 export class WorkspaceDaemon {
+  private readonly version = getPackageVersion();
   private registry = new WorkspaceRegistry();
   readonly runtime: WorkspaceRuntime;
   private server: net.Server;
@@ -148,7 +149,7 @@ export class WorkspaceDaemon {
         };
         if (setup.action === 'get-version' || setup.action === 'prepare-upgrade') {
           const token = getActiveUpgradeToken();
-          const version = getPackageVersion();
+          const version = this.version;
           socket.resume();
           const error =
             !token || token !== setup.token
@@ -216,7 +217,7 @@ export class WorkspaceDaemon {
         )
           throw new Error('An active repository within the workspace is required');
         const server = new McpServer(
-          { name: 'contextos', version: getPackageVersion() },
+          { name: 'contextos', version: this.version },
           { instructions: MCP_SERVER_INSTRUCTIONS }
         );
         registerWorkspaceTools(server, this.runtime, {

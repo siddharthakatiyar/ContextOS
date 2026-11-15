@@ -1,0 +1,66 @@
+{
+  "version": "1.2.0",
+  "archive": "siddharthakatiyar-contextos-1.2.0.tgz",
+  "archiveSha256": "26df7badfc880d0790035d3e2a0475c7bcc3b41dcbde9860402832f7a9ffc1d3",
+  "startedAt": "2026-11-15T16:02:14.397Z",
+  "completedAt": "2026-11-15T16:03:45.562Z",
+  "results": [
+    {
+      "name": "global npm install runs migration and preserves user instructions",
+      "status": "passed",
+      "durationMs": 27764
+    },
+    {
+      "name": "cold and warm JSON queries rebuild legacy indexes and retain memories",
+      "status": "passed",
+      "durationMs": 4931
+    },
+    {
+      "name": "fresh projects remain uninitialized",
+      "status": "passed",
+      "durationMs": 1054
+    },
+    {
+      "name": "live previous-release daemon is replaced automatically and knowledge survives",
+      "status": "passed",
+      "durationMs": 26884,
+      "detail": {
+        "previousVersion": "1.1.1",
+        "version": "1.2.0",
+        "previousDaemonExited": true,
+        "clientReconnected": true
+      }
+    },
+    {
+      "name": "four independent projects and a Git worktree initialize through the installed CLI",
+      "status": "passed",
+      "durationMs": 11557
+    },
+    {
+      "name": "combined ranking, provenance, scopes, and worktree isolation",
+      "status": "passed",
+      "durationMs": 7234
+    },
+    {
+      "name": "installed MCP tool inventory, independent clients, and token budgets",
+      "status": "passed",
+      "durationMs": 266
+    },
+    {
+      "name": "exact import and OpenAPI inspection, verified links, tracing, and knowledge lifecycle",
+      "status": "passed",
+      "durationMs": 1110
+    },
+    {
+      "name": "watcher updates, atomic replacements, deletion, and path containment",
+      "status": "passed",
+      "durationMs": 4159
+    },
+    {
+      "name": "removed worktree cleanup retains source projects and other indexes",
+      "status": "passed",
+      "durationMs": 2767
+    }
+  ],
+  "passed": true
+}

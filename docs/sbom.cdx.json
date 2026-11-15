@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:db729936-e6c2-48d6-9ed1-c7c46ea5799d",
+  "serialNumber": "urn:uuid:5cdc592a-7d14-4e32-8995-9972cdfcb580",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-15T15:08:58.301Z",
+    "timestamp": "2026-11-15T15:39:22.054Z",
     "lifecycles": [
       {
         "phase": "pre-build"
@@ -19,14 +19,14 @@
       }
     ],
     "component": {
-      "bom-ref": "@siddharthakatiyar/contextos@1.1.1",
+      "bom-ref": "@siddharthakatiyar/contextos@1.2.0",
       "type": "library",
       "name": "ContextOS",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "scope": "required",
       "author": "Siddhartha Katiyar",
       "description": "ContextOS - Universal knowledge graph for coding agents",
-      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.1.1",
+      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.2.0",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -58,12 +58,12 @@
   },
   "components": [
     {
-      "bom-ref": "docs@1.1.1",
+      "bom-ref": "docs@1.2.0",
       "type": "library",
       "name": "docs",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "scope": "required",
-      "purl": "pkg:npm/docs@1.1.1",
+      "purl": "pkg:npm/docs@1.2.0",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -24236,9 +24236,9 @@
   ],
   "dependencies": [
     {
-      "ref": "@siddharthakatiyar/contextos@1.1.1",
+      "ref": "@siddharthakatiyar/contextos@1.2.0",
       "dependsOn": [
-        "docs@1.1.1",
+        "docs@1.2.0",
         "@huggingface/transformers@4.3.0",
         "@modelcontextprotocol/sdk@1.32.1",
         "better-sqlite3@12.10.0",
@@ -24272,7 +24272,7 @@
       ]
     },
     {
-      "ref": "docs@1.1.1",
+      "ref": "docs@1.2.0",
       "dependsOn": [
         "@base-ui/react@1.6.0",
         "@vercel/analytics@2.0.1",

@@ -104,11 +104,16 @@ describe('built CLI and workspace daemon', () => {
       ).toBe(true);
       expect(fs.existsSync(path.join(root, 'frontend', '.contextos'))).toBe(false);
       run(['repo', 'add', path.join(root, 'frontend')]);
+      const owner = JSON.parse(run(['repo', 'status', 'frontend', '--json'])).repositories[0].owner;
+      const daemonPid = Number(fs.readFileSync(path.join(home, '.contextos/runtime/daemon.pid')));
+      expect(owner?.pid, 'Re-added projects must return with the live daemon watching them').toBe(
+        daemonPid
+      );
       const restored = await frontend.callTool({
         name: 'get_context',
         arguments: { prompt: 'displayPaymentStatus', tier: 'full' }
       });
-      expect(restored.isError).not.toBe(true);
+      expect(restored.isError, JSON.stringify(restored.content)).not.toBe(true);
       expect(JSON.stringify(restored.content)).toContain('frontend/payment.ts');
       watcher = spawn(process.execPath, [cli, 'watch', '-w', 'legacy-label'], {
         cwd: path.join(root, 'backend'),
