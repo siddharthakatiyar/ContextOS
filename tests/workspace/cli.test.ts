@@ -108,7 +108,7 @@ describe('built CLI and workspace daemon', () => {
         name: 'get_context',
         arguments: { prompt: 'displayPaymentStatus', tier: 'full' }
       });
-      expect(restored.isError).not.toBe(true);
+      expect(restored.isError, JSON.stringify(restored.content)).not.toBe(true);
       expect(JSON.stringify(restored.content)).toContain('frontend/payment.ts');
       watcher = spawn(process.execPath, [cli, 'watch', '-w', 'legacy-label'], {
         cwd: path.join(root, 'backend'),
