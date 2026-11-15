@@ -1,10 +1,16 @@
-# ContextOS 1.1.1 local testing
+# ContextOS 1.1.1 testing guide
 
-Version 1.1.1 is a local testing candidate. It is not published to npm, and no release should be created until local testing is complete and the user explicitly approves it.
+Use this checklist to verify ContextOS 1.1.1 against local projects, whether installed from npm or built from source.
 
 The latest completed real-project checks, corrected issues, and remaining limitations are recorded in [the ThrottleX validation report](validation/contextos-1.1.1-throttlex-validation.md).
 
-## Build the candidate
+## Install or build
+
+Install the released package with:
+
+```bash
+npm install -g @siddharthakatiyar/contextos@1.1.1
+```
 
 From a ContextOS source checkout, use the supported Node version and the locked dependencies:
 
@@ -20,14 +26,14 @@ node dist/bin/contextos.js --version
 
 The CLI should print `1.1.1`. During local testing, replace `contextos` in the examples below with `node /absolute/path/to/ContextOS/dist/bin/contextos.js`. A version string from the local build does not mean the package has been published.
 
-Alternatively, copy the local package from `.tmp/groups-worktrees-1.1.1/siddharthakatiyar-contextos-1.1.1.tgz` to your laptop and install that exact file:
+Alternatively, package a source build with `npm pack`, copy the generated tarball to your laptop, and install that exact file:
 
 ```bash
 npm install -g ./siddharthakatiyar-contextos-1.1.1.tgz
 contextos --version
 ```
 
-Use Node 22.12 or newer. The package installation needs network access for dependencies. This installs the testing candidate without publishing it. Automated results and testing limits are recorded in [the validation report](validation/contextos-1.1.1-groups-validation.md), with latency measurements in [the performance report](validation/contextos-1.1.1-groups-performance.json).
+Use Node 22.12 or newer. The package installation needs network access for dependencies. Installing a local tarball does not publish it. Automated results and testing limits are recorded in [the validation report](validation/contextos-1.1.1-groups-validation.md), with latency measurements in [the performance report](validation/contextos-1.1.1-groups-performance.json).
 
 ## Initialize projects and create a group
 
@@ -132,6 +138,17 @@ Create a second MCP client with frontend active. Verify that it has its own defa
 
 ## Storage and migration
 
+Global npm installation now upgrades known projects automatically; legacy
+projects without registration are upgraded on first use. Test with isolated
+homes: confirm old daemon shutdown finishes before registration, saved memories
+survive, legacy files remain, group memberships and explicit client entries stay
+intact, managed instructions refresh once, and a second invocation does no setup
+work. An unverifiable or still-draining process must remain intact and produce an
+actionable error. `contextos setup --upgrade --json` retries pending setup; use
+`--no-index` to defer rebuilding. Local npm installation and staged self-upgrades
+must not run migration from their install hooks. A fresh project must still wait
+for user-approved initialization. Restart the agent to refresh its loaded tools.
+
 New data is stored globally:
 
 ```text
@@ -153,6 +170,6 @@ Before testing against important data, run `contextos daemon stop --all` to stop
 
 Group removal retains project data. Explicit project purge deletes stored data but never source files. `clean` removes only views ContextOS can confirm are obsolete; use the dry run first.
 
-## Release gate
+## Release verification
 
-Do not publish to npm, create a GitHub release, or push a release tag as part of local testing. Version 1.1.1 remains pending until testing is complete and the user explicitly approves release.
+Local testing does not publish packages. Publishing requires an explicitly authorized release from a tested main-branch commit, with matching package version and release tag. The publishing workflow runs automated gates and a packed CLI smoke test before npm publication. Native agent authentication and approval-policy limitations are recorded separately in [the fresh-session report](validation/fresh-agent-sessions.md).

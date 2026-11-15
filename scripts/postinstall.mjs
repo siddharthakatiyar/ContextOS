@@ -5,6 +5,16 @@ if (process.env.CONTEXTOS_SUPPRESS_INSTALL_NOTICE !== '1') {
   process.stderr.write(notice);
 }
 
+// Staged self-upgrades must not mutate projects before the package swap commits.
+if (process.env.npm_config_global === 'true' && process.env.CONTEXTOS_SKIP_SETUP !== '1') {
+  try {
+    const { upgradeExistingProjects } = await import('../dist/src/cli/utils/installation-setup.js');
+    await upgradeExistingProjects({ cwd: process.env.INIT_CWD });
+  } catch (error) {
+    process.stderr.write(`[ContextOS] Project setup will retry on next use: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
+}
+
 // npm supplies this flag for global installs. Local installs never alter agent instructions.
 if (process.env.npm_config_global === 'true' && process.env.CONTEXTOS_GLOBAL_INSTRUCTIONS !== '0') {
   try {

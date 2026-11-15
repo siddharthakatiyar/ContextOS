@@ -64,7 +64,41 @@ background rebuild when the indexer format changes; use `contextos reindex` only
 when you explicitly want to rebuild the active project's index. Reindexing keeps
 memories and history.
 
-## Groups, projects, and worktrees (1.1.1 candidate)
+### Upgrading an existing installation
+
+Existing users normally only need to install the new package and reconnect their
+coding agent:
+
+```bash
+npm install -g @siddharthakatiyar/contextos@1.1.1
+```
+
+Global installation automatically refreshes known projects. It gracefully stops
+verified older ContextOS daemons, imports legacy registrations and indexes into
+global storage, and refreshes managed project instructions and missing MCP
+configuration. Legacy files and user-written instructions are retained. Existing
+group memberships and explicit MCP commands are preserved. Indexes rebuild on
+the next retrieval or MCP connection, keeping installation free of full scans.
+
+Older projects absent from the registry migrate automatically when next used
+through ContextOS. ContextOS does not scan the home directory for projects or
+initialize fresh projects automatically. If a daemon cannot be verified or is
+still draining, setup reports the problem and retries on next use; it never
+force-kills a process. Automatic process verification currently supports Linux
+and macOS; other platforms may require stopping older daemons manually.
+
+`contextos setup --upgrade` retries existing-project setup and indexes pending
+projects immediately; add `--no-index` to defer scanning or `--json` for a
+structured report. Set `CONTEXTOS_SKIP_SETUP=1` to disable automatic project
+setup. Local npm installation does not migrate projects during installation;
+first use still handles legacy projects. Staged self-upgrades defer setup until
+the new package is in use.
+
+Reconnect or restart the coding agent to refresh its loaded tools. A custom MCP
+entry pinned to an older executable or package version needs updating separately;
+ContextOS preserves explicit client settings.
+
+## Groups, projects, and worktrees (1.1.1)
 
 Use a group to search related local projects together. A project can belong to several groups, and ContextOS automatically discovers the Git worktrees that are already checked out on this machine.
 
@@ -139,7 +173,7 @@ The registry tracks groups, projects, worktrees, and branch views. Each view has
 
 Removing a project from a group keeps its indexes and knowledge. `contextos clean --dry-run` previews views left behind by removed worktrees or deleted branches. `contextos project remove <project> --purge` explicitly deletes the project's stored indexes and knowledge while leaving source files untouched.
 
-**Release status:** the 1.1.1 redesign is a local testing candidate. It is not available from npm; test it from a source checkout as described in [the testing guide](MULTI_REPOSITORY_TESTING.md). Do not publish a release until local testing is complete and the user has approved it.
+See [the testing guide](MULTI_REPOSITORY_TESTING.md) for group, worktree, knowledge, and migration checks, including the recorded validation limits.
 
 ## The Problem: Traditional vs. ContextOS
 

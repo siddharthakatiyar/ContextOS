@@ -13,6 +13,34 @@ import {
   projectAgentJsonPaths
 } from '../utils/project-agent-config.js';
 
+function projectSetupPlan(cwd: string, options: { integrations?: boolean }) {
+  const configs = [
+    path.join(cwd, '.mcp.json'),
+    ...(fs.existsSync(path.join(cwd, '.cursor')) ? [path.join(cwd, '.cursor', 'mcp.json')] : []),
+    ...projectAgentJsonPaths(cwd),
+    path.join(cwd, '.vscode', 'cline_mcp_settings.json'),
+    path.join(cwd, '.vscode', 'roo_mcp_settings.json')
+  ];
+  const integrations =
+    options.integrations !== false &&
+    loadConfig({ cwd, forceReload: true }).cursor.autoGenerateConfig !== false;
+  if (integrations) validateJsonConfigs(configs);
+  return { configs, integrations };
+}
+
+/** Refresh checkout integration without changing registration or group membership. */
+export function refreshProjectSetup(
+  cwd: string,
+  options: { group?: string; integrations?: boolean } = {},
+  plan = projectSetupPlan(cwd, options)
+): string[] {
+  installAgentInstructions(cwd);
+  if (!plan.integrations) return ['Automatic project MCP configuration is disabled.'];
+  const generated = generateCursorConfig({ projectRoot: cwd, workspaceName: options.group });
+  for (const config of plan.configs) mergeContextosMcpConfig(config, generated);
+  return installProjectAgentConfigs(cwd, generated).warnings;
+}
+
 export async function initializeProject(
   input: string,
   options: {
@@ -24,6 +52,8 @@ export async function initializeProject(
     json?: boolean;
   } = {}
 ): Promise<void> {
+  const { upgradeExistingProjects } = await import('../utils/installation-setup.js');
+  await upgradeExistingProjects({ cwd: input });
   const registry = new WorkspaceRegistry();
   const runtime = new WorkspaceRuntime(registry);
   try {
@@ -35,17 +65,7 @@ export async function initializeProject(
           (tree) => canonical === tree.rootPath || canonical.startsWith(tree.rootPath + path.sep)
         )
         .sort((a, b) => b.rootPath.length - a.rootPath.length)[0]?.rootPath ?? discovered.rootPath;
-    const configs = [
-      path.join(cwd, '.mcp.json'),
-      ...(fs.existsSync(path.join(cwd, '.cursor')) ? [path.join(cwd, '.cursor', 'mcp.json')] : []),
-      ...projectAgentJsonPaths(cwd),
-      path.join(cwd, '.vscode', 'cline_mcp_settings.json'),
-      path.join(cwd, '.vscode', 'roo_mcp_settings.json')
-    ];
-    const integrations =
-      options.integrations !== false &&
-      loadConfig({ cwd, forceReload: true }).cursor.autoGenerateConfig !== false;
-    if (integrations) validateJsonConfigs(configs);
+    const plan = projectSetupPlan(cwd, options);
     const source = registry.register(cwd, {
       name: options.name,
       workspace: options.group ?? options.workspace ?? 'default'
@@ -53,16 +73,11 @@ export async function initializeProject(
     const views = registry.listAll().filter((view) => view.projectId === source.projectId);
     for (const view of views)
       if (fs.existsSync(view.rootPath)) installAgentInstructions(view.rootPath);
-    const integrationWarnings: string[] = [];
-    if (integrations) {
-      const generated = generateCursorConfig({
-        projectRoot: source.rootPath,
-        workspaceName: options.group ?? options.workspace
-      });
-      // Existing explicit client entries are preserved by the merge helper.
-      for (const config of configs) mergeContextosMcpConfig(config, generated);
-      integrationWarnings.push(...installProjectAgentConfigs(cwd, generated).warnings);
-    } else integrationWarnings.push('Automatic project MCP configuration is disabled.');
+    const integrationWarnings = refreshProjectSetup(
+      cwd,
+      { ...options, group: options.group ?? options.workspace },
+      plan
+    );
     if (!options.json) for (const warning of integrationWarnings) console.warn(warning);
     if (!options.json)
       console.log(

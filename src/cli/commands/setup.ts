@@ -64,14 +64,37 @@ export const setupCommand = new Command('setup')
   .description('Check or initialize ContextOS for a project')
   .argument('[path]', 'Project or worktree path', '.')
   .option('--check', 'Inspect setup without changing files or registration')
+  .option('--upgrade', 'Refresh all known existing projects after an upgrade')
   .option('--json', 'Output a structured result')
   .option('--agent <client>', 'Inspect a specific coding agent', parseClient)
   .option('--no-index', 'Register without indexing')
   .action(
     async (
       input: string,
-      options: { check?: boolean; json?: boolean; agent?: DiagnosticClient; index: boolean }
+      options: {
+        check?: boolean;
+        upgrade?: boolean;
+        json?: boolean;
+        agent?: DiagnosticClient;
+        index: boolean;
+      }
     ) => {
+      if (options.upgrade) {
+        if (options.check)
+          throw new InvalidArgumentError('--upgrade cannot be combined with --check');
+        const { upgradeExistingProjects } = await import('../utils/installation-setup.js');
+        const result = await upgradeExistingProjects({
+          cwd: path.resolve(input),
+          index: options.index
+        });
+        if (options.json) process.stdout.write(`${JSON.stringify(result)}\n`);
+        else
+          process.stdout.write(
+            `Updated: ${result.updated.length}; unavailable: ${result.unavailable.length}; failed: ${result.errors.length}\n`
+          );
+        if (result.errors.length) process.exitCode = 1;
+        return;
+      }
       if (!options.check)
         return initializeProject(path.resolve(input), { index: options.index, json: options.json });
       const result = inspectProjectSetup(path.resolve(input), options.agent);

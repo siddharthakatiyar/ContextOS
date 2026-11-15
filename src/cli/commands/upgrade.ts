@@ -857,11 +857,12 @@ function runVersion(packageRoot: string, expectedVersion: string): boolean {
   }
 }
 
-function requestDaemon(
+export function requestDaemon(
   projectDir: string,
   action: 'get-version' | 'prepare-upgrade',
   token: string,
-  expectedVersion?: string
+  expectedVersion?: string,
+  timeoutMs = DAEMON_STOP_TIMEOUT_MS
 ): Promise<{ ok: boolean; version?: string; error?: string }> {
   return new Promise((resolve) => {
     let settled = false;
@@ -875,11 +876,12 @@ function requestDaemon(
     const timer = setTimeout(() => {
       socket.destroy();
       finish({ ok: false, error: 'daemon control request timed out' });
-    }, DAEMON_STOP_TIMEOUT_MS);
+    }, timeoutMs);
     const finish = (result: { ok: boolean; version?: string; error?: string }) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      socket.destroy();
       resolve(result);
     };
     socket.once('connect', () => {
@@ -1021,7 +1023,12 @@ async function installSelectedVersion(
           `${PACKAGE_NAME}@${targetVersion}`
         ],
         installTimeout,
-        { ...process.env, CONTEXTOS_SUPPRESS_INSTALL_NOTICE: '1' }
+        {
+          ...process.env,
+          CONTEXTOS_SUPPRESS_INSTALL_NOTICE: '1',
+          CONTEXTOS_SKIP_SETUP: '1',
+          CONTEXTOS_GLOBAL_INSTRUCTIONS: '0'
+        }
       );
     } catch (error) {
       throw new Error(

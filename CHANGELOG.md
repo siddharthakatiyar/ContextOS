@@ -10,6 +10,10 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-15
+
+### Added
+
 - Add `ctx_trace` for bounded, directed traversal of recorded verified links, with ordered witness paths, citations, explicit gaps and scope isolation.
 - Add on-demand `ctx_resolve_import` and `ctx_contract` tools. Agents can inspect exact local dependencies and OpenAPI/gRPC operations during normal work, then save established relationships with `ctx_link`. No background agent discovery or model calls are added.
 - Index protobuf RPC signatures, OpenAPI operations/schemas and Go module manifests. Advance the indexer version so selected views rebuild with the updated parser.
@@ -17,11 +21,7 @@ This project follows Semantic Versioning and Keep a Changelog.
 - Global npm installs enable managed instructions for detected supported coding agents by default; local installs do not. Add `contextos enable` for refresh and `CONTEXTOS_GLOBAL_INSTRUCTIONS=0` to opt out during installation.
 - Add read-only `contextos setup --check --json`, structured `init --json`, and native project MCP registration for installed Codex, Grok and OpenCode clients. Project enrollment remains an explicit user decision.
 - Extend doctor with instruction/import inventories, project/worktree readiness, client registration and separate retrieval/write permission observations; preserve unknown runtime policy rather than guessing.
-
-## [1.1.1] — local testing candidate; not released
-
-### Added
-
+- Automatically upgrade known projects during global npm installation and migrate unregistered legacy projects on first use. Gracefully stop verified older daemons, refresh managed instructions and missing MCP setup, retain legacy data, and defer full scans until retrieval. Add `contextos setup --upgrade` for pending setup and immediate indexing.
 - Global project storage organized into groups and per-worktree, per-branch index views.
 - Automatic discovery and indexing of checked-out Git worktrees, plus `contextos group`, `project`, `worktree`, and cleanup commands.
 - Evidence-backed agent knowledge tools for verified facts and cross-project links. Ambiguous or speculative connections are not stored.
@@ -34,6 +34,10 @@ This project follows Semantic Versioning and Keep a Changelog.
 - Preserve existing local databases as migration sources and move new indexing writes to global storage.
 - Retain verified knowledge only while its supporting indexed evidence remains valid.
 - Store shared agent instructions in `AGENTS.md`, with a deduplicated `@AGENTS.md` import in `CLAUDE.md`. Initialization migrates older generated sections while preserving user-authored guidance.
+
+### Fixed
+
+- Canonicalize temporary test roots so macOS path aliases do not break instruction diagnostics or global installation checks.
 
 
 ## [1.1.0] - 2026-11-03
