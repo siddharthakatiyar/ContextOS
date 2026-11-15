@@ -14,6 +14,7 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ### Fixed
 
+- Wait for the live workspace daemon to watch a newly indexed or re-added project before initialization returns, preventing immediate queries from racing its first scan.
 - Restart verified daemons on the first setup for a new version even when an older process reads the replaced package manifest; new daemons retain their startup version.
 - Keep default indexing progress on stderr so the first `contextos query --json` remains valid JSON while a migrated or unindexed project rebuilds.
 

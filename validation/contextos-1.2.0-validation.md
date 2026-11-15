@@ -1,6 +1,6 @@
 # ContextOS 1.2.0 validation
 
-Validated on 2026-11-15 using Node 22.23.2 on Linux. The release uses the existing multi-project, group, worktree and verified-knowledge implementation, with corrections for first-query JSON output and installation-time daemon replacement.
+Validated on 2026-11-15 using Node 22.23.2 on Linux. The release uses the existing multi-project, group, worktree and verified-knowledge implementation, with corrections for first-query JSON output, installation-time daemon replacement and live repository re-add readiness.
 
 ## Automated and artifact checks
 
@@ -28,7 +28,7 @@ The real-project checks used copied sources or a disposable clone. Original Thro
 
 `scripts/release-package-test.mjs` installs the actual tarball globally into a fresh prefix and home, without borrowing the checkout's `node_modules`. CI and the publishing workflow run it before publication and upload its JSON report. [The local package report](contextos-1.2.0-package.json) records the tested archive hash and results.
 
-It checks global instruction adapters, legacy schema-v6 migration and memory retention, strict cold/warm JSON queries, fresh-project non-initialization, four independent Git projects plus a worktree, scope rejection, grouped ranking and provenance, two stdio MCP clients, session isolation, Markdown/XML token budgets, exact import inspection, OpenAPI inspection, verified links and traces, memory retention through reindex, watcher updates, path containment, live membership refresh and removed-worktree cleanup.
+It checks global instruction adapters, legacy schema-v6 migration and memory retention, strict cold/warm JSON queries, fresh-project non-initialization, four independent Git projects plus a worktree, scope rejection, grouped ranking and provenance, two stdio MCP clients, session isolation, Markdown/XML token budgets, exact import inspection, OpenAPI inspection, verified links and traces, memory retention through reindex, watcher updates, path containment, live membership refresh and removed-worktree cleanup. Re-adding a project must return with the live daemon owning its watcher and the next query must return complete results.
 
 When given the published 1.1.1 tarball, it also starts that release with an active MCP client, upgrades the same global installation to 1.2.0, verifies the previous daemon exits and checks that the existing client reconnects with its saved knowledge intact.
 
@@ -43,6 +43,8 @@ node scripts/release-package-test.mjs \
 ```
 
 The first cold-query test reproduced stdout contamination before the stderr correction. The live-upgrade test reproduced a surviving old daemon before the installation correction: 1.1.1 reads the version from the on-disk manifest after npm replaces it. First setup for a new revision now restarts the authenticated, verified owner even if that reply matches the new version. New daemons capture their version at startup. No forced termination is introduced.
+
+Cross-platform CI also exposed an immediate-query race after repository re-add. A regression assertion reproduced initialization returning without a live watcher owner. Initialization now releases its temporary indexing leases and waits for the existing workspace daemon to refresh before returning.
 
 ## Ranking and latency
 

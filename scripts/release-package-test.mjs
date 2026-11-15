@@ -525,10 +525,16 @@ try {
       3
     );
     command(['group', 'add', 'payments', projects.frontend]);
+    const restored = await call(backend, 'get_context', { prompt: 'payment', group: 'payments' });
+    assert.equal(restored.scope.repoIds.length, 4);
+    assert.ok(!restored.partial, JSON.stringify(restored.unavailableSources));
+    const owner = json(
+      ['repo', 'status', 'frontend', '--workspace', 'payments', '--json'],
+      projects.backend
+    ).repositories[0].owner;
     assert.equal(
-      (await call(backend, 'get_context', { prompt: 'payment', group: 'payments' })).scope.repoIds
-        .length,
-      4
+      owner?.pid,
+      Number(fs.readFileSync(path.join(home, '.contextos/runtime/daemon.pid')))
     );
   });
   for (const client of clients) await client.close();

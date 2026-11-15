@@ -104,6 +104,11 @@ describe('built CLI and workspace daemon', () => {
       ).toBe(true);
       expect(fs.existsSync(path.join(root, 'frontend', '.contextos'))).toBe(false);
       run(['repo', 'add', path.join(root, 'frontend')]);
+      const owner = JSON.parse(run(['repo', 'status', 'frontend', '--json'])).repositories[0].owner;
+      const daemonPid = Number(fs.readFileSync(path.join(home, '.contextos/runtime/daemon.pid')));
+      expect(owner?.pid, 'Re-added projects must return with the live daemon watching them').toBe(
+        daemonPid
+      );
       const restored = await frontend.callTool({
         name: 'get_context',
         arguments: { prompt: 'displayPaymentStatus', tier: 'full' }

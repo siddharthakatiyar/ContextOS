@@ -1,29 +1,29 @@
 {
   "version": "1.2.0",
   "archive": "siddharthakatiyar-contextos-1.2.0.tgz",
-  "archiveSha256": "984935a49f81a7e78d770ea057e96bd46a80cc5fb877ab364b1477e7c804c738",
-  "startedAt": "2026-11-15T15:50:40.999Z",
-  "completedAt": "2026-11-15T15:52:03.096Z",
+  "archiveSha256": "26df7badfc880d0790035d3e2a0475c7bcc3b41dcbde9860402832f7a9ffc1d3",
+  "startedAt": "2026-11-15T16:02:14.397Z",
+  "completedAt": "2026-11-15T16:03:45.562Z",
   "results": [
     {
       "name": "global npm install runs migration and preserves user instructions",
       "status": "passed",
-      "durationMs": 32451
+      "durationMs": 27764
     },
     {
       "name": "cold and warm JSON queries rebuild legacy indexes and retain memories",
       "status": "passed",
-      "durationMs": 4448
+      "durationMs": 4931
     },
     {
       "name": "fresh projects remain uninitialized",
       "status": "passed",
-      "durationMs": 344
+      "durationMs": 1054
     },
     {
       "name": "live previous-release daemon is replaced automatically and knowledge survives",
       "status": "passed",
-      "durationMs": 15871,
+      "durationMs": 26884,
       "detail": {
         "previousVersion": "1.1.1",
         "version": "1.2.0",
@@ -34,32 +34,32 @@
     {
       "name": "four independent projects and a Git worktree initialize through the installed CLI",
       "status": "passed",
-      "durationMs": 11159
+      "durationMs": 11557
     },
     {
       "name": "combined ranking, provenance, scopes, and worktree isolation",
       "status": "passed",
-      "durationMs": 7127
+      "durationMs": 7234
     },
     {
       "name": "installed MCP tool inventory, independent clients, and token budgets",
       "status": "passed",
-      "durationMs": 293
+      "durationMs": 266
     },
     {
       "name": "exact import and OpenAPI inspection, verified links, tracing, and knowledge lifecycle",
       "status": "passed",
-      "durationMs": 1067
+      "durationMs": 1110
     },
     {
       "name": "watcher updates, atomic replacements, deletion, and path containment",
       "status": "passed",
-      "durationMs": 3267
+      "durationMs": 4159
     },
     {
       "name": "removed worktree cleanup retains source projects and other indexes",
       "status": "passed",
-      "durationMs": 2662
+      "durationMs": 2767
     }
   ],
   "passed": true
