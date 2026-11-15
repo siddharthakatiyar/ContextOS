@@ -101,6 +101,16 @@ async function main(): Promise<void> {
     return;
   }
 
+  const command = args.find((arg) => !arg.startsWith('-'));
+  if (
+    command &&
+    ['serve', 'query', 'watch', 'reindex', 'status'].includes(command) &&
+    !args.some((arg) => ['--help', '-h'].includes(arg))
+  ) {
+    const { upgradeExistingProjects } = await import('../src/cli/utils/installation-setup.js');
+    await upgradeExistingProjects({ cwd: process.env.CONTEXTOS_REPO_ROOT || process.cwd() });
+  }
+
   if (!skipsFirstUseAutoPatchNotice(args) && process.env.CONTEXTOS_AUTO_PATCH_REEXEC !== '1') {
     try {
       const { showAutoPatchDefaultNotice } =

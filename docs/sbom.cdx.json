@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:7db8227d-35ce-4066-b850-063b671b52a4",
+  "serialNumber": "urn:uuid:db729936-e6c2-48d6-9ed1-c7c46ea5799d",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-03T13:22:36.678Z",
+    "timestamp": "2026-11-15T15:08:58.301Z",
     "lifecycles": [
       {
         "phase": "pre-build"
@@ -19,14 +19,14 @@
       }
     ],
     "component": {
-      "bom-ref": "@siddharthakatiyar/contextos@1.1.0",
+      "bom-ref": "@siddharthakatiyar/contextos@1.1.1",
       "type": "library",
-      "name": "ContextOS-release-v1.1.0",
-      "version": "1.1.0",
+      "name": "ContextOS",
+      "version": "1.1.1",
       "scope": "required",
       "author": "Siddhartha Katiyar",
       "description": "ContextOS - Universal knowledge graph for coding agents",
-      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.1.0",
+      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.1.1",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -58,12 +58,12 @@
   },
   "components": [
     {
-      "bom-ref": "docs@1.1.0",
+      "bom-ref": "docs@1.1.1",
       "type": "library",
       "name": "docs",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "scope": "required",
-      "purl": "pkg:npm/docs@1.1.0",
+      "purl": "pkg:npm/docs@1.1.1",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -8887,16 +8887,12 @@
       "type": "library",
       "name": "argparse",
       "version": "2.0.1",
-      "scope": "optional",
+      "scope": "required",
       "purl": "pkg:npm/argparse@2.0.1",
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/argparse"
-        },
-        {
-          "name": "cdx:npm:package:development",
-          "value": "true"
         }
       ],
       "externalReferences": [],
@@ -16665,16 +16661,12 @@
       "type": "library",
       "name": "js-yaml",
       "version": "4.3.2",
-      "scope": "optional",
+      "scope": "required",
       "purl": "pkg:npm/js-yaml@4.3.2",
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/js-yaml"
-        },
-        {
-          "name": "cdx:npm:package:development",
-          "value": "true"
         }
       ],
       "externalReferences": [
@@ -24244,9 +24236,9 @@
   ],
   "dependencies": [
     {
-      "ref": "@siddharthakatiyar/contextos@1.1.0",
+      "ref": "@siddharthakatiyar/contextos@1.1.1",
       "dependsOn": [
-        "docs@1.1.0",
+        "docs@1.1.1",
         "@huggingface/transformers@4.3.0",
         "@modelcontextprotocol/sdk@1.32.1",
         "better-sqlite3@12.10.0",
@@ -24257,6 +24249,7 @@
         "glob@14.0.2",
         "gpt-tokenizer@3.4.0",
         "ignore@7.0.9",
+        "js-yaml@4.3.2",
         "minimatch@11.0.1",
         "ora@9.4.0",
         "sqlite-vec@0.1.9",
@@ -24279,7 +24272,7 @@
       ]
     },
     {
-      "ref": "docs@1.1.0",
+      "ref": "docs@1.1.1",
       "dependsOn": [
         "@base-ui/react@1.6.0",
         "@vercel/analytics@2.0.1",
