@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-14T04:09:53.675Z",
+  "generatedAt": "2026-11-15T15:42:50.993Z",
   "checkout": {
     "root": "/home/siddharthakatiyar/ContextOS",
     "branch": "codex/verified-cross-project-tracing"
@@ -15,7 +15,7 @@
     ]
   },
   "budgets": {
-    "timeoutMs": 90000,
+    "timeoutMs": 120000,
     "maxTurns": {
       "claude": 6,
       "grok": 6,

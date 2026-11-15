@@ -10,6 +10,18 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-15
+
+### Fixed
+
+- Restart verified daemons on the first setup for a new version even when an older process reads the replaced package manifest; new daemons retain their startup version.
+- Keep default indexing progress on stderr so the first `contextos query --json` remains valid JSON while a migrated or unindexed project rebuilds.
+
+### Changed
+
+- Validate the installable package in isolated user homes, including automatic migration, cold JSON queries, grouped retrieval, and MCP use before publishing.
+- Update package metadata and managed instruction blocks for 1.2.0.
+
 ## [1.1.1] - 2026-11-15
 
 ### Added

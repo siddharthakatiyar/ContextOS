@@ -25,6 +25,7 @@ import {
   writePrivateStateFile
 } from '../../utils/secure-state.js';
 import { resolveWithinWorkspace } from '../../utils/fs-guard.js';
+import { getPackageVersion } from '../../utils/version.js';
 import { getErrorMessage } from '../../utils/errors.js';
 
 type Owner = { pid: number; token: string; endpoint: string; protocol: number };
@@ -209,7 +210,7 @@ export class RepositoryRuntime {
       const pid = Number(fs.readFileSync(legacy, 'utf8').trim());
       if (pid > 0 && pid !== process.pid && alive(pid))
         throw new Error(
-          `A legacy daemon owns ${this.source.name}. Stop it and restart using ContextOS 1.1.1.`
+          `A legacy daemon owns ${this.source.name}. Stop it and restart using ContextOS ${getPackageVersion()}.`
         );
     }
     const token = crypto.randomUUID();
@@ -286,7 +287,7 @@ export class RepositoryRuntime {
   private remoteOnce(owner: Owner, request: IndexRequest): Promise<unknown> {
     if (owner.protocol !== 1)
       return Promise.reject(
-        new Error('Incompatible indexing owner; restart it using ContextOS 1.1.1.')
+        new Error(`Incompatible indexing owner; restart it using ContextOS ${getPackageVersion()}.`)
       );
     return new Promise((resolve, reject) => {
       const socket = net.createConnection(owner.endpoint);

@@ -1,6 +1,6 @@
 {
   "name": "@siddharthakatiyar/contextos",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "ContextOS - Universal knowledge graph for coding agents",
   "repository": {
     "type": "git",
@@ -8,7 +8,7 @@
   },
   "type": "module",
   "bin": {
-    "contextos": "./dist/bin/contextos.js"
+    "contextos": "dist/bin/contextos.js"
   },
   "main": "dist/src/index.js",
   "workspaces": [

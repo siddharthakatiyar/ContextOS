@@ -1,15 +1,15 @@
-# ContextOS 1.1.1 testing guide
+# ContextOS 1.2.0 testing guide
 
-Use this checklist to verify ContextOS 1.1.1 against local projects, whether installed from npm or built from source.
+Use this checklist to verify ContextOS 1.2.0 against local projects, whether installed from npm or built from source.
 
-The latest completed real-project checks, corrected issues, and remaining limitations are recorded in [the ThrottleX validation report](validation/contextos-1.1.1-throttlex-validation.md).
+Current checks and remaining limitations are recorded in [the 1.2.0 validation report](validation/contextos-1.2.0-validation.md). The earlier [ThrottleX validation report](validation/contextos-1.1.1-throttlex-validation.md) records the original multi-project implementation checks.
 
 ## Install or build
 
 Install the released package with:
 
 ```bash
-npm install -g @siddharthakatiyar/contextos@1.1.1
+npm install -g @siddharthakatiyar/contextos@1.2.0
 ```
 
 From a ContextOS source checkout, use the supported Node version and the locked dependencies:
@@ -24,16 +24,16 @@ npm run bench
 node dist/bin/contextos.js --version
 ```
 
-The CLI should print `1.1.1`. During local testing, replace `contextos` in the examples below with `node /absolute/path/to/ContextOS/dist/bin/contextos.js`. A version string from the local build does not mean the package has been published.
+The CLI should print `1.2.0`. During local testing, replace `contextos` in the examples below with `node /absolute/path/to/ContextOS/dist/bin/contextos.js`. A version string from the local build does not mean the package has been published.
 
 Alternatively, package a source build with `npm pack`, copy the generated tarball to your laptop, and install that exact file:
 
 ```bash
-npm install -g ./siddharthakatiyar-contextos-1.1.1.tgz
+npm install -g ./siddharthakatiyar-contextos-1.2.0.tgz
 contextos --version
 ```
 
-Use Node 22.12 or newer. The package installation needs network access for dependencies. Installing a local tarball does not publish it. Automated results and testing limits are recorded in [the validation report](validation/contextos-1.1.1-groups-validation.md), with latency measurements in [the performance report](validation/contextos-1.1.1-groups-performance.json).
+Use Node 22.12 or newer. The package installation needs network access for dependencies. Installing a local tarball does not publish it. Automated results and testing limits are recorded in [the 1.2.0 validation report](validation/contextos-1.2.0-validation.md), with latency measurements in [the workspace benchmark](validation/contextos-1.2.0-workspace.json).
 
 ## Initialize projects and create a group
 

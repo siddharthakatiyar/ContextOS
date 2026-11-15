@@ -1,6 +1,6 @@
 # Fresh-session agent release gate
 
-Generated 2026-11-14T04:09:53.675Z. The same architecture question is issued to each authenticated native CLI from a new non-interactive session.
+Generated 2026-11-15T15:42:50.993Z. The same architecture question is issued to each authenticated native CLI from a new non-interactive session.
 
 | Client | Status | Detail |
 | --- | --- | --- |

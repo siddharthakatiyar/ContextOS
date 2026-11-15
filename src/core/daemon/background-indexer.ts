@@ -56,7 +56,7 @@ export class BackgroundIndexer {
     projectDir: string,
     private stateDir?: string,
     private assertCurrent?: () => void,
-    private log: (message: string) => void = (message) => console.log(message)
+    private log: (message: string) => void = (message) => console.error(message)
   ) {
     this.db = db;
     // Explicit canonical traversal root — never depend on process.cwd() or a
