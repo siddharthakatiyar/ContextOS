@@ -67,20 +67,29 @@ describe('global agent instructions', () => {
     expect(result.status).toBe('error');
     expect(fs.readdirSync(target)).toEqual([]);
   });
-  it('postinstall only enables instructions on global installs and respects opt-out', () => {
+  it('never changes global instructions during installation, including legacy environment opt-in', () => {
     const { home, env, install } = fixture();
     install('codex');
+    fs.mkdirSync(path.join(home, '.codex'));
+    const instructions = path.join(home, '.codex', 'AGENTS.md');
+    const original =
+      'My instructions\r\n<!-- contextos:managed:start -->\nExisting block\n<!-- contextos:managed:end -->\n';
+    fs.writeFileSync(instructions, original);
     const script = path.resolve('scripts/postinstall.mjs');
-    const run = (extra: NodeJS.ProcessEnv) =>
-      spawnSync(process.execPath, [script], {
+    for (const extra of [
+      {},
+      { npm_config_global: 'true' },
+      { npm_config_global: 'true', CONTEXTOS_GLOBAL_INSTRUCTIONS: '0' },
+      { npm_config_global: 'true', CONTEXTOS_GLOBAL_INSTRUCTIONS: '1' }
+    ]) {
+      const result = spawnSync(process.execPath, [script], {
+        cwd: home,
         env: { ...env, CONTEXTOS_SUPPRESS_INSTALL_NOTICE: '1', ...extra },
         encoding: 'utf8'
       });
-    expect(run({}).status).toBe(0);
-    expect(fs.existsSync(path.join(home, '.codex'))).toBe(false);
-    expect(run({ npm_config_global: 'true', CONTEXTOS_GLOBAL_INSTRUCTIONS: '0' }).status).toBe(0);
-    expect(fs.existsSync(path.join(home, '.codex'))).toBe(false);
-    expect(run({ npm_config_global: 'true' }).status).toBe(0);
-    expect(fs.existsSync(path.join(home, '.codex', 'AGENTS.md'))).toBe(true);
+      expect(result.status, result.stderr).toBe(0);
+      expect(fs.readFileSync(instructions, 'utf8')).toBe(original);
+      expect(fs.existsSync(path.join(home, '.claude'))).toBe(false);
+    }
   });
 });

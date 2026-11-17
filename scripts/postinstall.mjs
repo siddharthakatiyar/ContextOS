@@ -3,6 +3,11 @@ const notice =
 
 if (process.env.CONTEXTOS_SUPPRESS_INSTALL_NOTICE !== '1') {
   process.stderr.write(notice);
+  if (process.env.npm_config_global === 'true') {
+    process.stderr.write(
+      '[ContextOS] Global agent instructions are unchanged. Run `contextos enable --dry-run` to preview optional setup, then `contextos enable` to apply it. Existing-project migration is separate; set CONTEXTOS_SKIP_SETUP=1 to skip it.\n'
+    );
+  }
 }
 
 // Staged self-upgrades must not mutate projects before the package swap commits.
@@ -11,25 +16,8 @@ if (process.env.npm_config_global === 'true' && process.env.CONTEXTOS_SKIP_SETUP
     const { upgradeExistingProjects } = await import('../dist/src/cli/utils/installation-setup.js');
     await upgradeExistingProjects({ cwd: process.env.INIT_CWD });
   } catch (error) {
-    process.stderr.write(`[ContextOS] Project setup will retry on next use: ${error instanceof Error ? error.message : String(error)}\n`);
-  }
-}
-
-// npm supplies this flag for global installs. Local installs never alter agent instructions.
-if (process.env.npm_config_global === 'true' && process.env.CONTEXTOS_GLOBAL_INSTRUCTIONS !== '0') {
-  try {
-    const { enableGlobalAgentInstructions } = await import('../dist/src/cli/utils/global-agent-setup.js');
-    const results = enableGlobalAgentInstructions();
-    for (const result of results) {
-      if (result.status === 'not-installed' || result.status === 'unchanged') continue;
-      process.stderr.write(`[ContextOS] ${result.agent}: ${result.status}${result.message ? ` — ${result.message}` : ''}\n`);
-    }
-    if (results.some((result) => result.status === 'error')) {
-      process.stderr.write('[ContextOS] Some global instructions could not be installed. Run `contextos enable` to retry.\n');
-      process.exitCode = 1;
-    }
-  } catch (error) {
-    process.stderr.write(`[ContextOS] Could not install global instructions: ${error instanceof Error ? error.message : String(error)}. Run \`contextos enable\` to retry.\n`);
-    process.exitCode = 1;
+    process.stderr.write(
+      `[ContextOS] Project setup will retry on next use: ${error instanceof Error ? error.message : String(error)}\n`
+    );
   }
 }

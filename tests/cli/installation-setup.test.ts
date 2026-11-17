@@ -179,6 +179,31 @@ describe('automatic existing-project setup', () => {
     expect(fs.existsSync(path.join(project, 'AGENTS.md'))).toBe(true);
     expect(fs.existsSync(path.join(project, '.contextos', 'index.db'))).toBe(true);
   });
+  it('suppresses both install-time hooks when both controls are set', () => {
+    legacy();
+    const instruction = path.join(home, '.codex', 'AGENTS.md');
+    fs.mkdirSync(path.dirname(instruction));
+    fs.writeFileSync(instruction, 'Keep my instructions\r\n');
+    const result = spawnSync(process.execPath, [path.resolve('scripts/postinstall.mjs')], {
+      env: {
+        ...process.env,
+        HOME: home,
+        USERPROFILE: home,
+        INIT_CWD: project,
+        npm_config_global: 'true',
+        CONTEXTOS_GLOBAL_INSTRUCTIONS: '0',
+        CONTEXTOS_SKIP_SETUP: '1',
+        CONTEXTOS_SUPPRESS_INSTALL_NOTICE: '1'
+      },
+      encoding: 'utf8',
+      timeout: 15000
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(fs.readFileSync(instruction, 'utf8')).toBe('Keep my instructions\r\n');
+    expect(fs.existsSync(path.join(home, '.contextos'))).toBe(false);
+    expect(fs.existsSync(path.join(project, 'AGENTS.md'))).toBe(false);
+    expect(fs.existsSync(path.join(project, '.contextos', 'index.db'))).toBe(true);
+  });
   it('migrates from CLI first use and keeps machine-readable output clean', () => {
     legacy();
     fs.writeFileSync(
