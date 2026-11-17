@@ -25,6 +25,7 @@ const env = {
   ...process.env,
   HOME: home,
   USERPROFILE: home,
+  INIT_CWD: project,
   APPDATA: path.join(home, 'AppData/Roaming'),
   LOCALAPPDATA: path.join(home, 'AppData/Local'),
   CODEX_HOME: path.join(home, '.codex'),

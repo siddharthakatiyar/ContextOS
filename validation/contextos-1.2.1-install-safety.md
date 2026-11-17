@@ -3,6 +3,9 @@
 Prepared on 2026-11-17. This is an unpublished patch candidate for the three
 install/release findings against 1.2.0.
 
+Local validated archive SHA-256:
+`9ef6bfaca7687db17ff62ce436392dcc41bf5f9f36e64a3652abb1b5810f0591`.
+
 ## Behavior
 
 - Global npm installation never calls global instruction setup. Existing agent

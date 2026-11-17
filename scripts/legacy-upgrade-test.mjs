@@ -20,6 +20,7 @@ const env = {
   ...process.env,
   HOME: home,
   USERPROFILE: home,
+  INIT_CWD: project,
   CONTEXTOS_EMBEDDINGS: '0',
   CONTEXTOS_AUTO_PATCH_REEXEC: '1',
   ONNXRUNTIME_NODE_INSTALL: 'skip'

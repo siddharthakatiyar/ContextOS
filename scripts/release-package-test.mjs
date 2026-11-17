@@ -41,6 +41,7 @@ for (const key of [
 Object.assign(env, {
   HOME: home,
   USERPROFILE: home,
+  INIT_CWD: legacy,
   CONTEXTOS_EMBEDDINGS: '0',
   CONTEXTOS_SKIP_SETUP: '0',
   CONTEXTOS_AUTO_PATCH_REEXEC: '1',
