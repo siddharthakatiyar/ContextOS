@@ -36,7 +36,7 @@ cd my-project
 contextos init
 ```
 
-A global npm install adds ContextOS instructions to detected supported coding agents by default. Each project still needs `contextos init`. The global guidance asks an agent to check setup and ask you before initializing a new project, including in automatic mode. Local npm installs do not change global instructions. Set `CONTEXTOS_GLOBAL_INSTRUCTIONS=0` during installation to opt out; use `contextos enable` to refresh instructions after installing another agent.
+Global npm installation leaves user-wide agent instruction files unchanged. Opt in with `contextos enable --dry-run --json`, then `contextos enable` to apply the changes. Each project still needs `contextos init`. Optional global guidance asks an agent to check setup and ask you before initializing a new project, including in automatic mode. See [upgrade controls and removal instructions](UPGRADING.md) for the different behavior in released 1.2.0 and for removing older managed blocks.
 
 Supported global instruction files cover Codex, Claude Code, Grok Build, OpenCode, Gemini CLI, Antigravity (`agy`), Amp, GitHub Copilot CLI and Windsurf. Cursor requires adding User Rules in its settings; `contextos enable --agent cursor` prints the block to copy. Existing user text is preserved. Global setup does not change client permissions or register projects.
 
@@ -70,7 +70,7 @@ Existing users normally only need to install the new package and reconnect their
 coding agent:
 
 ```bash
-npm install -g @siddharthakatiyar/contextos@1.2.0
+npm install -g @siddharthakatiyar/contextos
 ```
 
 Global installation automatically refreshes known projects. It gracefully stops
@@ -90,7 +90,7 @@ and macOS; other platforms may require stopping older daemons manually.
 `contextos setup --upgrade` retries existing-project setup and indexes pending
 projects immediately; add `--no-index` to defer scanning or `--json` for a
 structured report. Set `CONTEXTOS_SKIP_SETUP=1` to disable automatic project
-setup. Local npm installation does not migrate projects during installation;
+setup; this is independent of global instruction setup. A flag set only for installation does not suppress migration on later first use. Local npm installation does not migrate projects during installation;
 first use still handles legacy projects. Staged self-upgrades defer setup until
 the new package is in use.
 

@@ -1,6 +1,6 @@
 {
   "name": "@siddharthakatiyar/contextos",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "ContextOS - Universal knowledge graph for coding agents",
   "repository": {
     "type": "git",
@@ -21,7 +21,8 @@
     "README.md",
     ".contextosignore.default",
     "config.schema.json",
-    "THIRD-PARTY-NOTICES.md"
+    "THIRD-PARTY-NOTICES.md",
+    "UPGRADING.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -34,7 +35,8 @@
     "postinstall": "node scripts/postinstall.mjs",
     "prepublishOnly": "npm run build",
     "bench": "node scripts/bench/run.mjs",
-    "generate:large-repo": "tsx tools/generate-large-repo.ts"
+    "generate:large-repo": "tsx tools/generate-large-repo.ts",
+    "test:packed-install": "node scripts/packed-install-smoke.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

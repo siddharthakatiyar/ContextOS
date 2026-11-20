@@ -10,6 +10,16 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-20
+
+### Fixed
+
+- Global npm installation leaves user-wide agent instructions unchanged; use `contextos enable` explicitly to install or refresh them. Automatic existing-project migration remains a separate control.
+- Document 1.2.0's independent global-instruction and project-migration opt-outs, deferred first-use migration, and manual removal of older managed blocks.
+- Validate direct 1.0.3 upgrades and saved-data recovery, and packed installs on Linux, macOS and Windows before publication.
+- Publish the exact checksum-verified tarball that passed validation, without rebuilding from the checkout.
+- Update the documentation site's Next.js dependency to 16.4.6 to address GHSA-mfr8-8qww-v76h and unblock fresh builds.
+
 ## [1.2.0] - 2026-11-15
 
 ### Fixed

@@ -2,15 +2,14 @@ name: Publish to NPM
 
 on:
   release:
-    types: [published] # Only trigger when a GitHub release is created
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing git tag to build and publish (e.g. v1.0.2). The tag must point at a main-ancestor commit whose package.json version matches.'
+        description: 'Existing main-ancestor tag whose version matches package.json'
         required: true
         type: string
 
-# Prevent double-publishing.
 concurrency:
   group: publish-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
   cancel-in-progress: false
@@ -19,45 +18,27 @@ env:
   RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
 
 jobs:
-  build-and-publish:
+  prepare:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
-
+    outputs:
+      sha256: ${{ steps.package.outputs.sha256 }}
+      commit: ${{ steps.package.outputs.commit }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
-
-      - name: Verify release is on main branch
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - name: Verify release source and version
         run: |
           git fetch origin main
-          if ! git merge-base --is-ancestor HEAD origin/main; then
-            echo "::error::Releases can only be published from the main branch. This commit is not on main."
-            exit 1
-          fi
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.x' # ContextOS requires modern Node
-
-      - name: Verify release tag matches package.json version
-        run: |
-          TAG="${RELEASE_TAG#v}"
-          PKG=$(node -p "require('./package.json').version")
-          echo "tag=$RELEASE_TAG pkg=$PKG"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Tag $RELEASE_TAG ($TAG) does not match package.json version $PKG. The tag points at a commit with the wrong version — cut the tag from a commit where package.json was bumped first."
-            exit 1
-          fi
-
-      - name: Install dependencies
-        run: npm ci
-
+          git merge-base --is-ancestor HEAD origin/main
+          test "${RELEASE_TAG#v}" = "$(node -p "require('./package.json').version")"
+      - run: npm ci
       - name: Run release gates
         run: |
           npm run format:check
@@ -67,23 +48,92 @@ jobs:
           npm run lint --workspace docs
           npm run build --workspace docs
           npm audit --omit=dev --audit-level=critical
-
-      - name: Validate installed release package
+      - name: Pack release once
+        id: package
         run: |
+          mkdir -p "$RUNNER_TEMP/release-package"
           PACKAGE_TARBALL=$(npm pack --pack-destination "$RUNNER_TEMP" --silent)
-          PREVIOUS_TARBALL=$(npm pack @siddharthakatiyar/contextos@1.1.1 --pack-destination "$RUNNER_TEMP" --silent)
-          node scripts/release-package-test.mjs "$RUNNER_TEMP/$PACKAGE_TARBALL" "$RUNNER_TEMP/release-package-test.json" "$RUNNER_TEMP/$PREVIOUS_TARBALL"
-
-      - name: Upload installed-package validation report
+          mv "$RUNNER_TEMP/$PACKAGE_TARBALL" "$RUNNER_TEMP/release-package/contextos.tgz"
+          echo "sha256=$(sha256sum "$RUNNER_TEMP/release-package/contextos.tgz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Validate installed package and upgrade from 1.2.0
+        run: |
+          PREVIOUS_TARBALL=$(npm pack @siddharthakatiyar/contextos@1.2.0 --pack-destination "$RUNNER_TEMP" --silent)
+          node scripts/release-package-test.mjs "$RUNNER_TEMP/release-package/contextos.tgz" "$RUNNER_TEMP/release-package/release-package-test.json" "$RUNNER_TEMP/$PREVIOUS_TARBALL"
+      - name: Verify direct 1.0.3 upgrade and saved-data recovery
+        run: |
+          LEGACY_TARBALL=$(npm pack @siddharthakatiyar/contextos@1.0.3 --pack-destination "$RUNNER_TEMP" --silent)
+          node scripts/legacy-upgrade-test.mjs "$RUNNER_TEMP/release-package/contextos.tgz" "$RUNNER_TEMP/$LEGACY_TARBALL" "$RUNNER_TEMP/release-package/legacy-upgrade-test.json"
+      - name: Preserve validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: release-package-validation
-          path: ${{ runner.temp }}/release-package-test.json
+          name: release-validation
+          path: ${{ runner.temp }}/release-package/*.json
+          if-no-files-found: ignore
+      - name: Preserve validated tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: ${{ runner.temp }}/release-package/contextos.tgz
+          if-no-files-found: error
+
+  packed-install:
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [22.x, 24.x]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package
+          path: ${{ runner.temp }}/release-package
+      - name: Smoke-test exact release archive
+        shell: bash
+        env:
+          EXPECTED_RELEASE_SHA256: ${{ needs.prepare.outputs.sha256 }}
+        run: npm run test:packed-install -- "$RUNNER_TEMP/release-package/contextos.tgz" "$RUNNER_TEMP/packed-install.json"
+      - name: Preserve platform result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packed-install-${{ matrix.os }}-${{ matrix.node }}
+          path: ${{ runner.temp }}/packed-install.json
           if-no-files-found: ignore
 
+  build-and-publish:
+    needs: [prepare, packed-install]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package
+          path: ${{ runner.temp }}/release-package
       - name: Upgrade NPM for OIDC support
         run: npm install -g npm@latest
-
-      - name: Publish to NPM
-        run: npm publish --provenance --access public
+      - name: Verify archive matches the validated package
+        env:
+          EXPECTED_RELEASE_SHA256: ${{ needs.prepare.outputs.sha256 }}
+        run: printf '%s  %s\n' "$EXPECTED_RELEASE_SHA256" "$RUNNER_TEMP/release-package/contextos.tgz" | sha256sum --check
+      - name: Publish the validated tarball without rebuilding
+        run: npm publish "$RUNNER_TEMP/release-package/contextos.tgz" --ignore-scripts --provenance --access public

@@ -34,15 +34,16 @@ for (const key of [
   'CONTEXTOS_REPO_ROOT',
   'CONTEXTOS_MCP_COMMAND',
   'CONTEXTOS_MCP_ARGS',
-  'CONTEXTOS_UPGRADE_TOKEN'
+  'CONTEXTOS_UPGRADE_TOKEN',
+  'CONTEXTOS_GLOBAL_INSTRUCTIONS'
 ])
   delete env[key];
 Object.assign(env, {
   HOME: home,
   USERPROFILE: home,
+  INIT_CWD: legacy,
   CONTEXTOS_EMBEDDINGS: '0',
   CONTEXTOS_SKIP_SETUP: '0',
-  CONTEXTOS_GLOBAL_INSTRUCTIONS: '1',
   CONTEXTOS_AUTO_PATCH_REEXEC: '1',
   ONNXRUNTIME_NODE_INSTALL: 'skip',
   PATH: [path.join(prefix, 'bin'), fakeBin, env.PATH].join(path.delimiter)
@@ -166,6 +167,21 @@ try {
       fs.readFileSync(path.join(home, '.claude/CLAUDE.md'), 'utf8'),
       /Preserve user-written global guidance/
     );
+    assert.equal(
+      fs.readFileSync(path.join(home, '.claude/CLAUDE.md'), 'utf8'),
+      'Preserve user-written global guidance.\n'
+    );
+    assert.ok(!fs.existsSync(path.join(home, '.codex/AGENTS.md')));
+    assert.ok(!fs.existsSync(path.join(home, '.claude/AGENTS.md')));
+  });
+  await check('global instructions change only after explicit enable', () => {
+    assert.ok(
+      json(['enable', '--dry-run', '--json']).results.some(
+        (result) => result.status === 'would-update'
+      )
+    );
+    assert.ok(!fs.existsSync(path.join(home, '.claude/AGENTS.md')));
+    command(['enable']);
     for (const file of [
       '.codex/AGENTS.md',
       '.claude/AGENTS.md',
