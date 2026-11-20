@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-20
+
 ### Fixed
 
 - Global npm installation leaves user-wide agent instructions unchanged; use `contextos enable` explicitly to install or refresh them. Automatic existing-project migration remains a separate control.

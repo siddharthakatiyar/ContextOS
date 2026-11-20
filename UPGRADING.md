@@ -1,6 +1,6 @@
 # Upgrading ContextOS
 
-## 1.2.1 patch (in development)
+## 1.2.1 patch
 
 Global instruction setup is now explicit. A default global npm installation leaves user-wide coding-agent instruction files unchanged, including managed blocks from an earlier installation. To preview and apply changes yourself:
 
