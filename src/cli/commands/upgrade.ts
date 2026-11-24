@@ -1257,6 +1257,12 @@ export async function runAutoPatchBeforeServe(
 
 export function formatAutoPatchNotice(result: AutoPatchResult): string {
   if (result.status === 'current') return '';
+  if (
+    result.status === 'skipped' &&
+    result.reason === 'Automatic package installation is supported on Linux only.' &&
+    process.env.DEBUG !== '1'
+  )
+    return '';
   if (result.status === 'updated') {
     return `[ContextOS] Updated from ${result.currentVersion} to ${result.targetVersion}; restarting before serving.\n`;
   }
@@ -1269,8 +1275,10 @@ async function upgrade(options: {
   dryRun?: boolean;
 }): Promise<void> {
   if (!options.dryRun && process.platform !== 'linux') {
+    if (options.version && !parseStableVersion(options.version))
+      throw new Error('Invalid stable version; use an exact version such as 1.2.1.');
     throw new Error(
-      'Safe self-upgrade is currently supported on Linux only. Use npm install -g @siddharthakatiyar/contextos@<version> on this platform.'
+      `Safe self-upgrade is currently supported on Linux only.\n\nRun this command manually:\n  npm install -g ${PACKAGE_NAME}@${options.version?.trim() ?? 'latest'}\n`
     );
   }
 

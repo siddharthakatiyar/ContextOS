@@ -852,7 +852,7 @@ export class WorkspaceRegistry {
     sources = [...new Map(sources.map((r) => [r.repoId, r])).values()];
     if (!sources.length)
       throw new Error(
-        'The selected workspace/group has no repositories. Use contextos group add <group> <path>.'
+        `Group ${workspace?.name ?? explicitGroup ?? defaultWorkspace ?? 'default'} has no repositories. Run: contextos group add ${JSON.stringify(workspace?.name ?? explicitGroup ?? defaultWorkspace ?? 'default')} ${JSON.stringify(active?.rootPath ?? cwd)}${active ? ` --name ${JSON.stringify(active.name)}` : ''}`
       );
     return {
       workspaceId: workspace?.id,

@@ -375,7 +375,7 @@ function inspectMcpConfigs(root: string, cliVersion: string): DoctorCheck[] {
         checks.push({
           id: `mcp-version:${config.relativePath}${serverSuffix}`,
           status: 'fail',
-          summary: `The configured ContextOS script does not exist at ${configuredScript.path}`,
+          summary: `The configured ContextOS script does not exist at ${configuredScript.path} (config: ${configPath}, server: ${entry.serverName ?? 'contextos'}). Update this server entry to the installed ContextOS script path, or run contextos init in this project to regenerate its MCP configuration.`,
           details: { path: configPath, scriptPath: configuredScript.path }
         });
         continue;

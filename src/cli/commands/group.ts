@@ -45,7 +45,9 @@ groupCommand
     const registry = new WorkspaceRegistry();
     try {
       for (const group of registry.workspaces())
-        console.log(`${group.name}\t${registry.list(group.id).length} projects`);
+        console.log(
+          `${group.name}\t${registry.list(group.id).length} projects\t${registry.list(group.id, true).length} checkouts`
+        );
     } finally {
       registry.close();
     }

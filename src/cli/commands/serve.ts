@@ -172,7 +172,7 @@ export const serveCommand = new Command('serve')
           );
         if (!registry.list(workspace.id, true).some((view) => view.projectId === source.projectId))
           throw new Error(
-            'The active project is not in the selected group. Use contextos group add.'
+            `Project ${source.name} is not in group ${workspace.name}. Run: contextos group add ${JSON.stringify(workspace.name)} ${JSON.stringify(source.rootPath)} --name ${JSON.stringify(source.name)}`
           );
         await runDaemonClient(source.rootPath, {
           name: workspace.name,
