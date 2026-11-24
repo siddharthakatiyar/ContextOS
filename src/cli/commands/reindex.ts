@@ -5,7 +5,8 @@ export const reindexCommand = new Command('reindex')
   .description('Rebuild selected indexes while preserving memories and history')
   .option('--repo <repo>', 'Project selector (legacy alias)')
   .option('--project <project>', 'Project selector')
-  .option('--group <group>', 'Reindex a group')
+  .option('--group <name>', 'Group selector')
+  .option('--workspace <name>', 'Alias for --group')
   .option('--worktree <worktree>', 'Select one worktree')
   .option('--branch <branch>', 'Select one live branch')
   .option('--all-worktrees', 'Reindex all live worktrees')
@@ -16,6 +17,7 @@ export const reindexCommand = new Command('reindex')
       repo?: string;
       project?: string;
       group?: string;
+      workspace?: string;
       worktree?: string;
       branch?: string;
       allWorktrees?: boolean;
@@ -31,6 +33,7 @@ export const reindexCommand = new Command('reindex')
           !opts.project &&
           !opts.repo &&
           !opts.group &&
+          !opts.workspace &&
           !opts.worktree &&
           !registry.active(process.cwd())
         )

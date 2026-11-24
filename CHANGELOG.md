@@ -19,6 +19,15 @@ This project follows Semantic Versioning and Keep a Changelog.
 - Skip automatic registration of non-Git parent directories containing registered projects, with explicit group/project selection guidance; warn on explicit initialization while preserving standalone non-Git projects.
 - Re-verify Git repository identity mismatches after a short delay, compare canonical filesystem identities, and check other registered worktrees before marking a project unavailable. Include expected/actual common directories and the checked root in identity errors.
 - Recover unavailable views despite cached discovery fingerprints, and reconcile project list/status before displaying persisted availability.
+### Added
+
+- Add `daemon start --detach` (`--background`) with readiness confirmation, PID and a private runtime log; show the running daemon version and group in `daemon status`.
+
+### Fixed
+
+- Standardize group selection with `--group` and the compatible `--workspace` alias, and show checkout counts in project and group listings.
+- Hide unsupported-platform automatic patch notices unless `--verbose` is enabled, and print a concrete manual npm upgrade command on macOS.
+- Identify stale MCP script configuration files and server entries in doctor output, with repair guidance; include actual group and project paths in membership repair commands.
 
 ## [1.2.1] - 2026-11-20
 
