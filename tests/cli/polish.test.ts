@@ -115,7 +115,12 @@ describe('CLI polish', () => {
         flag === '--detach' ? '--group' : '--workspace',
         group
       );
-      expect(output).toMatch(/RUNNING \(PID \d+, version 1\.2\.1, group /);
+      const { version } = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')) as {
+        version: string;
+      };
+      expect(output).toMatch(
+        new RegExp(`RUNNING \\(PID \\d+, version ${version.replace(/\./g, '\\.')}, group `)
+      );
       expect(output).toContain(`group ${group})`);
       const log = output.match(/Log: (.+)/)?.[1];
       expect(log).toBe(path.join(home, '.contextos', 'runtime', 'daemon.log'));
