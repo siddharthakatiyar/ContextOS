@@ -10,6 +10,12 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep project/group registration and disabled integrations free of checkout writes, including agent instructions; ordinary initialization no longer upgrades every registered project.
+- Hide generated, untracked project integrations using Git's local exclude file, including linked worktrees, without changing tracked files or user ignore rules. Preserve user-authored instruction content.
+- Add `init --no-integrations` and report disabled project integrations accurately.
+
 ## [1.2.1] - 2026-11-20
 
 ### Fixed

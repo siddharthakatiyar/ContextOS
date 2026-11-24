@@ -32,8 +32,9 @@ function existsWithoutSymlink(file: string): boolean {
 
 export function installProjectAgentConfigs(
   root: string,
-  generated: CursorMcpConfig
-): { written: string[]; warnings: string[] } {
+  generated: CursorMcpConfig,
+  canWrite: (file: string) => boolean = () => true
+): { written: string[]; configured: string[]; warnings: string[] } {
   const detected = new Set(
     enableGlobalAgentInstructions({ dryRun: true })
       .filter((r) => r.status !== 'not-installed')
@@ -41,20 +42,22 @@ export function installProjectAgentConfigs(
   );
   const server = generated.mcpServers.contextos;
   const written: string[] = [];
+  const configured: string[] = [];
   const warnings: string[] = [];
   for (const client of ['codex', 'grok'] as const) {
     const file = path.join(root, `.${client}`, 'config.toml');
+    if (!canWrite(file)) continue;
     const dirExists = existsWithoutSymlink(path.dirname(file));
     if (!detected.has(client) && !dirExists) continue;
     const old = existsWithoutSymlink(file) ? fs.readFileSync(file, 'utf8') : '';
     // Preserve any explicit server configuration, including quoted TOML table keys.
-    if (
-      /^\s*\[\s*mcp_servers\s*\.\s*(?:contextos|"contextos"|'contextos')(?:\s*\.|\s*\])/m.test(
-        old
-      ) ||
-      /^\s*mcp_servers\s*=\s*\{/m.test(old)
-    )
+    const hasContextos =
+      /^\s*\[\s*mcp_servers\s*\.\s*(?:contextos|"contextos"|'contextos')(?:\s*\.|\s*\])/m.test(old);
+    if (hasContextos) {
+      configured.push(file);
       continue;
+    }
+    if (/^\s*mcp_servers\s*=\s*\{/m.test(old)) continue;
     const env = Object.entries(server.env ?? {})
       .map(([key, value]) => `${key} = ${JSON.stringify(value)}`)
       .join('\n');
@@ -66,8 +69,10 @@ export function installProjectAgentConfigs(
       { mode: 0o600 }
     );
     written.push(file);
+    configured.push(file);
   }
   const file = path.join(root, 'opencode.json');
+  if (!canWrite(file)) return { written, configured, warnings };
   const fileExists = existsWithoutSymlink(file);
   const jsonc = path.join(root, 'opencode.jsonc');
   const jsoncExists = existsWithoutSymlink(jsonc);
@@ -77,7 +82,7 @@ export function installProjectAgentConfigs(
       warnings.push(
         `OpenCode configuration ${jsonc} was preserved; add the ContextOS MCP server there manually if needed.`
       );
-      return { written, warnings };
+      return { written, configured, warnings };
     }
     const config = fileExists
       ? (JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>)
@@ -107,6 +112,7 @@ export function installProjectAgentConfigs(
       fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
       written.push(file);
     }
+    configured.push(file);
   }
-  return { written, warnings };
+  return { written, configured, warnings };
 }
