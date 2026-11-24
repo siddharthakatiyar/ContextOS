@@ -110,7 +110,7 @@ describe('CLI init command', () => {
     }
   });
 
-  it('respects disabled automatic MCP configuration while installing project guidance', async () => {
+  it('respects disabled automatic integrations without installing project guidance', async () => {
     fs.writeFileSync(
       path.join(home, '.contextos', 'config.json'),
       JSON.stringify({ cursor: { autoGenerateConfig: false } })
@@ -122,8 +122,9 @@ describe('CLI init command', () => {
     );
     expect(fs.existsSync(path.join(project, '.vscode'))).toBe(false);
     expect(fs.existsSync(path.join(home, '.gemini'))).toBe(false);
-    expect(fs.readFileSync(path.join(project, 'AGENTS.md'), 'utf8')).toContain(
-      '<!-- contextos:managed:start -->'
+    expect(fs.existsSync(path.join(project, 'AGENTS.md'))).toBe(false);
+    expect(fs.readFileSync(path.join(project, 'CLAUDE.md'), 'utf8')).toBe(
+      '# Project notes\nKeep this user-authored text.\n'
     );
     const registry = new WorkspaceRegistry();
     try {

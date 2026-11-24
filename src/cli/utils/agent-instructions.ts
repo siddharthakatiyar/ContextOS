@@ -82,7 +82,10 @@ export function hasAgentsImport(content: string): boolean {
 }
 
 /** Installs shared AGENTS.md guidance and migrates generated CLAUDE.md sections to an import. */
-export function installAgentInstructions(root: string): { file: string; changed: boolean } {
+export function installAgentInstructions(
+  root: string,
+  canWrite: (file: string) => boolean = () => true
+): { file: string; changed: boolean } {
   const file = path.join(root, 'AGENTS.md');
   const claudeFile = path.join(root, 'CLAUDE.md');
   // Validate both files before writing either, including dangling symlinks.
@@ -91,7 +94,9 @@ export function installAgentInstructions(root: string): { file: string; changed:
   const next = rewriteManagedInstructions(previous, agentInstructionsBlock());
   let nextClaude = rewriteManagedInstructions(previousClaude, '');
   if (!hasAgentsImport(nextClaude)) nextClaude = appendSection(nextClaude, '@AGENTS.md');
-  if (next !== previous) fs.writeFileSync(file, next, { mode: 0o644 });
-  if (nextClaude !== previousClaude) fs.writeFileSync(claudeFile, nextClaude, { mode: 0o644 });
-  return { file, changed: next !== previous || nextClaude !== previousClaude };
+  const agentsChanged = canWrite(file) && next !== previous;
+  const claudeChanged = canWrite(claudeFile) && nextClaude !== previousClaude;
+  if (agentsChanged) fs.writeFileSync(file, next, { mode: 0o644 });
+  if (claudeChanged) fs.writeFileSync(claudeFile, nextClaude, { mode: 0o644 });
+  return { file, changed: agentsChanged || claudeChanged };
 }

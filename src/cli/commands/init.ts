@@ -9,6 +9,7 @@ import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
 import { mergeContextosMcpConfig, validateJsonConfigs } from '../utils/mcp-config.js';
 import { installAgentInstructions } from '../utils/agent-instructions.js';
 import { loadConfig } from '../../config/index.js';
+import { projectGitFiles } from '../utils/project-git-files.js';
 import {
   installProjectAgentConfigs,
   projectAgentJsonPaths
@@ -25,7 +26,7 @@ function projectSetupPlan(cwd: string, options: { integrations?: boolean }) {
   const integrations =
     options.integrations !== false &&
     loadConfig({ cwd, forceReload: true }).cursor.autoGenerateConfig !== false;
-  if (integrations) validateJsonConfigs(configs);
+  if (integrations) validateJsonConfigs(configs.filter(projectGitFiles(cwd).canWrite));
   return { configs, integrations };
 }
 
@@ -35,11 +36,20 @@ export function refreshProjectSetup(
   options: { group?: string; integrations?: boolean } = {},
   plan = projectSetupPlan(cwd, options)
 ): string[] {
-  installAgentInstructions(cwd);
-  if (!plan.integrations) return ['Automatic project MCP configuration is disabled.'];
+  if (!plan.integrations)
+    return ['Automatic project integrations are disabled; no checkout files were changed.'];
+  const git = projectGitFiles(cwd);
+  installAgentInstructions(cwd, git.canWrite);
   const generated = generateCursorConfig({ projectRoot: cwd, workspaceName: options.group });
-  for (const config of plan.configs) mergeContextosMcpConfig(config, generated);
-  return installProjectAgentConfigs(cwd, generated).warnings;
+  const written = [path.join(cwd, 'AGENTS.md'), path.join(cwd, 'CLAUDE.md')].filter(git.canWrite);
+  for (const config of plan.configs) {
+    if (!git.canWrite(config)) continue;
+    mergeContextosMcpConfig(config, generated);
+    written.push(config);
+  }
+  const agents = installProjectAgentConfigs(cwd, generated, git.canWrite);
+  git.exclude([...written, ...agents.configured]);
+  return agents.warnings;
 }
 
 export async function initializeProject(
@@ -53,8 +63,6 @@ export async function initializeProject(
     json?: boolean;
   } = {}
 ): Promise<void> {
-  const { upgradeExistingProjects } = await import('../utils/installation-setup.js');
-  await upgradeExistingProjects({ cwd: input });
   const registry = new WorkspaceRegistry();
   const runtime = new WorkspaceRuntime(registry);
   try {
@@ -72,8 +80,6 @@ export async function initializeProject(
       workspace: options.group ?? options.workspace ?? 'default'
     });
     const views = registry.listAll().filter((view) => view.projectId === source.projectId);
-    for (const view of views)
-      if (fs.existsSync(view.rootPath)) installAgentInstructions(view.rootPath);
     const integrationWarnings = refreshProjectSetup(
       cwd,
       { ...options, group: options.group ?? options.workspace },
@@ -123,10 +129,17 @@ export const initCommand = new Command('init')
   .option('--name <name>', 'Unique project name')
   .option('--group <name>', 'Add this project to a group', 'default')
   .option('--no-index', 'Register without indexing')
+  .option('--no-integrations', 'Register without writing project instructions or client config')
   .option('--json', 'Output a structured result')
   .action(
     async (
       input: string,
-      options: { name?: string; group: string; index: boolean; json?: boolean }
+      options: {
+        name?: string;
+        group: string;
+        index: boolean;
+        integrations: boolean;
+        json?: boolean;
+      }
     ) => initializeProject(path.resolve(input), options)
   );
