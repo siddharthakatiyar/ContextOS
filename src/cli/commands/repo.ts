@@ -63,6 +63,7 @@ for (const command of ['list', 'status']) {
   const run = async (selector: string | undefined, opts: { workspace: string; json?: boolean }) => {
     const registry = new WorkspaceRegistry();
     try {
+      registry.reconcile();
       const sources = selector
         ? registry.select({ workspace: opts.workspace, repo: [selector] }, process.cwd()).sources
         : registry.list(opts.workspace);

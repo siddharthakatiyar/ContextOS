@@ -10,6 +10,11 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- Re-verify Git repository identity mismatches after a short delay, compare canonical filesystem identities, and check other registered worktrees before marking a project unavailable. Include expected/actual common directories and the checked root in identity errors.
+- Recover unavailable views despite cached discovery fingerprints, and reconcile project list/status before displaying persisted availability.
+
 ## [1.2.1] - 2026-11-20
 
 ### Fixed
