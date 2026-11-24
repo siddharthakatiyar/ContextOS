@@ -33,6 +33,7 @@ export type IndexRequest = {
   action: 'index' | 'file' | 'status' | 'embeddings' | 'watch';
   file?: string;
   force?: boolean;
+  failedOnly?: boolean;
   layer?: import('../storage/types.js').Layer;
   workspaceName?: string;
 };
@@ -346,9 +347,9 @@ export class RepositoryRuntime {
       return result;
     }
     this.assertCurrent();
-    if (request.force && !this.scan)
+    if (request.force && !request.failedOnly && !this.scan)
       this.db.getInstance().prepare("UPDATE files SET hash='' WHERE layer='repo'").run();
-    await this.index(request.force);
+    await this.index(request.force, undefined, request.failedOnly);
     return this.status();
   }
   private changed(prune = false): void {
@@ -371,18 +372,27 @@ export class RepositoryRuntime {
       graph.close();
     }
   }
-  async index(force = false, log?: (message: string) => void): Promise<void> {
+  async index(force = false, log?: (message: string) => void, failedOnly = false): Promise<void> {
     if (this.scan) return this.scan;
     const owner = await this.acquire();
     if (owner.token !== this.owner?.token) {
-      await this.remote(owner, { action: 'index', force });
+      await this.remote(owner, { action: 'index', force, failedOnly });
       return;
     }
     if (this.scan) return this.scan;
     const current = this.registry.resolve(this.source.repoId);
     this.assertCurrent();
-    if (!force && current.state === 'ready' && current.configFingerprint === this.fingerprint)
+    if (
+      !failedOnly &&
+      !force &&
+      current.state === 'ready' &&
+      current.configFingerprint === this.fingerprint
+    )
       return;
+    if (failedOnly && current.configFingerprint && current.configFingerprint !== this.fingerprint)
+      throw new Error(
+        'Index configuration changed; run a full reindex before retrying failed files.'
+      );
     this.scan = (async () => {
       this.registry.update(this.source.repoId, { state: 'indexing', lastError: null });
       if (current.configFingerprint !== this.fingerprint)
@@ -394,7 +404,7 @@ export class RepositoryRuntime {
         this.assertCurrent,
         log
       );
-      await indexer.startFullIndex(this.config);
+      await indexer.startFullIndex(this.config, failedOnly);
       if (indexer.lastError) throw new Error(indexer.lastError);
       const status = JSON.parse(
         fs.readFileSync(path.join(path.dirname(this.source.dbPath), 'status.json'), 'utf8')
@@ -414,7 +424,7 @@ export class RepositoryRuntime {
         configFingerprint: this.fingerprint,
         indexerVersion: INDEXER_VERSION,
         incrementGeneration: true,
-        progress: indexer.getStatus()
+        progress: status
       });
       this.pruneKnowledge();
     })()

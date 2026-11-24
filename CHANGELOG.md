@@ -10,6 +10,11 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep partially indexed views ready with capped file error diagnostics in status and doctor output, complete scan progress, and `reindex --failed` recovery without reprocessing successful files. All-file and storage failures remain failures.
+- Skip automatic registration of non-Git parent directories containing registered projects, with explicit group/project selection guidance; warn on explicit initialization while preserving standalone non-Git projects.
+
 ## [1.2.1] - 2026-11-20
 
 ### Fixed

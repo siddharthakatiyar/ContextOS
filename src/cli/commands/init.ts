@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { nestedProjectWarning } from '../../core/workspace/project-boundary.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { discoverProject } from '../../core/workspace/discovery.js';
@@ -66,6 +67,8 @@ export async function initializeProject(
           (tree) => canonical === tree.rootPath || canonical.startsWith(tree.rootPath + path.sep)
         )
         .sort((a, b) => b.rootPath.length - a.rootPath.length)[0]?.rootPath ?? discovered.rootPath;
+    const boundaryWarning = nestedProjectWarning(cwd, registry);
+    if (boundaryWarning && !options.json) console.warn(boundaryWarning);
     const plan = projectSetupPlan(cwd, options);
     const source = registry.register(cwd, {
       name: options.name,
@@ -79,7 +82,10 @@ export async function initializeProject(
       { ...options, group: options.group ?? options.workspace },
       plan
     );
-    if (!options.json) for (const warning of integrationWarnings) console.warn(warning);
+    if (boundaryWarning) integrationWarnings.push(boundaryWarning);
+    if (!options.json)
+      for (const warning of integrationWarnings.filter((warning) => warning !== boundaryWarning))
+        console.warn(warning);
     if (!options.json)
       console.log(
         `Registered ${source.name} in ${options.group ?? options.workspace ?? 'default'} (${views.length} checkout${views.length === 1 ? '' : 's'}).`

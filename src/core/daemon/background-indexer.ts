@@ -15,6 +15,12 @@ interface IndexConfig {
 }
 
 export const INDEXER_VERSION = 2;
+export const MAX_INDEX_FAILURE_DETAILS = 100;
+
+interface FileFailure {
+  path: string;
+  error: string;
+}
 
 // Single-flight guard at module level: the daemon's startup indexer and any
 // watcher-burst indexer share one process, so a per-instance flag allowed two
@@ -64,13 +70,13 @@ export class BackgroundIndexer {
     this.projectDir = canonicalDirectory(projectDir);
   }
 
-  public startFullIndex(config: IndexConfig): Promise<void> {
+  public startFullIndex(config: IndexConfig, failedOnly = false): Promise<void> {
     const key = this.projectDir + '\0' + this.db.getInstance().name;
     const active = activeFullIndexes.get(key);
     if (active) return active;
     this.isIndexing = true;
     this.lastError = null;
-    const job = scheduleFullIndex(() => this.runFullIndex(config)).finally(() => {
+    const job = scheduleFullIndex(() => this.runFullIndex(config, failedOnly)).finally(() => {
       this.isIndexing = false;
       activeFullIndexes.delete(key);
     });
@@ -80,11 +86,28 @@ export class BackgroundIndexer {
 
   public lastError: string | null = null;
 
-  private async runFullIndex(config: IndexConfig): Promise<void> {
+  private async runFullIndex(config: IndexConfig, failedOnly: boolean): Promise<void> {
     const statusFile = path.join(
       this.stateDir ?? path.dirname(this.db.getInstance().name),
       'status.json'
     );
+    const failuresFile = path.join(path.dirname(statusFile), 'failed-index-files.json');
+    const failures: FileFailure[] = [];
+    let retainedSuccesses = 0;
+    let fileFailuresOnly = false;
+    const progress = () => ({
+      processed: this.processedFiles,
+      total: this.totalFiles,
+      progressPercentage: this.totalFiles
+        ? Math.round((this.processedFiles / this.totalFiles) * 100)
+        : this.lastError
+          ? 0
+          : 100,
+      failedFileCount: failures.length,
+      failedFiles: failures.slice(0, MAX_INDEX_FAILURE_DETAILS),
+      failureDetailsTruncated: failures.length > MAX_INDEX_FAILURE_DETAILS,
+      scanType: failedOnly ? 'failed-files' : 'full'
+    });
     this.startTime = Date.now();
     this.processedFiles = 0;
     this.totalFiles = 0;
@@ -102,7 +125,22 @@ export class BackgroundIndexer {
       );
 
       const allRepoFiles = new Set<string>();
-      for (const pattern of config.indexablePatterns) {
+      if (failedOnly) {
+        const previous = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+        if (previous.error && !previous.fileFailuresOnly)
+          throw new Error('The previous scan had a scan/storage failure; run a full reindex.');
+        retainedSuccesses = previous.successfulFiles ?? 0;
+        const pending: FileFailure[] = previous.failedFileCount
+          ? JSON.parse(fs.readFileSync(failuresFile, 'utf8'))
+          : [];
+        for (const failure of pending) {
+          const file = path.resolve(failure.path);
+          if (!file.startsWith(this.projectDir + path.sep))
+            throw new Error('Failed-file retry path is outside the project');
+          allRepoFiles.add(file);
+        }
+      }
+      for (const pattern of failedOnly ? [] : config.indexablePatterns) {
         const files = await glob(pattern, {
           cwd: this.projectDir,
           ignore: [...indexIgnore.globIgnore],
@@ -167,14 +205,9 @@ export class BackgroundIndexer {
 
       const MAX_FILES = 1_000_000;
       if (this.totalFiles > MAX_FILES) {
-        console.error(
-          `[BackgroundIndexer] Repository too large: ${this.totalFiles} files found. Maximum allowed is ${MAX_FILES}.`
+        throw new Error(
+          `Repository too large: ${this.totalFiles} files found. Maximum allowed is ${MAX_FILES}. Please narrow your indexablePatterns in .contextosconfig.`
         );
-        writeJsonAtomic(statusFile, {
-          error: `Repository too large: ${this.totalFiles} files found. Maximum allowed is ${MAX_FILES}. Please narrow your indexablePatterns in .contextosconfig.`,
-          fullIndexCompleted: false
-        });
-        return;
       }
 
       this.log(`[BackgroundIndexer] Found ${this.totalFiles} files to index.`);
@@ -188,7 +221,8 @@ export class BackgroundIndexer {
       // Process in batches yielding to the event loop
       const BATCH_SIZE = 10;
       let skippedTooLarge = 0;
-      let failedFiles = 0;
+      let successfulFiles = retainedSuccesses;
+      let fatalError: unknown;
 
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         this.assertCurrent?.();
@@ -197,21 +231,42 @@ export class BackgroundIndexer {
         await Promise.all(
           batch.map(async (file) => {
             try {
-              const fileStat = fs.statSync(file);
+              let fileStat: fs.Stats;
+              try {
+                fileStat = fs.statSync(file);
+              } catch (error) {
+                // A deleted failed file is resolved. Permission and other I/O
+                // errors must remain failures rather than deleting stale rows.
+                if (!failedOnly || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+                await this.indexer?.removeFile(file, 'repo');
+                successfulFiles++;
+                return;
+              }
               // Same size cap as the incremental/watcher path so coverage does
               // not depend on which indexing route touched a file first.
               if (fileStat.size <= MAX_INDEXABLE_FILE_BYTES) {
                 await this.indexer?.indexFile(file, 'repo');
+                successfulFiles++;
               } else {
                 skippedTooLarge++;
               }
             } catch (error) {
               console.error(`[BackgroundIndexer] Failed ${file}: ${getErrorMessage(error)}`);
-              failedFiles++;
+              failures.push({ path: file, error: getErrorMessage(error).slice(0, 1000) });
+              // SQLite errors invalidate the whole scan; checkout/lease checks run below.
+              if (
+                String((error as NodeJS.ErrnoException).code ?? '').startsWith('SQLITE_') ||
+                /database.*(?:closed|not open)/i.test(getErrorMessage(error))
+              )
+                fatalError = error;
+            } finally {
+              this.processedFiles++;
             }
-            this.processedFiles++;
           })
         );
+
+        this.assertCurrent?.();
+        if (fatalError) throw fatalError;
 
         // Yield to the event loop so MCP server remains responsive
         await new Promise((resolve) => setImmediate(resolve));
@@ -235,26 +290,48 @@ export class BackgroundIndexer {
         );
       }
 
-      if (failedFiles > 0)
-        throw new Error(`${failedFiles} file(s) failed to index; retry the scan.`);
+      writeJsonAtomic(failuresFile, failures);
+      if (failures.length > 0 && successfulFiles === 0) {
+        fileFailuresOnly = true;
+        throw new Error(
+          `All ${failures.length} file(s) failed to index; retry with contextos reindex --failed.`
+        );
+      }
       this.assertCurrent?.();
       // A successful scan is also a reconciliation point. Remove rows from a
       // previous full scan when a source was deleted or became ignored. Keep
       // other layers (manual facts/workspace/global indexes) untouched.
-      await this.indexer?.removeFilesNotIn(files, 'repo');
+      if (!failedOnly) await this.indexer?.removeFilesNotIn(files, 'repo');
 
       // Mark full index as complete
       writeJsonAtomic(statusFile, {
+        ...progress(),
+        successfulFiles,
+        partial: failures.length > 0,
+        warning: failures.length
+          ? `${failures.length} file(s) failed to index; retry with contextos reindex --failed.`
+          : null,
         fullIndexCompleted: true,
         lastIndexTime: Date.now(),
         indexerVersion: INDEXER_VERSION
       });
+      if (failures.length)
+        this.log(
+          `[BackgroundIndexer] ${failures.length} file(s) failed; retry with contextos reindex --failed.`
+        );
       this.log(
         `[BackgroundIndexer] Full index completed in ${(Date.now() - this.startTime) / 1000}s`
       );
     } catch (error) {
       this.lastError = getErrorMessage(error);
-      writeJsonAtomic(statusFile, { fullIndexCompleted: false, error: this.lastError });
+      writeJsonAtomic(failuresFile, failures);
+      writeJsonAtomic(statusFile, {
+        ...progress(),
+        fileFailuresOnly,
+        successfulFiles: retainedSuccesses,
+        fullIndexCompleted: false,
+        error: this.lastError
+      });
       console.error(`[BackgroundIndexer] Error during indexing: ${getErrorMessage(error)}`);
     }
   }
@@ -265,7 +342,11 @@ export class BackgroundIndexer {
       processedFiles: this.processedFiles,
       totalFiles: this.totalFiles,
       progressPercentage:
-        this.totalFiles > 0 ? Math.round((this.processedFiles / this.totalFiles) * 100) : 0,
+        this.totalFiles > 0
+          ? Math.round((this.processedFiles / this.totalFiles) * 100)
+          : this.startTime > 0 && !this.isIndexing && !this.lastError
+            ? 100
+            : 0,
       runningTimeMs: this.isIndexing ? Date.now() - this.startTime : 0
     };
   }

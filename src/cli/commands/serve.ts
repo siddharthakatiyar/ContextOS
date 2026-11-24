@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { nestedProjectWarning } from '../../core/workspace/project-boundary.js';
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -159,6 +160,9 @@ export const serveCommand = new Command('serve')
             'default');
         const workspace = registry.workspace(group);
         const selector = options.worktree ?? options.project ?? options.repo;
+        const boundaryWarning = !selector && nestedProjectWarning(projectDir, registry);
+        if (boundaryWarning)
+          throw new Error(`Skipping automatic project registration. ${boundaryWarning}`);
         let source = selector ? registry.resolve(selector) : registry.active(projectDir);
         if (
           !source &&

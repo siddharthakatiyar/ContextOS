@@ -9,6 +9,7 @@ export const reindexCommand = new Command('reindex')
   .option('--worktree <worktree>', 'Select one worktree')
   .option('--branch <branch>', 'Select one live branch')
   .option('--all-worktrees', 'Reindex all live worktrees')
+  .option('--failed', 'Retry only files that failed the previous scan')
   .option('--embeddings', 'Backfill embeddings without rebuilding content')
   .action(
     async (opts: {
@@ -19,7 +20,10 @@ export const reindexCommand = new Command('reindex')
       branch?: string;
       allWorktrees?: boolean;
       embeddings?: boolean;
+      failed?: boolean;
     }) => {
+      if (opts.failed && opts.embeddings)
+        throw new Error('--failed cannot be combined with --embeddings');
       const registry = new WorkspaceRegistry();
       const runtime = new WorkspaceRuntime(registry);
       try {
@@ -41,9 +45,11 @@ export const reindexCommand = new Command('reindex')
         );
         await Promise.all(
           scope.sources.map(async (source) => {
-            await runtime
-              .get(source)
-              .request({ action: opts.embeddings ? 'embeddings' : 'index', force: true });
+            await runtime.get(source).request({
+              action: opts.embeddings ? 'embeddings' : 'index',
+              force: true,
+              failedOnly: opts.failed
+            });
             console.log(
               `Reindexed ${source.name} [${source.branch ?? 'working/detached'}]. Memories and history retained.`
             );
