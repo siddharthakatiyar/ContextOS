@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { formatIndexWarning } from '../../core/daemon/index-status.js';
 import { WorkspaceRegistry } from '../../core/workspace/registry.js';
 import { WorkspaceRuntime } from '../../core/workspace/runtime.js';
 export const statusCommand = new Command('status')
@@ -29,10 +30,14 @@ export const statusCommand = new Command('status')
       });
       if (opts.json) console.log(JSON.stringify({ views: statuses }, null, 2));
       else
-        for (const source of statuses)
+        for (const source of statuses) {
           console.log(
             `${source.name}\t${source.branch ?? 'working/detached'}\t${source.state}\t${source.rootPath}\t${source.dbPath}`
           );
+          const progress = 'progress' in source ? source.progress : undefined;
+          const warning = formatIndexWarning(progress);
+          if (warning) console.log(warning);
+        }
     } finally {
       await runtime.close();
       registry.close();
