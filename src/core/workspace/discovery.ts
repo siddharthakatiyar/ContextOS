@@ -32,6 +32,25 @@ function canonical(input: string): string {
     return path.resolve(input);
   }
 }
+/** Compare filesystem identity without folding distinct paths on case-sensitive volumes. */
+export function sameDirectory(expected: string | null, actual: string | null): boolean {
+  if (expected === null || actual === null) return expected === actual;
+  if (canonical(expected) === canonical(actual)) return true;
+  try {
+    const a = fs.statSync(expected);
+    const b = fs.statSync(actual);
+    return a.isDirectory() && b.isDirectory() && a.ino !== 0 && a.dev === b.dev && a.ino === b.ino;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve Git's potentially relative common directory against the checkout, not process.cwd(). */
+export function gitCommonDirectory(root: string): string {
+  const directory = canonical(root);
+  return canonical(path.resolve(directory, git(directory, ['rev-parse', '--git-common-dir'])));
+}
+
 export function discoverProject(input: string): DiscoveredProject {
   const directory = fs.realpathSync(input);
   if (!fs.statSync(directory).isDirectory()) throw new Error(`Not a directory: ${input}`);

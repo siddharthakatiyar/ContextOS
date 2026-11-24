@@ -17,6 +17,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 - Add `init --no-integrations` and report disabled project integrations accurately.
 - Keep partially indexed views ready with capped file error diagnostics in status and doctor output, complete scan progress, and `reindex --failed` recovery without reprocessing successful files. All-file and storage failures remain failures.
 - Skip automatic registration of non-Git parent directories containing registered projects, with explicit group/project selection guidance; warn on explicit initialization while preserving standalone non-Git projects.
+- Re-verify Git repository identity mismatches after a short delay, compare canonical filesystem identities, and check other registered worktrees before marking a project unavailable. Include expected/actual common directories and the checked root in identity errors.
+- Recover unavailable views despite cached discovery fingerprints, and reconcile project list/status before displaying persisted availability.
 
 ## [1.2.1] - 2026-11-20
 
