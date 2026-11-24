@@ -11,6 +11,13 @@ import { statusCommand } from '../../src/cli/commands/status.js';
 import { reindexCommand } from '../../src/cli/commands/reindex.js';
 
 const config = { indexablePatterns: ['**/*.ts'], ignorePatterns: [] };
+function scratchRoot(): string {
+  // Gitignored in-repo fixture root: the indexer skips the OS temp directory.
+  const dir = path.resolve('scratch');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 let temporary: string;
 let registry: WorkspaceRegistry;
 let runtime: WorkspaceRuntime;
@@ -22,7 +29,7 @@ let indexFile: MockInstance<Indexer['indexFile']>;
 const originalIndexFile = Indexer.prototype.indexFile;
 
 beforeEach(() => {
-  temporary = fs.mkdtempSync(path.resolve('scratch', 'partial-index-'));
+  temporary = fs.mkdtempSync(path.join(scratchRoot(), 'partial-index-'));
   vi.stubEnv('GIT_CEILING_DIRECTORIES', temporary);
   root = path.join(temporary, 'project');
   fs.mkdirSync(root);

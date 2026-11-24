@@ -20,6 +20,13 @@ import { runDaemonClient } from '../../src/core/daemon/client.js';
 import { WorkspaceRegistry } from '../../src/core/workspace/registry.js';
 import { nestedProjectWarning } from '../../src/core/workspace/project-boundary.js';
 
+function scratchRoot(): string {
+  // Gitignored in-repo fixture root: the indexer skips the OS temp directory.
+  const dir = path.resolve('scratch');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 let temporary: string;
 let root: string;
 let registry: WorkspaceRegistry;
@@ -28,7 +35,7 @@ let uncaught: Set<NodeJS.UncaughtExceptionListener>;
 let rejected: Set<NodeJS.UnhandledRejectionListener>;
 beforeEach(() => {
   originalCwd = process.cwd();
-  temporary = fs.mkdtempSync(path.resolve('scratch', 'nested-project-'));
+  temporary = fs.mkdtempSync(path.join(scratchRoot(), 'nested-project-'));
   vi.stubEnv('GIT_CEILING_DIRECTORIES', temporary);
   root = path.join(temporary, 'parent');
   fs.mkdirSync(path.join(root, '.contextos'), { recursive: true });
