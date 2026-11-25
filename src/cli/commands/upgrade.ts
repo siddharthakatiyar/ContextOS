@@ -1343,6 +1343,7 @@ async function upgrade(options: {
 }
 
 export const upgradeCommand = new Command('upgrade')
+  .alias('update')
   .description('Safely upgrade a Linux global npm install or print a portable install plan')
   .option('--version <semver>', 'Install this exact published stable version')
   .option('--allow-major', 'Allow selecting a release with a newer major version')

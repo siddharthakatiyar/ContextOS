@@ -141,6 +141,10 @@ describe('CLI polish', () => {
     45_000
   );
 
+  it('accepts update as an alias of upgrade', async () => {
+    expect(await run('update', '--help')).toContain('--dry-run');
+  });
+
   it('identifies the stale config file and server and suggests repair in human doctor output', async () => {
     const config = path.join(root, '.codex');
     fs.mkdirSync(config);

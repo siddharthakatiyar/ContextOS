@@ -48,6 +48,7 @@ function skipsStartupNotice(args: string[]): boolean {
     'daemon',
     'visualize',
     'upgrade',
+    'update',
     'updates'
   ]);
   const commandIndex = args.findIndex((arg) => commands.has(arg));
@@ -57,6 +58,7 @@ function skipsStartupNotice(args: string[]): boolean {
     command === 'enable' ||
     command === 'setup' ||
     command === 'upgrade' ||
+    command === 'update' ||
     command === 'updates' ||
     command === 'serve' ||
     args.includes('--version') ||
