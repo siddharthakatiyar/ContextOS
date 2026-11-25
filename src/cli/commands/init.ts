@@ -8,7 +8,7 @@ import { WorkspaceRuntime } from '../../core/workspace/runtime.js';
 import { refreshWorkspaceDaemon } from '../../core/workspace/daemon.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
 import { mergeContextosMcpConfig, validateJsonConfigs } from '../utils/mcp-config.js';
-import { installAgentInstructions } from '../utils/agent-instructions.js';
+import { AGENT_BLOCK_START, installAgentInstructions } from '../utils/agent-instructions.js';
 import { loadConfig } from '../../config/index.js';
 import { projectGitFiles } from '../utils/project-git-files.js';
 import {
@@ -40,9 +40,13 @@ export function refreshProjectSetup(
   if (!plan.integrations)
     return ['Automatic project integrations are disabled; no checkout files were changed.'];
   const git = projectGitFiles(cwd);
+  const instructionFiles = ['AGENTS.md', 'CLAUDE.md'].map((name) => path.join(cwd, name));
+  const excludableInstructions = instructionFiles.filter(
+    (file) => !fs.existsSync(file) || fs.readFileSync(file, 'utf8').includes(AGENT_BLOCK_START)
+  );
   installAgentInstructions(cwd, git.canWrite);
   const generated = generateCursorConfig({ projectRoot: cwd, workspaceName: options.group });
-  const written = [path.join(cwd, 'AGENTS.md'), path.join(cwd, 'CLAUDE.md')].filter(git.canWrite);
+  const written = excludableInstructions.filter(git.canWrite);
   for (const config of plan.configs) {
     if (!git.canWrite(config)) continue;
     mergeContextosMcpConfig(config, generated);
@@ -88,6 +92,15 @@ export async function initializeProject(
       { ...options, group: options.group ?? options.workspace },
       plan
     );
+    for (const root of new Set(views.map((view) => view.rootPath))) {
+      if (root === cwd || !fs.existsSync(root)) continue;
+      integrationWarnings.push(
+        ...refreshProjectSetup(root, {
+          ...options,
+          group: options.group ?? options.workspace
+        })
+      );
+    }
     if (boundaryWarning) integrationWarnings.push(boundaryWarning);
     if (!options.json)
       for (const warning of integrationWarnings.filter((warning) => warning !== boundaryWarning))

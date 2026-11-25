@@ -19,13 +19,15 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ### Fixed
 
+- Replace an existing daemon on `daemon start`, reporting its PID and version; refresh managed integrations in every registered checkout of the selected project on `init` and `project add`.
+
 - Keep project/group registration and disabled integrations free of checkout writes, including agent instructions; ordinary initialization no longer upgrades every registered project.
 - Hide generated, untracked project integrations using Git's local exclude file, including linked worktrees, without changing tracked files or user ignore rules. Preserve user-authored instruction content.
 - Report disabled project integrations accurately.
 - Keep partially indexed views ready with capped file error diagnostics in status and doctor output and complete scan progress. All-file and storage failures remain failures.
 - Skip automatic registration of non-Git parent directories containing registered projects, with explicit group/project selection guidance; warn on explicit initialization while preserving standalone non-Git projects.
-- Re-verify Git repository identity mismatches after a short delay, compare canonical filesystem identities, and check other registered worktrees before marking a project unavailable. Include expected/actual common directories and the checked root in identity errors.
-- Recover unavailable views despite cached discovery fingerprints, and reconcile project list/status before displaying persisted availability.
+- Re-verify Git repository identity mismatches without blocking the event loop, compare canonical filesystem identities, and check other registered worktrees before marking a project unavailable. Include expected/actual common directories and the checked root in identity errors.
+- Recover unavailable views despite cached discovery fingerprints, back off repeated unavailable-view checks, and reconcile project list/status before displaying persisted availability.
 - Standardize group selection with `--group` and the compatible `--workspace` alias, and show checkout counts in project and group listings.
 - Hide unsupported-platform automatic patch notices unless `--verbose` is enabled, and print a concrete manual npm upgrade command on macOS.
 - Identify stale MCP script configuration files and server entries in doctor output, with repair guidance; include actual group and project paths in membership repair commands.

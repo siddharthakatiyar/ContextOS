@@ -19,6 +19,7 @@ import {
   removePrivateStateFile,
   preparePrivateStateFile
 } from '../../utils/secure-state.js';
+import { verifiedDaemonProcess } from '../utils/installation-setup.js';
 import { getActiveUpgradeToken, isUpgradeInProgress } from '../../core/updater/upgrade-lock.js';
 
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
@@ -137,6 +138,36 @@ async function readDaemonStatus(group?: string): Promise<DaemonStatus> {
   });
 }
 
+/** The status protocol identifies the daemon; verify process identity before every signal. */
+async function replaceExistingDaemon(group: string): Promise<void> {
+  let previous: DaemonStatus;
+  try {
+    previous = await readDaemonStatus(group);
+  } catch {
+    return;
+  }
+  const signal = (value: NodeJS.Signals) => {
+    if (!verifiedDaemonProcess(previous.pid))
+      throw new Error(
+        `Cannot verify ContextOS daemon PID ${previous.pid}; stop it manually before retrying.`
+      );
+    try {
+      process.kill(previous.pid, value);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+    }
+  };
+  signal('SIGTERM');
+  if (!(await waitForProcessExit(previous.pid, 3000))) {
+    signal('SIGKILL');
+    if (!(await waitForProcessExit(previous.pid, 3000)))
+      throw new Error(`Previous ContextOS daemon (PID ${previous.pid}) did not exit.`);
+  }
+  console.log(
+    `Replaced previous ContextOS daemon (PID ${previous.pid}, version ${previous.version}, group ${previous.group}).`
+  );
+}
+
 async function startDetached(group: string): Promise<void> {
   const logPath = preparePrivateStateFile(path.join(workspaceStateDirectory(group), 'daemon.log'));
   const log = fs.openSync(
@@ -180,7 +211,9 @@ async function startDetached(group: string): Promise<void> {
       );
     try {
       const status = await readDaemonStatus(group);
-      if (status.pid === child.pid) {
+      // The CLI can re-exec (for example through the TypeScript launcher), so
+      // the serving PID need not equal the spawned wrapper's PID.
+      if (status.group === group) {
         console.log(
           `Daemon is RUNNING (PID ${status.pid}, version ${status.version}, group ${status.group})\nLog: ${logPath}`
         );
@@ -221,16 +254,15 @@ daemonCommand
           'A ContextOS upgrade is in progress; wait for it to finish before starting a daemon.'
         );
       }
-      const group = options.group ?? options.workspace ?? 'default';
-      if (options.detach || options.background) {
-        const registry = new WorkspaceRegistry();
-        try {
-          registry.workspace(group);
-        } finally {
-          registry.close();
-        }
-        return startDetached(group);
+      const registry = new WorkspaceRegistry();
+      let group: string;
+      try {
+        group = registry.workspace(options.group ?? options.workspace ?? 'default').name;
+      } finally {
+        registry.close();
       }
+      await replaceExistingDaemon(group);
+      if (options.detach || options.background) return startDetached(group);
       const daemon = new WorkspaceDaemon(group);
       await daemon.start();
       const cleanup = () => {

@@ -93,6 +93,19 @@ export class BackgroundIndexer {
     );
     const failuresFile = path.join(path.dirname(statusFile), 'failed-index-files.json');
     const failures: FileFailure[] = [];
+    let previous:
+      | {
+          failedFileCount?: number;
+          failedFiles?: FileFailure[];
+          failureDetailsTruncated?: boolean;
+          successfulFiles?: number;
+          error?: string;
+          fileFailuresOnly?: boolean;
+        }
+      | undefined;
+    let pending: FileFailure[] | undefined;
+    const completed = new Set<string>();
+    let completeFailureList = false;
     let retainedSuccesses = 0;
     let fileFailuresOnly = false;
     const progress = () => ({
@@ -115,6 +128,15 @@ export class BackgroundIndexer {
     this.log('[BackgroundIndexer] Starting full repository index...');
 
     try {
+      if (failedOnly) {
+        previous = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+        retainedSuccesses = previous?.successfulFiles ?? 0;
+        pending = previous?.failedFileCount
+          ? JSON.parse(fs.readFileSync(failuresFile, 'utf8'))
+          : [];
+        if (previous?.error && !previous.fileFailuresOnly)
+          throw new Error('The previous scan had a scan/storage failure; run a full reindex.');
+      }
       const indexIgnore = createIndexIgnore(this.projectDir, config.ignorePatterns || []);
       this.assertCurrent?.();
       this.indexer = new Indexer(
@@ -126,14 +148,7 @@ export class BackgroundIndexer {
 
       const allRepoFiles = new Set<string>();
       if (failedOnly) {
-        const previous = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
-        if (previous.error && !previous.fileFailuresOnly)
-          throw new Error('The previous scan had a scan/storage failure; run a full reindex.');
-        retainedSuccesses = previous.successfulFiles ?? 0;
-        const pending: FileFailure[] = previous.failedFileCount
-          ? JSON.parse(fs.readFileSync(failuresFile, 'utf8'))
-          : [];
-        for (const failure of pending) {
+        for (const failure of pending ?? []) {
           const file = path.resolve(failure.path);
           if (!file.startsWith(this.projectDir + path.sep))
             throw new Error('Failed-file retry path is outside the project');
@@ -231,6 +246,11 @@ export class BackgroundIndexer {
         await Promise.all(
           batch.map(async (file) => {
             try {
+              if (failedOnly && indexIgnore.ignores(file)) {
+                await this.indexer?.removeFile(file, 'repo');
+                successfulFiles++;
+                return;
+              }
               let fileStat: fs.Stats;
               try {
                 fileStat = fs.statSync(file);
@@ -249,6 +269,10 @@ export class BackgroundIndexer {
                 successfulFiles++;
               } else {
                 skippedTooLarge++;
+                if (failedOnly) {
+                  await this.indexer?.removeFile(file, 'repo');
+                  successfulFiles++;
+                }
               }
             } catch (error) {
               console.error(`[BackgroundIndexer] Failed ${file}: ${getErrorMessage(error)}`);
@@ -260,6 +284,7 @@ export class BackgroundIndexer {
               )
                 fatalError = error;
             } finally {
+              completed.add(file);
               this.processedFiles++;
             }
           })
@@ -290,6 +315,7 @@ export class BackgroundIndexer {
         );
       }
 
+      completeFailureList = true;
       writeJsonAtomic(failuresFile, failures);
       if (failures.length > 0 && successfulFiles === 0) {
         fileFailuresOnly = true;
@@ -324,9 +350,22 @@ export class BackgroundIndexer {
       );
     } catch (error) {
       this.lastError = getErrorMessage(error);
-      writeJsonAtomic(failuresFile, failures);
+      if (!failedOnly || completeFailureList) {
+        writeJsonAtomic(failuresFile, failures);
+      } else if (pending && completed.size) {
+        // Preserve every unattempted retry when a lease/storage failure aborts a batch.
+        failures.push(...pending.filter((entry) => !completed.has(path.resolve(entry.path))));
+        writeJsonAtomic(failuresFile, failures);
+      }
       writeJsonAtomic(statusFile, {
         ...progress(),
+        ...(!completeFailureList && failedOnly && previous
+          ? {
+              failedFileCount: previous.failedFileCount ?? 0,
+              failedFiles: previous.failedFiles ?? [],
+              failureDetailsTruncated: previous.failureDetailsTruncated ?? false
+            }
+          : {}),
         fileFailuresOnly,
         successfulFiles: retainedSuccesses,
         fullIndexCompleted: false,

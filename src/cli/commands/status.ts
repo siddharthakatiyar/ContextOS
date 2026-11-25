@@ -13,7 +13,7 @@ export const statusCommand = new Command('status')
       const registry = new WorkspaceRegistry();
       const runtime = new WorkspaceRuntime(registry);
       try {
-        registry.reconcile();
+        registry.reconcile(undefined, { force: true });
         const group = opts.group ?? opts.workspace;
         const views = group
           ? registry.list(group, true)

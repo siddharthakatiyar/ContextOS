@@ -74,6 +74,15 @@ describe('nested registered project boundaries', () => {
     expect(registry.projects()).toHaveLength(1);
     expect(runDaemonClient).not.toHaveBeenCalled();
   });
+  it('serves an already registered non-Git parent containing registered projects', async () => {
+    // Remove the legacy placeholder before registering the parent database.
+    fs.rmSync(path.join(root, '.contextos'), { recursive: true });
+    registry.register(root);
+    child();
+    await serveCommand.parseAsync(['node', 'contextos']);
+    expect(runDaemonClient).toHaveBeenCalledWith(root, expect.any(Object));
+    expect(registry.projects()).toHaveLength(2);
+  });
   it('allows an explicit project selection from its parent', async () => {
     const source = child();
     await serveCommand.parseAsync([

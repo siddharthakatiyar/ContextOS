@@ -186,6 +186,70 @@ describe('partial indexing', () => {
     expect(repository.status().files).toBe(1);
   });
 
+  it.each(['size cap', 'ignored'])(
+    'resolves failed files that became %s and removes stale rows',
+    async (reason) => {
+      const bad = path.join(root, 'bad.ts');
+      const repository = runtime.get(source);
+      await originalIndexFile.call(new Indexer(repository.db, root), bad, 'repo');
+      await repository.index();
+      expect(repository.status().files).toBe(2);
+      if (reason === 'size cap') fs.writeFileSync(bad, 'x'.repeat(2 * 1024 * 1024 + 1));
+      else fs.writeFileSync(path.join(root, '.contextosignore'), 'bad.ts\n');
+      indexFile.mockClear();
+      await repository.request({ action: 'index', force: true, failedOnly: true });
+      expect(status()).toMatchObject({
+        fullIndexCompleted: true,
+        partial: false,
+        failedFileCount: 0
+      });
+      expect(repository.status().files).toBe(1);
+      expect(indexFile).not.toHaveBeenCalled();
+    }
+  );
+
+  it('preserves the pending file and failed count when a retry aborts before processing', async () => {
+    await runtime.get(source).index();
+    const file = path.join(path.dirname(source.dbPath), 'failed-index-files.json');
+    const pending = fs.readFileSync(file, 'utf8');
+    const indexer = new BackgroundIndexer(runtime.get(source).db, root, undefined, () => {
+      throw new Error('lease lost');
+    });
+    await indexer.startFullIndex(config, true);
+    expect(indexer.lastError).toBe('lease lost');
+    expect(fs.readFileSync(file, 'utf8')).toBe(pending);
+    expect(status()).toMatchObject({ failedFileCount: 1, failedFiles: JSON.parse(pending) });
+  });
+
+  it('merges unprocessed pending files with new failures after a retry batch aborts', async () => {
+    for (let i = 0; i < 15; i++) {
+      const file = path.join(root, `retry-${i}.ts`);
+      fs.writeFileSync(file, 'export const retry = true;');
+      failures.add(file);
+    }
+    await runtime.get(source).index();
+    const file = path.join(path.dirname(source.dbPath), 'failed-index-files.json');
+    const pending = JSON.parse(fs.readFileSync(file, 'utf8')) as { path: string; error: string }[];
+    indexFile.mockClear();
+    failures.clear();
+    failures.add(pending[0].path);
+    const indexer = new BackgroundIndexer(runtime.get(source).db, root, undefined, () => {
+      if (indexer.processedFiles >= 10) throw new Error('lease lost');
+    });
+    await indexer.startFullIndex(config, true);
+    expect(indexer.lastError).toBe('lease lost');
+    const attempted = new Set(indexFile.mock.calls.map((call) => call[0]));
+    expect(attempted.size).toBe(10);
+    const remaining = JSON.parse(fs.readFileSync(file, 'utf8')) as { path: string }[];
+    expect(remaining.map((entry) => entry.path).sort()).toEqual(
+      pending
+        .filter((entry) => !attempted.has(entry.path) || failures.has(entry.path))
+        .map((entry) => entry.path)
+        .sort()
+    );
+    expect(status().failedFileCount).toBe(pending.length);
+  });
+
   it('fails the view when reconciliation fails after successful file indexing', async () => {
     failures.clear();
     vi.spyOn(Indexer.prototype, 'removeFilesNotIn').mockRejectedValue(

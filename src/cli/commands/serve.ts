@@ -160,16 +160,17 @@ export const serveCommand = new Command('serve')
             'default');
         const workspace = registry.workspace(group);
         const selector = options.worktree ?? options.project ?? options.repo;
-        const boundaryWarning = !selector && nestedProjectWarning(projectDir, registry);
-        if (boundaryWarning)
-          throw new Error(`Skipping automatic project registration. ${boundaryWarning}`);
         let source = selector ? registry.resolve(selector) : registry.active(projectDir);
         if (
           !source &&
           (fs.existsSync(path.join(projectDir, '.git')) ||
             fs.existsSync(path.join(projectDir, '.contextos', 'index.db')))
-        )
+        ) {
+          const boundaryWarning = nestedProjectWarning(projectDir, registry);
+          if (boundaryWarning)
+            throw new Error(`Skipping automatic project registration. ${boundaryWarning}`);
           source = registry.register(projectDir);
+        }
         if (!source)
           throw new Error(
             'No initialized project selected. Run contextos init in your project or select --group and --project.'

@@ -23,8 +23,21 @@ export function projectGitFiles(root: string): {
     return { canWrite: () => true, exclude: () => {} };
   }
   const relative = (file: string) => path.relative(root, file).split(path.sep).join('/');
-  const tracked = new Set(git(['ls-files', '-z', '--cached']).split('\0'));
-  const canWrite = (file: string) => !tracked.has(relative(file));
+  const writable = new Map<string, boolean>();
+  const canWrite = (file: string) => {
+    const candidate = relative(file);
+    if (!writable.has(candidate)) {
+      try {
+        // Query only the candidate, never buffer the entire repository's index.
+        const tracked = git(['--literal-pathspecs', 'ls-files', '-z', '--cached', '--', candidate]);
+        writable.set(candidate, tracked.length === 0);
+      } catch {
+        // On an unreadable index, preserve the checkout rather than overwrite a tracked file.
+        writable.set(candidate, false);
+      }
+    }
+    return writable.get(candidate)!;
+  };
   return {
     canWrite,
     exclude(files) {

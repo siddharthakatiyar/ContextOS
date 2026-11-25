@@ -113,6 +113,35 @@ describe('repository identity reconciliation', () => {
     ).toBe(true);
   });
 
+  it('backs off unavailable identity checks without blocking, and retries on expiry, force or fingerprint change', () => {
+    const root = repository('backend');
+    const source = registry.register(root);
+    const found = discovery.discoverProject(root);
+    const spy = vi
+      .spyOn(discovery, 'discoverProject')
+      .mockReturnValue({ ...found, commonDir: null });
+    const sleep = vi.spyOn(Atomics, 'wait');
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000);
+    registry.reconcile();
+    expect(registry.resolve(source.repoId).state).toBe('unavailable');
+    const calls = spy.mock.calls.length;
+    registry.reconcile();
+    registry.reconcile();
+    expect(spy).toHaveBeenCalledTimes(calls);
+    expect(sleep).not.toHaveBeenCalled();
+    now.mockReturnValue(130_001);
+    registry.reconcile();
+    expect(spy).toHaveBeenCalledTimes(calls * 2);
+    registry.reconcile(undefined, { force: true });
+    expect(spy).toHaveBeenCalledTimes(calls * 3);
+    fs.writeFileSync(path.join(root, '.git', 'HEAD'), 'ref: refs/heads/changed\n');
+    registry.reconcile();
+    expect(spy).toHaveBeenCalledTimes(calls * 4);
+    spy.mockReturnValue(found);
+    registry.reconcile(source.projectId, { force: true });
+    expect(registry.resolve(source.repoId)).toMatchObject({ state: 'registered', lastError: null });
+  });
+
   it('keeps the registered identity for equivalent common-directory aliases', () => {
     const root = repository('backend');
     const source = registry.register(root);

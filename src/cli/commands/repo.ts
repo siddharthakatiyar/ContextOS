@@ -18,15 +18,21 @@ repoCommand
   .option('--workspace <name>', 'Alias for --group')
   .option('--name <name>', 'Unique repository display name')
   .option('--no-index', 'Register without indexing')
+  .option('--no-integrations', 'Register without writing project instructions or client config')
   .action(
     async (
       root: string,
-      opts: { workspace?: string; group?: string; name?: string; index: boolean }
+      opts: {
+        workspace?: string;
+        group?: string;
+        name?: string;
+        index: boolean;
+        integrations?: boolean;
+      }
     ) => {
       await initializeProject(root, {
         ...opts,
-        group: opts.group ?? opts.workspace ?? 'default',
-        integrations: false
+        group: opts.group ?? opts.workspace ?? 'default'
       });
     }
   );
@@ -43,11 +49,11 @@ repoCommand
       try {
         if (opts.purge) {
           const ids = registry.views(selector).map((view) => view.repoId);
-          await refreshWorkspaceDaemon('default', 'quiesce', ids);
+          await refreshWorkspaceDaemon(group, 'quiesce', ids);
           try {
             registry.purgeProject(selector);
           } finally {
-            await refreshWorkspaceDaemon('default', 'resume', ids);
+            await refreshWorkspaceDaemon(group, 'resume', ids);
           }
           console.log(`Purged ${selector}. Source files retained.`);
           return;
@@ -76,7 +82,7 @@ for (const command of ['list', 'status']) {
     const group = opts.group ?? opts.workspace ?? 'default';
     const registry = new WorkspaceRegistry();
     try {
-      registry.reconcile();
+      registry.reconcile(undefined, { force: true });
       const sources = selector
         ? registry.select({ workspace: group, repo: [selector] }, process.cwd()).sources
         : registry.list(group);

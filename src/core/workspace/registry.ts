@@ -147,6 +147,7 @@ function alive(pid: number): boolean {
 export class WorkspaceRegistry {
   private db: Database.Database;
   readonly home: string;
+  private discoveryAttempts = new Map<string, { fingerprint: string; at: number }>();
   private discoveryFingerprints = new Map<string, string>();
   constructor(home = getContextOSHome()) {
     this.home = home;
@@ -864,22 +865,29 @@ export class WorkspaceRegistry {
       sources
     };
   }
-  reconcile(selector?: string): RepositorySource[] {
+  reconcile(selector?: string, options: { force?: boolean } = {}): RepositorySource[] {
     const projects = selector ? [this.project(selector)] : this.projects();
     for (const project of projects) {
       const trees = this.worktrees(project.id);
       if (this.projectHasPendingDeletion(project.id)) continue;
       const fingerprint = this.discoveryFingerprint(project, trees);
       const activeViews = this.views(project.id).filter((v) => v.active);
+      const attempt = this.discoveryAttempts.get(project.id);
       if (
-        this.discoveryFingerprints.get(project.id) === fingerprint &&
-        !activeViews.some((v) => v.state === 'unavailable')
+        !options.force &&
+        ((this.discoveryFingerprints.get(project.id) === fingerprint &&
+          !activeViews.some((v) => v.state === 'unavailable')) ||
+          (attempt?.fingerprint === fingerprint &&
+            activeViews.some((v) => v.state === 'unavailable') &&
+            Date.now() - attempt.at < 30_000))
       )
         continue;
+
       const root = [project.rootPath, ...trees.map((w) => w.rootPath)].find((p) =>
         fs.existsSync(p)
       );
       if (!root) {
+        this.discoveryAttempts.set(project.id, { fingerprint, at: Date.now() });
         for (const view of this.views(project.id).filter((v) => v.active))
           this.update(view.repoId, {
             state: 'unavailable',
@@ -891,6 +899,7 @@ export class WorkspaceRegistry {
       try {
         discovery = discoverProject(root);
       } catch {
+        this.discoveryAttempts.set(project.id, { fingerprint, at: Date.now() });
         continue;
       }
       // A missing mount or replaced directory must not silently become another project.
@@ -900,7 +909,6 @@ export class WorkspaceRegistry {
       if (!sameDirectory(project.commonDir, discovery.commonDir)) {
         this.discoveryFingerprints.delete(project.id);
         // Discovery may have observed a transient Git failure (reported as a non-Git root).
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
         let verified = false;
         for (const candidate of new Set([root, ...trees.map((w) => w.rootPath)])) {
           if (!fs.existsSync(candidate)) continue;
@@ -929,6 +937,7 @@ export class WorkspaceRegistry {
           }
         }
         if (!verified) {
+          this.discoveryAttempts.set(project.id, { fingerprint, at: Date.now() });
           const lastError =
             [...rejectedRoots.values()].join('; ') || identityError(root, discovery.commonDir);
           for (const view of activeViews)
@@ -975,6 +984,12 @@ export class WorkspaceRegistry {
           this.touch();
         }
       for (const view of current) if (view.state === 'registering') this.finishRegistration(view);
+      if (this.views(project.id).some((view) => view.active && view.state === 'unavailable'))
+        this.discoveryAttempts.set(project.id, {
+          fingerprint: this.discoveryFingerprint(project, this.worktrees(project.id)),
+          at: Date.now()
+        });
+      else this.discoveryAttempts.delete(project.id);
       this.discoveryFingerprints.set(
         project.id,
         this.discoveryFingerprint(project, this.worktrees(project.id))
