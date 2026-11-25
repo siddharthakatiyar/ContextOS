@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { nestedProjectWarning } from '../../core/workspace/project-boundary.js';
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -164,15 +165,19 @@ export const serveCommand = new Command('serve')
           !source &&
           (fs.existsSync(path.join(projectDir, '.git')) ||
             fs.existsSync(path.join(projectDir, '.contextos', 'index.db')))
-        )
+        ) {
+          const boundaryWarning = nestedProjectWarning(projectDir, registry);
+          if (boundaryWarning)
+            throw new Error(`Skipping automatic project registration. ${boundaryWarning}`);
           source = registry.register(projectDir);
+        }
         if (!source)
           throw new Error(
             'No initialized project selected. Run contextos init in your project or select --group and --project.'
           );
         if (!registry.list(workspace.id, true).some((view) => view.projectId === source.projectId))
           throw new Error(
-            'The active project is not in the selected group. Use contextos group add.'
+            `Project ${source.name} is not in group ${workspace.name}. Run: contextos group add ${JSON.stringify(workspace.name)} ${JSON.stringify(source.rootPath)} --name ${JSON.stringify(source.name)}`
           );
         await runDaemonClient(source.rootPath, {
           name: workspace.name,

@@ -147,6 +147,19 @@ export class WorkspaceDaemon {
           token?: string;
           expectedVersion?: string;
         };
+        if (setup.action === 'status') {
+          const group = this.registry.workspace(setup.workspaceId || this.name);
+          socket.resume();
+          socket.end(
+            JSON.stringify({
+              ok: true,
+              pid: process.pid,
+              version: this.version,
+              group: group.name
+            }) + '\n'
+          );
+          return;
+        }
         if (setup.action === 'get-version' || setup.action === 'prepare-upgrade') {
           const token = getActiveUpgradeToken();
           const version = this.version;

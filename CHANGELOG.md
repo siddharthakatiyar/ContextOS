@@ -10,6 +10,30 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-24
+
+### Added
+
+- Add `daemon start --detach` (`--background`) with readiness confirmation, PID and a private runtime log; show the running daemon version and group in `daemon status`.
+- Add `init --no-integrations` and `reindex --failed` for recovering partially indexed views without reprocessing successful files.
+- Add `contextos update` as an alias of `contextos upgrade`, and mention it in the startup update notice.
+- Tell agents explicitly to call ContextOS before reading or searching for questions about services, infrastructure and relationships, and to save verified discoveries (`ctx_remember`, `ctx_link`) as they work.
+
+### Fixed
+
+- Replace an existing daemon on `daemon start`, reporting its PID and version; refresh managed integrations in every registered checkout of the selected project on `init` and `project add`.
+
+- Keep project/group registration and disabled integrations free of checkout writes, including agent instructions; ordinary initialization no longer upgrades every registered project.
+- Hide generated, untracked project integrations using Git's local exclude file, including linked worktrees, without changing tracked files or user ignore rules. Preserve user-authored instruction content.
+- Report disabled project integrations accurately.
+- Keep partially indexed views ready with capped file error diagnostics in status and doctor output and complete scan progress. All-file and storage failures remain failures.
+- Skip automatic registration of non-Git parent directories containing registered projects, with explicit group/project selection guidance; warn on explicit initialization while preserving standalone non-Git projects.
+- Re-verify Git repository identity mismatches without blocking the event loop, compare canonical filesystem identities, and check other registered worktrees before marking a project unavailable. Include expected/actual common directories and the checked root in identity errors.
+- Recover unavailable views despite cached discovery fingerprints, back off repeated unavailable-view checks, and reconcile project list/status before displaying persisted availability.
+- Standardize group selection with `--group` and the compatible `--workspace` alias, and show checkout counts in project and group listings.
+- Hide unsupported-platform automatic patch notices unless `--verbose` is enabled, and print a concrete manual npm upgrade command on macOS.
+- Identify stale MCP script configuration files and server entries in doctor output, with repair guidance; include actual group and project paths in membership repair commands.
+
 ## [1.2.1] - 2026-11-20
 
 ### Fixed
@@ -61,7 +85,6 @@ This project follows Semantic Versioning and Keep a Changelog.
 ### Fixed
 
 - Canonicalize temporary test roots so macOS path aliases do not break instruction diagnostics or global installation checks.
-
 
 ## [1.1.0] - 2026-11-03
 
@@ -225,7 +248,7 @@ This keeps indexing responsive even on very large repositories.
 Simply run
 
 ```bash
-npm update -g @siddharthakatiyar/contextos 
+npm update -g @siddharthakatiyar/contextos
 ```
 
 ## [0.9.0] - 2026-07-22
@@ -233,6 +256,7 @@ npm update -g @siddharthakatiyar/contextos
 Security hardening and robust large repository support for the upcoming v1.0 release.
 
 ### Added
+
 - **Path Traversal Guards**: Added explicit sandbox boundaries so the indexer refuses to parse `../../` files beyond workspace roots.
 - **Malicious Repo Protection**: Implemented a hard cap (1,000,000 files) on glob limits to prevent Out-Of-Memory (OOM) crashes on massive directories (like `~/`).
 - **DOS Protection**: Throttled concurrent file watcher events with an asynchronous queue (`pLimit`), preventing daemon crashes from CPU starvation during huge `git checkout` branch swaps.
@@ -241,12 +265,14 @@ Security hardening and robust large repository support for the upcoming v1.0 rel
 - **CI**: macOS runners added to the test matrix; the publish workflow now verifies the pushed tag matches `package.json`.
 
 ### Changed
+
 - Clarified `contextos serve` behavior in documentation, explaining it is managed by MCP clients and should not be run manually.
 - **Retrieval default**: `pipeline.embeddingFusion` now follows `embeddingsRetrieval` (off by default; confidence-gated) instead of being forced on — queries no longer run embedding-kNN fusion unless you opt in. See UPGRADING.
 - **Benchmark**: the suite now measures ContextOS only (competitor comparison arms removed).
 - **Storage**: prepared statements are cached per connection and extra SQLite PRAGMAs (`synchronous=NORMAL`, cache/mmap/temp_store) are applied for faster indexing.
 
 ### Fixed
+
 - **`ctx_expand`** now validates file paths against the workspace root (previously an unguarded arbitrary file read).
 - **Workspace boundary** checks in `ctx_read_file` / `reindex_context` / `ctx_execute` resolve symlinks (realpath) and reject a bare `..` argument.
 - **Dependencies**: bumped `brace-expansion` (ReDoS) and `esbuild` via `npm audit fix`.
@@ -258,6 +284,7 @@ Security hardening and robust large repository support for the upcoming v1.0 rel
 Zero-dependency local SQLite architecture and non-blocking background daemon indexing.
 
 ### Added
+
 - **Background Daemon Indexing**: ContextOS now spawns a non-blocking daemon on `contextos init`. Massive repositories (50,000+ files) are now indexed seamlessly in the background without blocking your CLI or editor.
 - **Local SQLite Architecture**: Migrated fully away from Redis & Qdrant to a zero-dependency local SQLite architecture using FTS5 (BM25 ranking) and recursive Graph BFS (relationship expansion).
 - **Retrieval Benchmarks**: Added 6 new framework-specific retrieval benchmarks (`nextjs-rsc-boundaries`, `express-auth-routing`, etc.) which achieved 100% recall.
@@ -265,10 +292,12 @@ Zero-dependency local SQLite architecture and non-blocking background daemon ind
 - **Update Notifier**: The CLI now notifies you in the background when a new release is available on npm.
 
 ### Changed
+
 - `contextos init` now returns instantly while indexing continues in the background. Check progress via `contextos status`.
 - MCP tools no longer require a running daemon/server to execute local retrieval requests.
 
 ### Removed
+
 - Removed Redis caching and Qdrant vector database requirements. ContextOS is now 100% zero-dependency.
 
 ## [0.7.1] - 2026-07-19
@@ -276,11 +305,13 @@ Zero-dependency local SQLite architecture and non-blocking background daemon ind
 Documentation updates and stability improvements for graph expansion.
 
 ### Added
+
 - Comprehensive Next.js Documentation site at `/docs`.
 - New `contextos status --json` output for IDE plugins and CI tracking.
 - Interactive terminal metrics and visualization for Graph Expansion limits.
 
 ### Fixed
+
 - Fixed cyclical import detection during AST chunking which caused infinite loops in specific Monorepo setups.
 
 ## [0.7.0] - 2026-07-16
@@ -288,6 +319,7 @@ Documentation updates and stability improvements for graph expansion.
 The largest architectural rewrite since ContextOS was created.
 
 ### Changed
+
 - **Breaking Change**: Consolidated MCP tools. `ctx_search`, `ctx_graph`, and `ctx_ast` were merged into a single unified `ctx_retrieve` tool for simplicity.
 - Revamped token budget enforcing. ContextOS now physically counts tokens using `gpt-tokenizer` to ensure strictly bound Context Windows.
 
@@ -296,6 +328,7 @@ The largest architectural rewrite since ContextOS was created.
 Retrieval overhaul featuring Schema v5, RRF fusion, and local embeddings.
 
 ### Changed
+
 - **RRF Fusion Retrieval**: Combined ranking signals using Reciprocal Rank Fusion.
 - **Query-Aware Compile**: Compilation now adapts to the query intent.
 - **Hardened MCP Tools**: Improved robustness of MCP tool execution.
@@ -305,6 +338,7 @@ Retrieval overhaul featuring Schema v5, RRF fusion, and local embeddings.
 Major token optimization cutting E2E tokens under baseline.
 
 ### Changed
+
 - **Tiered Compile**: Introduced a tiered compilation strategy to reduce token usage.
 - **Retrieval Precision**: Improved precision of retrieved context.
 
@@ -313,6 +347,7 @@ Major token optimization cutting E2E tokens under baseline.
 General robustness and security update.
 
 ### Changed
+
 - **Security Patches**: Addressed known security issues.
 - **Stability Improvements**: General reliability fixes across the CLI.
 
@@ -321,6 +356,7 @@ General robustness and security update.
 Introduced cross-session memory and smart context assembly.
 
 ### Added
+
 - **Cross-Session Memory**: Context now persists across sessions.
 - **Smart Context Assembly**: Automatically assembles relevant context for a query.
 - **Graph Visualization**: Visualize the relationship graph between files.
@@ -330,5 +366,6 @@ Introduced cross-session memory and smart context assembly.
 First public beta of ContextOS.
 
 ### Added
+
 - **Basic File Retrieval**: Initial retrieval implementation.
 - **CLI Interface**: First version of the command-line interface.

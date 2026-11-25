@@ -6,6 +6,8 @@ import { DB, getContextOSHome } from '../storage/database.js';
 import { bindRepository } from './identity.js';
 import {
   discoverProject,
+  gitCommonDirectory,
+  sameDirectory,
   localBranches,
   type DiscoveredProject,
   type DiscoveredWorktree
@@ -145,6 +147,7 @@ function alive(pid: number): boolean {
 export class WorkspaceRegistry {
   private db: Database.Database;
   readonly home: string;
+  private discoveryAttempts = new Map<string, { fingerprint: string; at: number }>();
   private discoveryFingerprints = new Map<string, string>();
   constructor(home = getContextOSHome()) {
     this.home = home;
@@ -852,7 +855,7 @@ export class WorkspaceRegistry {
     sources = [...new Map(sources.map((r) => [r.repoId, r])).values()];
     if (!sources.length)
       throw new Error(
-        'The selected workspace/group has no repositories. Use contextos group add <group> <path>.'
+        `Group ${workspace?.name ?? explicitGroup ?? defaultWorkspace ?? 'default'} has no repositories. Run: contextos group add ${JSON.stringify(workspace?.name ?? explicitGroup ?? defaultWorkspace ?? 'default')} ${JSON.stringify(active?.rootPath ?? cwd)}${active ? ` --name ${JSON.stringify(active.name)}` : ''}`
       );
     return {
       workspaceId: workspace?.id,
@@ -862,17 +865,29 @@ export class WorkspaceRegistry {
       sources
     };
   }
-  reconcile(selector?: string): RepositorySource[] {
+  reconcile(selector?: string, options: { force?: boolean } = {}): RepositorySource[] {
     const projects = selector ? [this.project(selector)] : this.projects();
     for (const project of projects) {
       const trees = this.worktrees(project.id);
       if (this.projectHasPendingDeletion(project.id)) continue;
       const fingerprint = this.discoveryFingerprint(project, trees);
-      if (this.discoveryFingerprints.get(project.id) === fingerprint) continue;
+      const activeViews = this.views(project.id).filter((v) => v.active);
+      const attempt = this.discoveryAttempts.get(project.id);
+      if (
+        !options.force &&
+        ((this.discoveryFingerprints.get(project.id) === fingerprint &&
+          !activeViews.some((v) => v.state === 'unavailable')) ||
+          (attempt?.fingerprint === fingerprint &&
+            activeViews.some((v) => v.state === 'unavailable') &&
+            Date.now() - attempt.at < 30_000))
+      )
+        continue;
+
       const root = [project.rootPath, ...trees.map((w) => w.rootPath)].find((p) =>
         fs.existsSync(p)
       );
       if (!root) {
+        this.discoveryAttempts.set(project.id, { fingerprint, at: Date.now() });
         for (const view of this.views(project.id).filter((v) => v.active))
           this.update(view.repoId, {
             state: 'unavailable',
@@ -884,18 +899,81 @@ export class WorkspaceRegistry {
       try {
         discovery = discoverProject(root);
       } catch {
+        this.discoveryAttempts.set(project.id, { fingerprint, at: Date.now() });
         continue;
       }
       // A missing mount or replaced directory must not silently become another project.
-      if (discovery.commonDir !== project.commonDir) {
-        for (const view of this.views(project.id).filter((v) => v.active))
-          this.update(view.repoId, {
-            state: 'unavailable',
-            lastError: 'Registered Git repository identity changed'
-          });
-        continue;
+      const rejectedRoots = new Map<string, string>();
+      const identityError = (candidate: string, actual: string | null): string =>
+        `Registered Git repository identity changed: expected commonDir=${JSON.stringify(project.commonDir)}, actual commonDir=${JSON.stringify(actual)}, root=${JSON.stringify(candidate)}`;
+      if (!sameDirectory(project.commonDir, discovery.commonDir)) {
+        this.discoveryFingerprints.delete(project.id);
+        // Discovery may have observed a transient Git failure (reported as a non-Git root).
+        let verified = false;
+        for (const candidate of new Set([root, ...trees.map((w) => w.rootPath)])) {
+          if (!fs.existsSync(candidate)) continue;
+          let actual: string | null = null;
+          try {
+            const retry = discoverProject(candidate);
+            actual = retry.commonDir;
+            const gitCommonDir = project.commonDir ? gitCommonDirectory(candidate) : null;
+            if (
+              sameDirectory(project.commonDir, actual) &&
+              sameDirectory(project.commonDir, gitCommonDir)
+            ) {
+              discovery = retry;
+              verified = true;
+              break;
+            }
+            rejectedRoots.set(
+              candidate,
+              `${identityError(candidate, actual)}; git commonDir=${JSON.stringify(gitCommonDir)}`
+            );
+          } catch (error) {
+            rejectedRoots.set(
+              candidate,
+              `${identityError(candidate, actual)}; verification failed: ${(error as Error).message}`
+            );
+          }
+        }
+        if (!verified) {
+          this.discoveryAttempts.set(project.id, { fingerprint, at: Date.now() });
+          const lastError =
+            [...rejectedRoots.values()].join('; ') || identityError(root, discovery.commonDir);
+          for (const view of activeViews)
+            this.update(view.repoId, { state: 'unavailable', lastError });
+          continue;
+        }
       }
+      // Keep the stored identity key when an equivalent spelling was discovered.
+      // Git's worktree list can still name a replaced checkout. Do not adopt that foreign root.
+      const rejectedPaths = new Set([...rejectedRoots.keys()].map(canonical));
+      discovery = {
+        ...discovery,
+        commonDir: project.commonDir,
+        worktrees: [
+          ...discovery.worktrees
+            .filter((tree) => !rejectedPaths.has(canonical(tree.rootPath)))
+            .map((tree) => ({ ...tree, commonDir: project.commonDir })),
+          ...activeViews
+            .filter((view) => rejectedRoots.has(view.rootPath))
+            .map((view) => ({
+              rootPath: view.rootPath,
+              gitDir: view.gitDir,
+              commonDir: project.commonDir,
+              branch: view.branch,
+              head: view.head,
+              locked: trees.find((tree) => tree.id === view.worktreeId)?.locked ?? false,
+              prunable: false,
+              available: false
+            }))
+        ]
+      };
       const current = this.upsertDiscovery(discovery);
+      for (const view of current) {
+        const lastError = rejectedRoots.get(view.rootPath);
+        if (lastError) this.update(view.repoId, { state: 'unavailable', lastError });
+      }
       const currentWorktreeIds = new Set(current.map((w) => w.worktreeId));
       for (const tree of trees)
         if (!currentWorktreeIds.has(tree.id) && !tree.locked && project.commonDir) {
@@ -906,6 +984,12 @@ export class WorkspaceRegistry {
           this.touch();
         }
       for (const view of current) if (view.state === 'registering') this.finishRegistration(view);
+      if (this.views(project.id).some((view) => view.active && view.state === 'unavailable'))
+        this.discoveryAttempts.set(project.id, {
+          fingerprint: this.discoveryFingerprint(project, this.worktrees(project.id)),
+          at: Date.now()
+        });
+      else this.discoveryAttempts.delete(project.id);
       this.discoveryFingerprints.set(
         project.id,
         this.discoveryFingerprint(project, this.worktrees(project.id))
@@ -926,6 +1010,7 @@ export class WorkspaceRegistry {
     };
     for (const tree of trees) {
       inspect(tree.rootPath);
+      inspect(path.join(tree.rootPath, '.git'), true);
       if (tree.gitDir) inspect(path.join(tree.gitDir, 'HEAD'), true);
     }
     if (project.commonDir) {

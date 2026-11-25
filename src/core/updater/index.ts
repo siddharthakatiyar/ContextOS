@@ -186,6 +186,6 @@ export function formatUpdateNotice(status: UpdateStatus): string {
   const compatibility = status.compatible ? ' (same major version)' : ' (major version change)';
   return (
     `[ContextOS] Update available: ${status.currentVersion} → ${status.latestVersion}${compatibility}\n` +
-    `Run \`${status.upgradeCommand}\` to upgrade. Release notes: ${status.releasesUrl}\n`
+    `Run \`contextos update\` (or \`${status.upgradeCommand}\`) to upgrade. Release notes: ${status.releasesUrl}\n`
   );
 }

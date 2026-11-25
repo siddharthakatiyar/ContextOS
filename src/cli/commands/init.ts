@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { nestedProjectWarning } from '../../core/workspace/project-boundary.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { discoverProject } from '../../core/workspace/discovery.js';
@@ -7,8 +8,9 @@ import { WorkspaceRuntime } from '../../core/workspace/runtime.js';
 import { refreshWorkspaceDaemon } from '../../core/workspace/daemon.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
 import { mergeContextosMcpConfig, validateJsonConfigs } from '../utils/mcp-config.js';
-import { installAgentInstructions } from '../utils/agent-instructions.js';
+import { AGENT_BLOCK_START, installAgentInstructions } from '../utils/agent-instructions.js';
 import { loadConfig } from '../../config/index.js';
+import { projectGitFiles } from '../utils/project-git-files.js';
 import {
   installProjectAgentConfigs,
   projectAgentJsonPaths
@@ -25,7 +27,7 @@ function projectSetupPlan(cwd: string, options: { integrations?: boolean }) {
   const integrations =
     options.integrations !== false &&
     loadConfig({ cwd, forceReload: true }).cursor.autoGenerateConfig !== false;
-  if (integrations) validateJsonConfigs(configs);
+  if (integrations) validateJsonConfigs(configs.filter(projectGitFiles(cwd).canWrite));
   return { configs, integrations };
 }
 
@@ -35,11 +37,24 @@ export function refreshProjectSetup(
   options: { group?: string; integrations?: boolean } = {},
   plan = projectSetupPlan(cwd, options)
 ): string[] {
-  installAgentInstructions(cwd);
-  if (!plan.integrations) return ['Automatic project MCP configuration is disabled.'];
+  if (!plan.integrations)
+    return ['Automatic project integrations are disabled; no checkout files were changed.'];
+  const git = projectGitFiles(cwd);
+  const instructionFiles = ['AGENTS.md', 'CLAUDE.md'].map((name) => path.join(cwd, name));
+  const excludableInstructions = instructionFiles.filter(
+    (file) => !fs.existsSync(file) || fs.readFileSync(file, 'utf8').includes(AGENT_BLOCK_START)
+  );
+  installAgentInstructions(cwd, git.canWrite);
   const generated = generateCursorConfig({ projectRoot: cwd, workspaceName: options.group });
-  for (const config of plan.configs) mergeContextosMcpConfig(config, generated);
-  return installProjectAgentConfigs(cwd, generated).warnings;
+  const written = excludableInstructions.filter(git.canWrite);
+  for (const config of plan.configs) {
+    if (!git.canWrite(config)) continue;
+    mergeContextosMcpConfig(config, generated);
+    written.push(config);
+  }
+  const agents = installProjectAgentConfigs(cwd, generated, git.canWrite);
+  git.exclude([...written, ...agents.configured]);
+  return agents.warnings;
 }
 
 export async function initializeProject(
@@ -53,8 +68,6 @@ export async function initializeProject(
     json?: boolean;
   } = {}
 ): Promise<void> {
-  const { upgradeExistingProjects } = await import('../utils/installation-setup.js');
-  await upgradeExistingProjects({ cwd: input });
   const registry = new WorkspaceRegistry();
   const runtime = new WorkspaceRuntime(registry);
   try {
@@ -66,20 +79,32 @@ export async function initializeProject(
           (tree) => canonical === tree.rootPath || canonical.startsWith(tree.rootPath + path.sep)
         )
         .sort((a, b) => b.rootPath.length - a.rootPath.length)[0]?.rootPath ?? discovered.rootPath;
+    const boundaryWarning = nestedProjectWarning(cwd, registry);
+    if (boundaryWarning && !options.json) console.warn(boundaryWarning);
     const plan = projectSetupPlan(cwd, options);
     const source = registry.register(cwd, {
       name: options.name,
       workspace: options.group ?? options.workspace ?? 'default'
     });
     const views = registry.listAll().filter((view) => view.projectId === source.projectId);
-    for (const view of views)
-      if (fs.existsSync(view.rootPath)) installAgentInstructions(view.rootPath);
     const integrationWarnings = refreshProjectSetup(
       cwd,
       { ...options, group: options.group ?? options.workspace },
       plan
     );
-    if (!options.json) for (const warning of integrationWarnings) console.warn(warning);
+    for (const root of new Set(views.map((view) => view.rootPath))) {
+      if (root === cwd || !fs.existsSync(root)) continue;
+      integrationWarnings.push(
+        ...refreshProjectSetup(root, {
+          ...options,
+          group: options.group ?? options.workspace
+        })
+      );
+    }
+    if (boundaryWarning) integrationWarnings.push(boundaryWarning);
+    if (!options.json)
+      for (const warning of integrationWarnings.filter((warning) => warning !== boundaryWarning))
+        console.warn(warning);
     if (!options.json)
       console.log(
         `Registered ${source.name} in ${options.group ?? options.workspace ?? 'default'} (${views.length} checkout${views.length === 1 ? '' : 's'}).`
@@ -123,10 +148,17 @@ export const initCommand = new Command('init')
   .option('--name <name>', 'Unique project name')
   .option('--group <name>', 'Add this project to a group', 'default')
   .option('--no-index', 'Register without indexing')
+  .option('--no-integrations', 'Register without writing project instructions or client config')
   .option('--json', 'Output a structured result')
   .action(
     async (
       input: string,
-      options: { name?: string; group: string; index: boolean; json?: boolean }
+      options: {
+        name?: string;
+        group: string;
+        index: boolean;
+        integrations: boolean;
+        json?: boolean;
+      }
     ) => initializeProject(path.resolve(input), options)
   );

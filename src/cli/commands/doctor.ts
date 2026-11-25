@@ -1,4 +1,5 @@
 import { Command, Option } from 'commander';
+import { formatIndexWarning } from '../../core/daemon/index-status.js';
 import Database from 'better-sqlite3';
 import chalk from 'chalk';
 import crypto from 'node:crypto';
@@ -375,7 +376,7 @@ function inspectMcpConfigs(root: string, cliVersion: string): DoctorCheck[] {
         checks.push({
           id: `mcp-version:${config.relativePath}${serverSuffix}`,
           status: 'fail',
-          summary: `The configured ContextOS script does not exist at ${configuredScript.path}`,
+          summary: `The configured ContextOS script does not exist at ${configuredScript.path} (config: ${configPath}, server: ${entry.serverName ?? 'contextos'}). Update this server entry to the installed ContextOS script path, or run contextos init in this project to regenerate its MCP configuration.`,
           details: { path: configPath, scriptPath: configuredScript.path }
         });
         continue;
@@ -567,8 +568,22 @@ function inspectIndexStatus(
     return {
       id: 'index-status',
       status: 'fail',
-      summary: `The last index run reported an error: ${status.error.slice(0, 300)}`,
-      details: { path: statusPath }
+      summary: [
+        `The last index run reported an error: ${status.error.slice(0, 300)}`,
+        formatIndexWarning(status)
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      details: { path: statusPath, ...status }
+    };
+  }
+
+  if (status.fullIndexCompleted === true && status.partial === true) {
+    return {
+      id: 'index-status',
+      status: 'warn',
+      summary: formatIndexWarning(status) ?? 'The index has partial coverage',
+      details: { path: statusPath, ...status }
     };
   }
 

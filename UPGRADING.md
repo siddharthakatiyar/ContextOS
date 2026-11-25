@@ -1,5 +1,9 @@
 # Upgrading ContextOS
 
+## 1.2.2 patch
+
+No action is required. Adding a project to a group no longer rewrites client configuration or agent-instruction files in other registered projects, and generated files are hidden through `.git/info/exclude`. To register a project without any integration files, use `contextos init --no-integrations`. Views with a few unindexable files now stay ready with a warning; retry them with `contextos reindex --failed`. `contextos daemon start --detach` runs the daemon in the background. `--group` is now the primary selector and `--workspace` remains an alias.
+
 ## 1.2.1 patch
 
 Global instruction setup is now explicit. A default global npm installation leaves user-wide coding-agent instruction files unchanged, including managed blocks from an earlier installation. To preview and apply changes yourself:

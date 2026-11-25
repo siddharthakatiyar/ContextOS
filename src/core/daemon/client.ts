@@ -36,7 +36,13 @@ async function spawnDaemon(projectDir: string, workspace?: string): Promise<void
   if (!fs.existsSync(binPath)) binPath = path.resolve(process.cwd(), 'bin/contextos.ts');
   const isTs = binPath.endsWith('.ts');
   const cmd = isTs ? 'tsx' : process.execPath;
-  const args = [binPath, 'daemon', 'start', ...(workspace ? ['--workspace', workspace] : [])];
+  const args = [
+    binPath,
+    'daemon',
+    'start',
+    '--keep-existing',
+    ...(workspace ? ['--workspace', workspace] : [])
+  ];
   await waitForUpgradeToFinish();
   await new Promise<void>((resolve, reject) => {
     const child = spawn(cmd, args, {
