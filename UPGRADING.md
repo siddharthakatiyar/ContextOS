@@ -1,5 +1,9 @@
 # Upgrading ContextOS
 
+## 1.2.3 patch
+
+No action is required. `contextos serve` now answers the MCP handshake and tool listing immediately, so coding agents that time out after 30 seconds no longer fail while the daemon starts. The daemon opens repositories on demand and stays up for 30 minutes of inactivity by default (`CONTEXTOS_DAEMON_IDLE_MS` still overrides it). The first tool call after an idle period can still take a moment while the daemon starts.
+
 ## 1.2.2 patch
 
 No action is required. Adding a project to a group no longer rewrites client configuration or agent-instruction files in other registered projects, and generated files are hidden through `.git/info/exclude`. To register a project without any integration files, use `contextos init --no-integrations`. Views with a few unindexable files now stay ready with a warning; retry them with `contextos reindex --failed`. `contextos daemon start --detach` runs the daemon in the background. `--group` is now the primary selector and `--workspace` remains an alias.

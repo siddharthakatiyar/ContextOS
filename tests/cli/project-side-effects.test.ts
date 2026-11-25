@@ -54,6 +54,10 @@ afterEach(() => {
   fs.rmSync(temporary, { recursive: true, force: true });
 });
 
+const packageVersion = (
+  JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')) as { version: string }
+).version;
+
 describe('project integration side effects', () => {
   it.each(['project add disabled', 'group add', 'init disabled', 'init CLI disabled'])(
     '%s only registers, leaving every checkout untouched',
@@ -219,7 +223,7 @@ describe('project integration side effects', () => {
       else await repoCommand.parseAsync(['node', 'contextos', 'add', root, '--no-index']);
       for (const checkout of [root, linked]) {
         expect(fs.readFileSync(path.join(checkout, 'AGENTS.md'), 'utf8')).toContain(
-          'managed instructions v1.2.2'
+          `managed instructions v${packageVersion}`
         );
         expect(git(checkout, 'status', '--porcelain', '--untracked-files=all')).toBe('');
         const exclude = path.resolve(

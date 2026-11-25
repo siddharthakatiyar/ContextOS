@@ -1276,7 +1276,7 @@ async function upgrade(options: {
 }): Promise<void> {
   if (!options.dryRun && process.platform !== 'linux') {
     if (options.version && !parseStableVersion(options.version))
-      throw new Error('Invalid stable version; use an exact version such as 1.2.2.');
+      throw new Error('Invalid stable version; use an exact version such as 1.2.3.');
     throw new Error(
       `Safe self-upgrade is currently supported on Linux only.\n\nRun this command manually:\n  npm install -g ${PACKAGE_NAME}@${options.version?.trim() ?? 'latest'}\n`
     );
