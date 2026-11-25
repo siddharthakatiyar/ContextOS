@@ -128,8 +128,13 @@ describe('CLI polish', () => {
       if (process.platform !== 'win32') expect(fs.statSync(log!).mode & 0o777).toBe(0o600);
       expect(await run('daemon', 'status')).toContain(output.split('\n')[0]);
       expect(await run('daemon', 'status', '--workspace', group)).toContain(`group ${group})`);
-      await expect(run('daemon', 'start', flag, '--group', group)).rejects.toThrow('Log:');
-      expect(await run('daemon', 'status')).toContain(output.split('\n')[0]);
+      const replaced = await run('daemon', 'start', flag, '--group', group);
+      expect(replaced).toContain('Replaced previous ContextOS daemon');
+      expect(replaced).toMatch(/RUNNING \(PID \d+, version /);
+      // Automatic starts must leave a healthy daemon alone.
+      const kept = await run('daemon', 'start', '--keep-existing', '--group', group);
+      expect(kept).not.toContain('Replaced');
+      expect(await run('daemon', 'status')).toContain(`group ${group})`);
       await run('daemon', 'stop');
       expect(await run('daemon', 'status')).toContain('NOT RUNNING');
     },

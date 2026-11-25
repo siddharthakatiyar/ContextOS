@@ -239,12 +239,17 @@ daemonCommand
   .option('--workspace <name>', 'Alias for --group')
   .option('--detach', 'Run in the background and write output to the daemon log')
   .option('--background', 'Alias for --detach')
+  .option(
+    '--keep-existing',
+    'Leave an already running daemon in place instead of replacing it (used for automatic starts)'
+  )
   .action(
     async (options: {
       workspace?: string;
       group?: string;
       detach?: boolean;
       background?: boolean;
+      keepExisting?: boolean;
     }) => {
       if (
         isUpgradeInProgress() &&
@@ -261,7 +266,16 @@ daemonCommand
       } finally {
         registry.close();
       }
-      await replaceExistingDaemon(group);
+      if (options.keepExisting) {
+        try {
+          await readDaemonStatus(group);
+          return;
+        } catch {
+          // No live daemon answered; fall through and start one.
+        }
+      } else {
+        await replaceExistingDaemon(group);
+      }
       if (options.detach || options.background) return startDetached(group);
       const daemon = new WorkspaceDaemon(group);
       await daemon.start();
