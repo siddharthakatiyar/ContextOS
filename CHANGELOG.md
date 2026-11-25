@@ -16,6 +16,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 - Add `daemon start --detach` (`--background`) with readiness confirmation, PID and a private runtime log; show the running daemon version and group in `daemon status`.
 - Add `init --no-integrations` and `reindex --failed` for recovering partially indexed views without reprocessing successful files.
+- Add `contextos update` as an alias of `contextos upgrade`, and mention it in the startup update notice.
+- Tell agents explicitly to call ContextOS before reading or searching for questions about services, infrastructure and relationships, and to save verified discoveries (`ctx_remember`, `ctx_link`) as they work.
 
 ### Fixed
 
