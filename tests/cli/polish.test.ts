@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile, execFileSync } from 'node:child_process';
@@ -179,9 +181,24 @@ describe('CLI polish', () => {
     await run('project', 'add', project, '--no-index');
     await run('group', 'create', 'payments');
     env.CONTEXTOS_REPO_ROOT = project;
-    await expect(run('serve', '--group', 'payments')).rejects.toThrow(
-      `contextos group add "payments" ${JSON.stringify(project)} --name "backend"`
-    );
+    const client = new Client({ name: 'membership-test', version: '1' });
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [cli, 'serve', '--group', 'payments'],
+      cwd: root,
+      env: env as Record<string, string>,
+      stderr: 'pipe'
+    });
+    try {
+      await client.connect(transport);
+      const result = await client.callTool({ name: 'ctx_scope', arguments: {} });
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain('contextos group add');
+      expect(JSON.stringify(result.content)).toContain('payments');
+      expect(JSON.stringify(result.content)).toContain('backend');
+    } finally {
+      await client.close();
+    }
   });
 
   it('silences only the unsupported-platform patch notice unless verbose logging is enabled', () => {

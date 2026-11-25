@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -24,6 +25,16 @@ function git(root: string, args: string[]): string {
     timeout: 15000,
     env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }
   }).trimEnd();
+}
+const execute = promisify(execFile);
+async function gitAsync(root: string, args: string[]): Promise<string> {
+  const { stdout } = await execute('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    timeout: 15000,
+    maxBuffer: 8 * 1024 * 1024,
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }
+  });
+  return stdout.trimEnd();
 }
 function canonical(input: string): string {
   try {
@@ -51,14 +62,18 @@ export function gitCommonDirectory(root: string): string {
   return canonical(path.resolve(directory, git(directory, ['rev-parse', '--git-common-dir'])));
 }
 
-export function discoverProject(input: string): DiscoveredProject {
+function* discover(
+  input: string
+): Generator<{ root: string; args: string[] }, DiscoveredProject, string> {
   const directory = fs.realpathSync(input);
   if (!fs.statSync(directory).isDirectory()) throw new Error(`Not a directory: ${input}`);
   let root: string;
   let commonDir: string;
   try {
-    root = canonical(git(directory, ['rev-parse', '--show-toplevel']));
-    commonDir = canonical(git(root, ['rev-parse', '--path-format=absolute', '--git-common-dir']));
+    root = canonical(yield { root: directory, args: ['rev-parse', '--show-toplevel'] });
+    commonDir = canonical(
+      yield { root, args: ['rev-parse', '--path-format=absolute', '--git-common-dir'] }
+    );
   } catch {
     return {
       rootPath: directory,
@@ -78,7 +93,7 @@ export function discoverProject(input: string): DiscoveredProject {
     };
   }
   // NUL-delimited output handles spaces, quotes, tabs and newlines in paths.
-  const records = git(root, ['worktree', 'list', '--porcelain', '-z'])
+  const records = (yield { root, args: ['worktree', 'list', '--porcelain', '-z'] })
     .split('\0\0')
     .filter(Boolean);
   const worktrees: DiscoveredWorktree[] = [];
@@ -91,7 +106,7 @@ export function discoverProject(input: string): DiscoveredProject {
     let gitDir: string | null = null;
     if (available) {
       try {
-        gitDir = canonical(git(checkout, ['rev-parse', '--absolute-git-dir']));
+        gitDir = canonical(yield { root: checkout, args: ['rev-parse', '--absolute-git-dir'] });
       } catch {
         /* unavailable checkout */
       }
@@ -118,13 +133,13 @@ export function discoverProject(input: string): DiscoveredProject {
   if (!worktrees.some((w) => w.rootPath === root)) {
     let branch: string | null = null;
     try {
-      branch = git(root, ['symbolic-ref', '--short', 'HEAD']);
+      branch = yield { root, args: ['symbolic-ref', '--short', 'HEAD'] };
     } catch {
       /* detached */
     }
     worktrees.push({
       rootPath: root,
-      gitDir: canonical(git(root, ['rev-parse', '--absolute-git-dir'])),
+      gitDir: canonical(yield { root, args: ['rev-parse', '--absolute-git-dir'] }),
       commonDir,
       branch,
       head: null,
@@ -140,6 +155,50 @@ export function discoverProject(input: string): DiscoveredProject {
 export function localBranches(root: string): Set<string> {
   return new Set(
     git(root, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'])
+      .split('\n')
+      .filter(Boolean)
+  );
+}
+
+export function discoverProject(input: string): DiscoveredProject {
+  const job = discover(input);
+  let step = job.next();
+  while (!step.done) {
+    let value: string;
+    try {
+      value = git(step.value.root, step.value.args);
+    } catch (error) {
+      step = job.throw(error);
+      continue;
+    }
+    step = job.next(value);
+  }
+  return step.value;
+}
+export async function discoverProjectAsync(input: string): Promise<DiscoveredProject> {
+  const job = discover(input);
+  let step = job.next();
+  while (!step.done) {
+    let value: string;
+    try {
+      value = await gitAsync(step.value.root, step.value.args);
+    } catch (error) {
+      step = job.throw(error);
+      continue;
+    }
+    step = job.next(value);
+  }
+  return step.value;
+}
+export async function gitCommonDirectoryAsync(root: string): Promise<string> {
+  const directory = canonical(root);
+  return canonical(
+    path.resolve(directory, await gitAsync(directory, ['rev-parse', '--git-common-dir']))
+  );
+}
+export async function localBranchesAsync(root: string): Promise<Set<string>> {
+  return new Set(
+    (await gitAsync(root, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/']))
       .split('\n')
       .filter(Boolean)
   );

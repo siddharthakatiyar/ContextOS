@@ -12,9 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { daemonCommand } from '../../src/cli/commands/daemon.js';
 import { WorkspaceDaemon } from '../../src/core/workspace/daemon.js';
 import { WorkspaceRegistry } from '../../src/core/workspace/registry.js';
-import { verifiedDaemonProcess } from '../../src/cli/utils/installation-setup.js';
+import { verifiedDaemonProcess } from '../../src/cli/utils/daemon-process.js';
 
-vi.mock('../../src/cli/utils/installation-setup.js', () => ({ verifiedDaemonProcess: vi.fn() }));
+vi.mock('../../src/cli/utils/daemon-process.js', () => ({ verifiedDaemonProcess: vi.fn() }));
 
 let temporary: string;
 let replies: Array<object | null>;

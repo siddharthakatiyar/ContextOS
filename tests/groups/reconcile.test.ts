@@ -322,3 +322,76 @@ describe('repository identity reconciliation', () => {
     }
   });
 });
+
+describe('cold discovery caching and asynchronous refresh', () => {
+  it('reuses persisted fingerprints after reopening, but retries unavailable views and checkout changes', async () => {
+    const root = repository('persisted');
+    const source = registry.register(root);
+    await registry.reconcileAsync();
+    registry.close();
+    registry = new WorkspaceRegistry(path.join(temp, 'state'));
+    const discover = vi.spyOn(discovery, 'discoverProjectAsync');
+    await registry.reconcileAsync();
+    expect(discover).not.toHaveBeenCalled();
+    registry.update(source.repoId, { state: 'unavailable', lastError: 'transient' });
+    await registry.reconcileAsync();
+    expect(discover).toHaveBeenCalledTimes(1);
+    expect(registry.resolve(source.repoId).state).toBe('registered');
+    git(root, 'checkout', '-b', 'changed');
+    await registry.reconcileAsync();
+    expect(discover).toHaveBeenCalledTimes(2);
+    expect(registry.active(root)?.branch).toBe('changed');
+  });
+
+  it('bounds async Git discovery to four projects and keeps timers responsive', async () => {
+    for (let i = 0; i < 9; i++) registry.register(repository(`async-${i}`));
+    let running = 0;
+    let maximum = 0;
+    let ticks = 0;
+    const original = discovery.discoverProjectAsync;
+    vi.spyOn(discovery, 'discoverProjectAsync').mockImplementation(async (root) => {
+      running++;
+      maximum = Math.max(maximum, running);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        return await original(root);
+      } finally {
+        running--;
+      }
+    });
+    const synchronous = vi.spyOn(discovery, 'discoverProject');
+    const branches = vi.spyOn(discovery, 'localBranches');
+    const timer = setInterval(() => ticks++, 5);
+    try {
+      await registry.reconcileAsync(undefined, { force: true });
+      await registry.cleanupAsync();
+    } finally {
+      clearInterval(timer);
+    }
+    expect(maximum).toBe(4);
+    expect(ticks).toBeGreaterThan(3);
+    expect(synchronous).not.toHaveBeenCalled();
+    expect(branches).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('preserves unavailable-view backoff on the async path and recovers after expiry', async () => {
+    const root = repository('async-retry');
+    const source = registry.register(root);
+    const found = discovery.discoverProject(root);
+    const discover = vi
+      .spyOn(discovery, 'discoverProjectAsync')
+      .mockResolvedValue({ ...found, commonDir: null });
+    vi.spyOn(discovery, 'gitCommonDirectoryAsync').mockResolvedValue('wrong');
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000);
+    await registry.reconcileAsync();
+    const attempts = discover.mock.calls.length;
+    expect(registry.resolve(source.repoId).state).toBe('unavailable');
+    await registry.reconcileAsync();
+    expect(discover).toHaveBeenCalledTimes(attempts);
+    now.mockReturnValue(130_001);
+    discover.mockResolvedValue(found);
+    await registry.reconcileAsync();
+    expect(discover).toHaveBeenCalledTimes(attempts + 1);
+    expect(registry.resolve(source.repoId).lastError).toBeNull();
+  });
+});

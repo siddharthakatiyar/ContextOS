@@ -2,10 +2,15 @@ import Database from 'better-sqlite3';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import net from 'node:net';
+import { verifiedDaemonProcess } from '../../cli/utils/daemon-process.js';
 import { DB, getContextOSHome } from '../storage/database.js';
 import { bindRepository } from './identity.js';
 import {
   discoverProject,
+  discoverProjectAsync,
+  gitCommonDirectoryAsync,
+  localBranchesAsync,
   gitCommonDirectory,
   sameDirectory,
   localBranches,
@@ -137,6 +142,7 @@ function canonical(input: string): string {
   }
 }
 function alive(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -144,11 +150,66 @@ function alive(pid: number): boolean {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH';
   }
 }
+type GitOperation = { kind: 'discover' | 'common' | 'branches'; root: string };
+type GitResult = DiscoveredProject | string | Set<string>;
+function gitOperation(operation: GitOperation): GitResult {
+  if (operation.kind === 'discover') return discoverProject(operation.root);
+  if (operation.kind === 'common') return gitCommonDirectory(operation.root);
+  return localBranches(operation.root);
+}
+async function gitOperationAsync(operation: GitOperation): Promise<GitResult> {
+  if (operation.kind === 'discover') return discoverProjectAsync(operation.root);
+  if (operation.kind === 'common') return gitCommonDirectoryAsync(operation.root);
+  return localBranchesAsync(operation.root);
+}
+function runGit<T>(job: Generator<GitOperation, T, GitResult>): T {
+  let step = job.next();
+  while (!step.done) {
+    let value: GitResult;
+    try {
+      value = gitOperation(step.value);
+    } catch (error) {
+      step = job.throw(error);
+      continue;
+    }
+    step = job.next(value);
+  }
+  return step.value;
+}
+async function runGitAsync<T>(job: Generator<GitOperation, T, GitResult>): Promise<T> {
+  let step = job.next();
+  while (!step.done) {
+    let value: GitResult;
+    try {
+      value = await gitOperationAsync(step.value);
+    } catch (error) {
+      step = job.throw(error);
+      continue;
+    }
+    step = job.next(value);
+  }
+  return step.value;
+}
 export class WorkspaceRegistry {
   private db: Database.Database;
+  deferReconciliation = false;
+  private ownedWorkspaceTokens = new Set<string>();
   readonly home: string;
   private discoveryAttempts = new Map<string, { fingerprint: string; at: number }>();
-  private discoveryFingerprints = new Map<string, string>();
+  private savedDiscovery(id: string): string | undefined {
+    return (
+      this.db.prepare('SELECT value FROM registry_metadata WHERE key=?').get(`discovery:${id}`) as
+        { value: string } | undefined
+    )?.value;
+  }
+  private saveDiscovery(id: string, fingerprint?: string): void {
+    if (fingerprint === undefined)
+      this.db.prepare('DELETE FROM registry_metadata WHERE key=?').run(`discovery:${id}`);
+    else
+      this.db
+        .prepare('INSERT OR REPLACE INTO registry_metadata VALUES (?,?)')
+        .run(`discovery:${id}`, fingerprint);
+  }
   constructor(home = getContextOSHome()) {
     this.home = home;
     const file = preparePrivateStateFile(path.join(home, 'registry.db'));
@@ -778,7 +839,7 @@ export class WorkspaceRegistry {
     defaultWorkspace?: string,
     activeRepoId?: string
   ): RetrievalScope {
-    this.reconcile();
+    if (!this.deferReconciliation) this.reconcile();
     const repos = selectors.project ?? selectors.repo;
     if (repos?.length && selectors.allRepos)
       throw new Error('--repo/--project and --all-repos cannot be combined.');
@@ -866,6 +927,44 @@ export class WorkspaceRegistry {
     };
   }
   reconcile(selector?: string, options: { force?: boolean } = {}): RepositorySource[] {
+    return runGit(this.reconcileProjects(selector, options));
+  }
+  async reconcileAsync(
+    selector?: string,
+    options: { force?: boolean } = {}
+  ): Promise<RepositorySource[]> {
+    while (this.reconciliation) await this.reconciliation;
+    const job = this.reconcileAsyncNow(selector, options);
+    this.reconciliation = job;
+    try {
+      return await job;
+    } finally {
+      this.reconciliation = undefined;
+    }
+  }
+  private reconciliation?: Promise<RepositorySource[]>;
+  private async reconcileAsyncNow(
+    selector?: string,
+    options: { force?: boolean } = {}
+  ): Promise<RepositorySource[]> {
+    const projects = selector ? [this.project(selector)] : this.projects();
+    let next = 0;
+    // At most four Git processes, and a yield between projects even on cache hits.
+    await Promise.all(
+      Array.from({ length: Math.min(4, projects.length) }, async () => {
+        while (next < projects.length) {
+          const project = projects[next++];
+          await runGitAsync(this.reconcileProjects(project.id, options));
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      })
+    );
+    return this.listAll();
+  }
+  private *reconcileProjects(
+    selector?: string,
+    options: { force?: boolean } = {}
+  ): Generator<GitOperation, RepositorySource[], GitResult> {
     const projects = selector ? [this.project(selector)] : this.projects();
     for (const project of projects) {
       const trees = this.worktrees(project.id);
@@ -875,7 +974,7 @@ export class WorkspaceRegistry {
       const attempt = this.discoveryAttempts.get(project.id);
       if (
         !options.force &&
-        ((this.discoveryFingerprints.get(project.id) === fingerprint &&
+        ((this.savedDiscovery(project.id) === fingerprint &&
           !activeViews.some((v) => v.state === 'unavailable')) ||
           (attempt?.fingerprint === fingerprint &&
             activeViews.some((v) => v.state === 'unavailable') &&
@@ -897,7 +996,7 @@ export class WorkspaceRegistry {
       }
       let discovery: DiscoveredProject;
       try {
-        discovery = discoverProject(root);
+        discovery = (yield { kind: 'discover', root }) as DiscoveredProject;
       } catch {
         this.discoveryAttempts.set(project.id, { fingerprint, at: Date.now() });
         continue;
@@ -907,16 +1006,18 @@ export class WorkspaceRegistry {
       const identityError = (candidate: string, actual: string | null): string =>
         `Registered Git repository identity changed: expected commonDir=${JSON.stringify(project.commonDir)}, actual commonDir=${JSON.stringify(actual)}, root=${JSON.stringify(candidate)}`;
       if (!sameDirectory(project.commonDir, discovery.commonDir)) {
-        this.discoveryFingerprints.delete(project.id);
+        this.saveDiscovery(project.id);
         // Discovery may have observed a transient Git failure (reported as a non-Git root).
         let verified = false;
         for (const candidate of new Set([root, ...trees.map((w) => w.rootPath)])) {
           if (!fs.existsSync(candidate)) continue;
           let actual: string | null = null;
           try {
-            const retry = discoverProject(candidate);
+            const retry = (yield { kind: 'discover', root: candidate }) as DiscoveredProject;
             actual = retry.commonDir;
-            const gitCommonDir = project.commonDir ? gitCommonDirectory(candidate) : null;
+            const gitCommonDir = project.commonDir
+              ? ((yield { kind: 'common', root: candidate }) as string)
+              : null;
             if (
               sameDirectory(project.commonDir, actual) &&
               sameDirectory(project.commonDir, gitCommonDir)
@@ -990,7 +1091,7 @@ export class WorkspaceRegistry {
           at: Date.now()
         });
       else this.discoveryAttempts.delete(project.id);
-      this.discoveryFingerprints.set(
+      this.saveDiscovery(
         project.id,
         this.discoveryFingerprint(project, this.worktrees(project.id))
       );
@@ -1002,7 +1103,13 @@ export class WorkspaceRegistry {
     const inspect = (file: string, contents = false): void => {
       try {
         const stat = fs.statSync(file);
-        pieces.push(file, String(stat.mtimeMs), String(stat.size));
+        pieces.push(
+          file,
+          String(stat.mtimeMs),
+          String(stat.size),
+          String(stat.dev),
+          String(stat.ino)
+        );
         if (contents && stat.isFile()) pieces.push(fs.readFileSync(file, 'utf8'));
       } catch {
         pieces.push(file, 'missing');
@@ -1048,6 +1155,15 @@ export class WorkspaceRegistry {
   }
   cleanup(options: { dryRun?: boolean } = {}): CleanupAction[] {
     this.reconcile();
+    return runGit(this.cleanupProjects(options));
+  }
+  async cleanupAsync(options: { dryRun?: boolean } = {}): Promise<CleanupAction[]> {
+    await this.reconcileAsync();
+    return runGitAsync(this.cleanupProjects(options));
+  }
+  private *cleanupProjects(options: {
+    dryRun?: boolean;
+  }): Generator<GitOperation, CleanupAction[], GitResult> {
     const actions: CleanupAction[] = [];
     for (const project of this.projects()) {
       for (const tree of this.worktrees(project.id).filter((w) => w.removed && !w.locked))
@@ -1060,12 +1176,12 @@ export class WorkspaceRegistry {
             .map((v) => v.repoId),
           reason: 'Git no longer lists this worktree'
         });
-      if (project.commonDir) {
+      if (project.commonDir && this.views(project.id).some((v) => !v.active && v.branch)) {
         const root = this.worktrees(project.id).find((w) => w.available && !w.removed)?.rootPath;
         if (!root) continue;
         let branches: Set<string>;
         try {
-          branches = localBranches(root);
+          branches = (yield { kind: 'branches', root }) as Set<string>;
         } catch {
           continue;
         }
@@ -1209,7 +1325,7 @@ export class WorkspaceRegistry {
         this.touch();
       })
       .immediate();
-    this.discoveryFingerprints.delete(action.projectId);
+    this.saveDiscovery(action.projectId);
   }
   private deleteGraphViews(ids: string[], projectId?: string): void {
     // Graph implementation may add tables independently. Delete only recognized view ownership columns.
@@ -1275,9 +1391,48 @@ export class WorkspaceRegistry {
       { owner: string } | undefined;
     return row ? JSON.parse(row.owner) : undefined;
   }
+  async takeWorkspaceLease(candidate: {
+    pid: number;
+    token: string;
+    endpoint: string;
+    protocol: number;
+  }): Promise<typeof candidate> {
+    const current = this.lease('workspace:shared');
+    let verifiedToken: string | undefined;
+    if (current && alive(current.pid) && current.endpoint) {
+      const answered = await new Promise<boolean>((resolve) => {
+        const socket = net.createConnection(current.endpoint);
+        let buffer = '';
+        const finish = (value: boolean) => {
+          socket.destroy();
+          resolve(value);
+        };
+        socket.setTimeout(500, () => finish(false));
+        socket.once('error', () => finish(false));
+        socket.once('close', () => resolve(false));
+        socket.once('connect', () => socket.write(JSON.stringify({ action: 'status' }) + '\n'));
+        socket.on('data', (data) => {
+          buffer += data.toString();
+          if (buffer.length > 8192) return finish(false);
+          if (!buffer.includes('\n')) return;
+          try {
+            const status = JSON.parse(buffer.split('\n')[0]);
+            finish(
+              status.ok === true && status.pid === current.pid && typeof status.version === 'string'
+            );
+          } catch {
+            finish(false);
+          }
+        });
+      });
+      if (answered) verifiedToken = current.token;
+    }
+    return this.takeLease('workspace:shared', candidate, verifiedToken);
+  }
   takeLease(
     id: string,
-    candidate: { pid: number; token: string; endpoint: string; protocol: number }
+    candidate: { pid: number; token: string; endpoint: string; protocol: number },
+    verifiedToken?: string
   ): typeof candidate {
     return this.db
       .transaction(() => {
@@ -1291,17 +1446,27 @@ export class WorkspaceRegistry {
             );
         }
         const current = this.lease(id);
-        if (current && alive(current.pid)) return current;
+        if (
+          current &&
+          alive(current.pid) &&
+          (!id.startsWith('workspace:') ||
+            current.token === verifiedToken ||
+            this.ownedWorkspaceTokens.has(current.token) ||
+            verifiedDaemonProcess(current.pid))
+        )
+          return current;
         this.db
           .prepare(
             'INSERT INTO indexing_leases VALUES (?,?) ON CONFLICT(entity_id) DO UPDATE SET owner=excluded.owner'
           )
           .run(id, JSON.stringify(candidate));
+        if (id.startsWith('workspace:')) this.ownedWorkspaceTokens.add(candidate.token);
         return candidate;
       })
       .immediate();
   }
   releaseLease(id: string, token: string): void {
+    this.ownedWorkspaceTokens.delete(token);
     this.db
       .prepare("DELETE FROM indexing_leases WHERE entity_id=? AND json_extract(owner,'$.token')=?")
       .run(id, token);

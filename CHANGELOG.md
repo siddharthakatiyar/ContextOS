@@ -10,6 +10,11 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Answer MCP initialization, discovery probes, ping, and tool listing locally before daemon startup, using a tool catalog generated from the real server registrations. Report backend startup failures as actionable tool errors.
+- Open repository runtimes and watchers on demand for connected clients; reconcile Git asynchronously with bounded concurrency and event-loop yields, and reuse persisted discovery fingerprints across daemon restarts.
+- Keep idle daemons available for 30 minutes by default (still configurable), release shared leases and runtime files during shutdown, and recover stale or recycled-PID leases only after verifying daemon ownership. Never signal an unverified daemon PID.
+- Add an isolated 50-repository cold-start benchmark and regression coverage for slow startup, tool catalog parity, lazy views, discovery recovery, and lease cleanup.
+
 ## [1.2.2] - 2026-11-24
 
 ### Added

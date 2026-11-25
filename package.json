@@ -25,7 +25,7 @@
     "UPGRADING.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/generate-tool-catalog.mjs",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "coverage": "vitest run --coverage",

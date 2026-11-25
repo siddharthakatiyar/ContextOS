@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as daemonProcess from '../../src/cli/utils/daemon-process.js';
 import { daemonCommand } from '../../src/cli/commands/daemon.js';
 import { workspaceStateDirectory } from '../../src/core/workspace/daemon.js';
 
@@ -40,6 +41,7 @@ describe('daemon stop command', () => {
       .run('old-owner', JSON.stringify({ pid: 44322 }));
     registry.close();
     process.chdir(projectDir);
+    vi.spyOn(daemonProcess, 'verifiedDaemonProcess').mockReturnValue(true);
     const stopped: number[] = [];
     vi.spyOn(process, 'kill').mockImplementation(((
       pid: number,
@@ -77,6 +79,7 @@ describe('daemon stop command', () => {
     const daemonPid = 44_321;
     fs.writeFileSync(pidPath, String(daemonPid));
 
+    vi.spyOn(daemonProcess, 'verifiedDaemonProcess').mockReturnValue(true);
     let pollCount = 0;
     let pidFilePresentWhileWaiting = false;
     vi.spyOn(process, 'kill').mockImplementation(((
@@ -100,5 +103,25 @@ describe('daemon stop command', () => {
     expect(fs.existsSync(pidPath)).toBe(false);
     expect(path.dirname(pidPath)).toBe(path.join(home, '.contextos', 'runtime'));
     expect(fs.existsSync(path.join(projectDir, '.contextos'))).toBe(false);
+  });
+  it('refuses to signal an alive unverified PID and retains its state for diagnosis', async () => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-unverified-home-'));
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-unverified-project-'));
+    homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(home);
+    process.chdir(projectDir);
+    const pidPath = path.join(workspaceStateDirectory('default'), 'daemon.pid');
+    fs.writeFileSync(pidPath, '44322');
+    vi.spyOn(daemonProcess, 'verifiedDaemonProcess').mockReturnValue(false);
+    const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const priorExitCode = process.exitCode;
+    try {
+      await daemonCommand.parseAsync(['node', 'contextos', 'stop']);
+      expect(kill.mock.calls.every(([, signal]) => signal === 0)).toBe(true);
+      expect(process.exitCode).toBe(1);
+      expect(fs.existsSync(pidPath)).toBe(true);
+    } finally {
+      process.exitCode = priorExitCode;
+    }
   });
 });
