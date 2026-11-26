@@ -10,6 +10,10 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- Retry context retrieval once from a fresh scope when startup indexing or checkout reconciliation invalidates the first read after a live daemon upgrade. Preserve per-view failure details and retire stale runtimes before retrying, without changing the local MCP handshake.
+
 ## [1.2.3] - 2026-11-26
 
 ### Fixed

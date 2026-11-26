@@ -18,6 +18,7 @@ import { parseRef } from './identity.js';
 import { entityRef } from './identity.js';
 import { loadConfig } from '../../config/index.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import { ReadinessChangedError, unavailableError } from './readiness.js';
 
 export function qualifyChunk<T extends ScoredChunk>(chunk: T, source: RepositorySource): T {
   return {
@@ -97,14 +98,13 @@ export async function retrieveWorkspace(
       unavailableSources.push({
         repoId: source.repoId,
         name: source.name,
-        error: getErrorMessage(error)
+        error: getErrorMessage(error),
+        retryable: error instanceof ReadinessChangedError
       });
     }
   }
   if (unavailableSources.length === scope.sources.length)
-    throw new Error(
-      `All selected repositories failed: ${unavailableSources.map((s) => `${s.name}: ${s.error}`).join('; ')}`
-    );
+    throw unavailableError('All selected repositories failed', unavailableSources);
   const config = loadConfig({ cwd: opts.repoRoot });
   const globalPath = path.join(getContextOSHome(), 'index.db');
   if (
