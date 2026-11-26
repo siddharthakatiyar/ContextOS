@@ -1,5 +1,9 @@
 # Upgrading ContextOS
 
+## 1.2.4 patch
+
+No action is required. 1.2.3 was never published to npm; install 1.2.4 to get its fast MCP handshake and lazy daemon startup. The first `get_context` after an upgrade or daemon restart now retries once if indexing or checkout reconciliation is still settling, instead of returning a transient "views changed" error.
+
 ## 1.2.3 patch
 
 No action is required. `contextos serve` now answers the MCP handshake and tool listing immediately, so coding agents that time out after 30 seconds no longer fail while the daemon starts. The daemon opens repositories on demand and stays up for 30 minutes of inactivity by default (`CONTEXTOS_DAEMON_IDLE_MS` still overrides it). The first tool call after an idle period can still take a moment while the daemon starts.

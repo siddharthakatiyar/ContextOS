@@ -29,6 +29,7 @@ import { registerSaveContextTool } from './tools/save-context.js';
 import { ChunksRepo } from '../core/storage/chunks-repo.js';
 import { GraphStore } from '../core/knowledge/graph-store.js';
 import { registerWorkspaceKnowledgeTools } from './tools/knowledge.js';
+import { ReadinessChangedError, unavailableError } from '../core/workspace/readiness.js';
 
 type Handler = (args: Record<string, unknown>) => Promise<CallToolResult>;
 type Definition = { name: string; description: string; schema: z.ZodRawShape; handler: Handler };
@@ -55,9 +56,23 @@ export function registerWorkspaceTools(
   const originalServer = server;
   server = {
     tool: (name: string, description: string, schema: z.ZodRawShape, handler: Handler) =>
-      originalServer.tool(name, description, schema, (args) =>
-        runtime.withSnapshot(() => handler(args))
-      )
+      originalServer.tool(name, description, schema, async (args) => {
+        for (let attempt = 0; ; attempt++) {
+          try {
+            return await runtime.withSnapshot(() => handler(args));
+          } catch (error) {
+            if (name !== 'get_context' || attempt > 0 || !(error instanceof ReadinessChangedError))
+              return failure(error);
+            // Leave the failed snapshot before waiting for startup watchers or
+            // retiring stale runtimes. Refresh may itself be waiting for readers.
+            try {
+              await runtime.refreshReadState();
+            } catch (refreshError) {
+              return failure(refreshError);
+            }
+          }
+        }
+      })
   } as unknown as McpServer;
   const sent = new SentRegistry();
   const sessions = new Map<
@@ -180,7 +195,8 @@ export function registerWorkspaceTools(
             result.unavailableSources.push({
               repoId: source.repoId,
               name: source.name,
-              error: getErrorMessage(error)
+              error: getErrorMessage(error),
+              retryable: error instanceof ReadinessChangedError
             });
           result.partial = true;
         };
@@ -248,8 +264,9 @@ export function registerWorkspaceTools(
           }
         }
         if (scope.sources.every((source) => failed.has(source.repoId)))
-          throw new Error(
-            'All selected views changed or became unavailable during retrieval; refresh and retry.'
+          throw unavailableError(
+            'All selected views changed or became unavailable during retrieval; refresh and retry.',
+            result.unavailableSources ?? []
           );
         for (const chunk of result.chunks) {
           if (!chunk.repoId || !chunk.localId || !chunk.relativePath) continue;
@@ -340,6 +357,7 @@ export function registerWorkspaceTools(
         while (cache.size > 8) cache.delete(cache.keys().next().value!);
         return output;
       } catch (error) {
+        if (error instanceof ReadinessChangedError) throw error;
         return failure(error);
       }
     }

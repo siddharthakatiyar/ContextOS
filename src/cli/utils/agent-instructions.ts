@@ -5,7 +5,7 @@ import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 export const AGENT_BLOCK_START = '<!-- contextos:managed:start -->';
 export const AGENT_BLOCK_END = '<!-- contextos:managed:end -->';
 export function agentInstructionsBlock(): string {
-  return `${AGENT_BLOCK_START}\n## ContextOS (managed instructions v1.2.3)\n\n${MCP_SERVER_INSTRUCTIONS}\n${AGENT_BLOCK_END}`;
+  return `${AGENT_BLOCK_START}\n## ContextOS (managed instructions v1.2.4)\n\n${MCP_SERVER_INSTRUCTIONS}\n${AGENT_BLOCK_END}`;
 }
 /** Rewrites only recognizable generated sections, preserving user-authored guidance. */
 export function rewriteManagedInstructions(previous: string, replacement: string): string {

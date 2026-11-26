@@ -12,6 +12,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { registerWorkspaceTools } from '../../src/mcp/workspace-tools.js';
+import { SessionManager } from '../../src/core/session/index.js';
+import { BackgroundIndexer } from '../../src/core/daemon/background-indexer.js';
+import { RetrievalEngine } from '../../src/core/retrieval/index.js';
+import Database from 'better-sqlite3';
+import { ReadinessChangedError } from '../../src/core/workspace/readiness.js';
 
 let temp: string;
 let registry: WorkspaceRegistry;
@@ -58,6 +63,137 @@ async function connect(active = 'backend') {
   await client.connect(b);
   return client;
 }
+
+describe('retrieval readiness transitions', () => {
+  it('reselects the scope and replaces a stale lazy runtime after a generation change', async () => {
+    const source = registry.resolve('backend');
+    const previous = runtime.get(source);
+    const client = await connect();
+    vi.spyOn(SessionManager.prototype, 'getSessionContext').mockImplementationOnce(async () => {
+      // Deterministically apply the checkout-generation updates made by reconcile
+      // after search has completed, while this request still holds the old source.
+      const db = new Database(path.join(registry.home, 'registry.db'));
+      try {
+        db.transaction(() => {
+          db.prepare(
+            'UPDATE worktrees SET checkout_generation=checkout_generation+1 WHERE id=?'
+          ).run(source.worktreeId);
+          db.prepare(
+            'UPDATE repositories SET checkout_generation=checkout_generation+1 WHERE id=?'
+          ).run(source.repoId);
+        })();
+      } finally {
+        db.close();
+      }
+      return [];
+    });
+    const retry = vi.spyOn(runtime, 'refreshReadState');
+    const result = await client.callTool({ name: 'get_context', arguments: { prompt } });
+    expect(result.isError).not.toBe(true);
+    expect(retry).toHaveBeenCalledTimes(1);
+    const current = registry.resolve(source.repoId);
+    expect(current.checkoutGeneration).toBe(source.checkoutGeneration + 1);
+    expect(runtime.get(current)).not.toBe(previous);
+    expect(result.structuredContent).toMatchObject({ sources: [current] });
+  });
+
+  it.each([true, false])('retries core search errors only when transient=%s', async (transient) => {
+    const client = await connect();
+    const search = vi
+      .spyOn(RetrievalEngine.prototype, 'retrieve')
+      .mockRejectedValueOnce(
+        transient ? new ReadinessChangedError('Checkout changed') : new Error('Search failed')
+      );
+    const retry = vi.spyOn(runtime, 'refreshReadState');
+    const result = await client.callTool({ name: 'get_context', arguments: { prompt } });
+    expect(Boolean(result.isError)).toBe(!transient);
+    expect(retry).toHaveBeenCalledTimes(transient ? 1 : 0);
+    expect(search).toHaveBeenCalledTimes(transient ? 2 : 1);
+  });
+
+  it('retries the first read when lazy watcher startup indexes during session retrieval', async () => {
+    const source = registry.resolve('backend');
+    const client = await connect();
+    await client.callTool({
+      name: 'ctx_remember',
+      arguments: { content: 'LiveUpgradeMemorySurvives', provenance: 'user' }
+    });
+    const search = vi.spyOn(RetrievalEngine.prototype, 'retrieve');
+    let release!: () => void;
+    let started!: () => void;
+    const blocked = new Promise<void>((resolve) => (release = resolve));
+    const indexing = new Promise<void>((resolve) => (started = resolve));
+    const index = BackgroundIndexer.prototype.startFullIndex;
+    vi.spyOn(BackgroundIndexer.prototype, 'startFullIndex').mockImplementationOnce(async function (
+      this: BackgroundIndexer,
+      ...args
+    ) {
+      started();
+      await blocked;
+      return index.apply(this, args);
+    });
+    let refresh: Promise<void> | undefined;
+    const context = SessionManager.prototype.getSessionContext;
+    vi.spyOn(SessionManager.prototype, 'getSessionContext').mockImplementationOnce(async function (
+      this: SessionManager
+    ) {
+      const result = await context.call(this);
+      refresh = runtime.refreshWatchers(['default'], [source.repoId]);
+      await indexing;
+      expect(registry.resolve(source.repoId).state).toBe('indexing');
+      return result;
+    });
+    const recover = runtime.refreshReadState.bind(runtime);
+    const retry = vi.spyOn(runtime, 'refreshReadState').mockImplementation(async () => {
+      release();
+      await recover();
+    });
+    try {
+      const result = await client.callTool({
+        name: 'get_context',
+        arguments: { prompt: 'LiveUpgradeMemorySurvives', tier: 'full' }
+      });
+      expect(result.isError).not.toBe(true);
+      expect(JSON.stringify(result.content)).toContain('LiveUpgradeMemorySurvives');
+      expect(retry).toHaveBeenCalledTimes(1);
+      expect(search).toHaveBeenCalledTimes(2);
+      expect(registry.resolve(source.repoId).checkoutGeneration).toBe(source.checkoutGeneration);
+    } finally {
+      release();
+      await refresh;
+    }
+  });
+
+  it('limits readiness retries to one and reports the per-view reason', async () => {
+    const source = registry.resolve('backend');
+    const client = await connect();
+    vi.spyOn(SessionManager.prototype, 'getSessionContext').mockImplementation(async () => {
+      registry.update(source.repoId, { state: 'indexing' });
+      return [];
+    });
+    const retry = vi.spyOn(runtime, 'refreshReadState');
+    const search = vi.spyOn(RetrievalEngine.prototype, 'retrieve');
+    const result = await client.callTool({ name: 'get_context', arguments: { prompt } });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('state=indexing');
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a permanent failure during session retrieval', async () => {
+    const source = registry.resolve('backend');
+    const client = await connect();
+    vi.spyOn(SessionManager.prototype, 'getSessionContext').mockImplementationOnce(async () => {
+      registry.update(source.repoId, { state: 'failed', lastError: 'Index failed' });
+      return [];
+    });
+    const retry = vi.spyOn(runtime, 'refreshReadState');
+    const result = await client.callTool({ name: 'get_context', arguments: { prompt } });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('state=failed');
+    expect(retry).not.toHaveBeenCalled();
+  });
+});
 
 describe('workspace registration and identity', () => {
   it('persists IDs, canonical aliases and multiple memberships without duplicate indexes', () => {
