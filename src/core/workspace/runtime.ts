@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { DB } from '../storage/database.js';
 import { loadConfig } from '../../config/index.js';
 import { BackgroundIndexer, INDEXER_VERSION } from '../daemon/background-indexer.js';
@@ -46,21 +45,34 @@ function alive(pid: number): boolean {
   }
 }
 /** Capture both the checked-out ref and its commit; detached HEAD is supported. */
-function checkoutIdentityReader(root: string): () => string | undefined {
-  let gitDir: string;
-  let commonDir: string;
-  try {
-    const git = (args: string[]) =>
-      execFileSync('git', ['-C', root, ...args], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore']
-      }).trim();
-    gitDir = git(['rev-parse', '--absolute-git-dir']);
-    commonDir = git(['rev-parse', '--path-format=absolute', '--git-common-dir']);
-  } catch {
-    return () => undefined;
-  }
+function checkoutIdentityReader(
+  root: string,
+  gitDir: string | null,
+  commonDir: string | null
+): () => string | undefined {
+  if (!gitDir || !commonDir) return () => undefined;
   return () => {
+    // Use the discovered directories, but recheck Git's filesystem routing so a
+    // replaced worktree pointer cannot keep reading the old checkout identity.
+    const marker = path.join(root, '.git');
+    const actualGitDir = fs.statSync(marker).isDirectory()
+      ? marker
+      : path.resolve(
+          root,
+          fs
+            .readFileSync(marker, 'utf8')
+            .replace(/^gitdir: /, '')
+            .trim()
+        );
+    const commonFile = path.join(actualGitDir, 'commondir');
+    const actualCommonDir = fs.existsSync(commonFile)
+      ? path.resolve(actualGitDir, fs.readFileSync(commonFile, 'utf8').trim())
+      : actualGitDir;
+    if (
+      fs.realpathSync(actualGitDir) !== fs.realpathSync(gitDir) ||
+      fs.realpathSync(actualCommonDir) !== fs.realpathSync(commonDir)
+    )
+      throw new Error(`Git checkout identity changed: ${root}. Retry after reconciliation.`);
     // Git holds this lock while replacing checkout files. HEAD is updated only
     // near the end of a checkout, so checking HEAD alone misses that window.
     if (fs.existsSync(path.join(gitDir, 'index.lock')))
@@ -141,8 +153,13 @@ export class RepositoryRuntime {
       checkoutGeneration: source.checkoutGeneration
     });
     this.leaseFile = path.join(path.dirname(source.dbPath), 'index-owner.json');
-    this.currentCheckout = checkoutIdentityReader(source.rootPath);
-    this.checkout = this.currentCheckout();
+    this.currentCheckout = checkoutIdentityReader(source.rootPath, source.gitDir, source.commonDir);
+    try {
+      this.checkout = this.currentCheckout();
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
     if (this.checkout) {
       const [, ref, commit] = this.checkout.split('\n');
       if (
@@ -533,6 +550,7 @@ export class WorkspaceRuntime {
     for (const id of repoIds) this.paused.delete(id);
   }
   async withSnapshot<T>(action: () => Promise<T>): Promise<T> {
+    await this.registry.reconcileAsync();
     this.requests++;
     try {
       return await action();
@@ -596,10 +614,12 @@ export class WorkspaceRuntime {
     return scope;
   }
   async refreshWatchers(
-    workspaces: string[] = this.workspace ? [this.workspace] : []
+    workspaces: string[] = this.workspace ? [this.workspace] : [],
+    activeRepoIds: string[] = []
   ): Promise<void> {
-    return this.refreshBy(() =>
-      workspaces.flatMap((workspace) => this.registry.list(workspace, true))
+    return this.refreshBy(
+      () => workspaces.flatMap((workspace) => this.registry.list(workspace, true)),
+      new Set(activeRepoIds)
     );
   }
   async refreshSelected(
@@ -612,17 +632,23 @@ export class WorkspaceRuntime {
       () => this.select(selectors, cwd, activeRepoId, defaultWorkspace).sources
     );
   }
-  private async refreshBy(resolveSources: () => RepositorySource[]): Promise<void> {
+  private async refreshBy(
+    resolveSources: () => RepositorySource[],
+    activeRepoIds?: Set<string>
+  ): Promise<void> {
     while (this.refreshJob) await this.refreshJob;
-    this.refreshJob = this.refreshWatchersNow(resolveSources);
+    this.refreshJob = this.refreshWatchersNow(resolveSources, activeRepoIds);
     try {
       await this.refreshJob;
     } finally {
       this.refreshJob = undefined;
     }
   }
-  private async refreshWatchersNow(resolveSources: () => RepositorySource[]): Promise<void> {
-    this.registry.reconcile();
+  private async refreshWatchersNow(
+    resolveSources: () => RepositorySource[],
+    activeRepoIds?: Set<string>
+  ): Promise<void> {
+    await this.registry.reconcileAsync();
     let resolved: RepositorySource[] = [];
     let resolutionError: unknown;
     try {
@@ -651,7 +677,7 @@ export class WorkspaceRuntime {
       await this.drainRetired();
     }
     try {
-      this.registry.cleanup();
+      await this.registry.cleanupAsync();
       this.lastCleanupError = undefined;
     } catch (error) {
       const message = getErrorMessage(error);
@@ -660,19 +686,37 @@ export class WorkspaceRuntime {
       this.lastCleanupError = message;
     }
     if (resolutionError) throw resolutionError;
-    await Promise.allSettled(
-      sources.map(async (source) => {
-        try {
-          await this.get(source).watch();
-        } catch (error) {
-          const message = getErrorMessage(error);
-          const current = this.registry.resolve(source.repoId);
-          if (current.lastError !== message)
-            this.registry.update(source.repoId, { state: 'unavailable', lastError: message });
-        }
-      })
+    const activeWorktrees = new Set<string>();
+    for (const id of activeRepoIds ?? []) {
+      try {
+        activeWorktrees.add(this.registry.resolve(id).worktreeId);
+      } catch {
+        /* disconnected or removed view */
+      }
+    }
+    const watched = sources.filter(
+      (source) =>
+        activeRepoIds === undefined ||
+        activeWorktrees.has(source.worktreeId) ||
+        this.repositories.has(source.repoId)
     );
+    for (let i = 0; i < watched.length; i += 4) {
+      await Promise.allSettled(
+        watched.slice(i, i + 4).map(async (source) => {
+          try {
+            await this.get(source).watch();
+          } catch (error) {
+            const message = getErrorMessage(error);
+            const current = this.registry.resolve(source.repoId);
+            if (current.lastError !== message)
+              this.registry.update(source.repoId, { state: 'unavailable', lastError: message });
+          }
+        })
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
   }
+
   async waitForIdle(): Promise<void> {
     while (this.requests > 0) await new Promise((resolve) => setTimeout(resolve, 20));
     await this.drainRetired();

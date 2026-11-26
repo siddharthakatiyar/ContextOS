@@ -89,6 +89,15 @@ describe('serve auto-patch policy and restart flow', () => {
     expect(stdoutWrite).not.toHaveBeenCalled();
   });
 
+  it('connects proxy tool calls without waiting for an advisory network check', async () => {
+    vi.stubEnv('CONTEXTOS_DAEMON_PROXY_BACKEND', '1');
+    vi.stubEnv('CONTEXTOS_REPO_ROOT', projectRoot);
+    vi.mocked(readAutoPatchPolicy).mockReturnValue('notify');
+    vi.mocked(checkForUpdates).mockReturnValue(new Promise(() => {}));
+    await serveCommand.parseAsync(['node', 'contextos']);
+    expect(runDaemonClient).toHaveBeenCalledOnce();
+  });
+
   it('falls back to a passive update notice when automatic installation is safely skipped', async () => {
     const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

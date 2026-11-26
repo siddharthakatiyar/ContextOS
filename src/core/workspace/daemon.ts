@@ -20,6 +20,7 @@ import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 import { registerWorkspaceTools } from '../../mcp/workspace-tools.js';
 import { getPackageVersion } from '../../utils/version.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import { verifiedDaemonProcess } from '../../cli/utils/daemon-process.js';
 import { getActiveUpgradeToken } from '../updater/upgrade-lock.js';
 
 export function workspaceStateDirectory(name: string): string {
@@ -40,6 +41,7 @@ export class WorkspaceDaemon {
   readonly runtime: WorkspaceRuntime;
   private server: net.Server;
   private clients = new Map<net.Socket, McpServer>();
+  private clientViews = new Map<net.Socket, string>();
   private clientWorkspaces = new Map<net.Socket, string>();
   private refresh?: NodeJS.Timeout;
   private idleTimer?: NodeJS.Timeout;
@@ -53,6 +55,7 @@ export class WorkspaceDaemon {
     const root = workspaceStateDirectory(name);
     this.endpoint = workspaceSocketPath();
     this.pidFile = path.join(root, 'daemon.pid');
+    this.registry.deferReconciliation = true;
     this.runtime = new WorkspaceRuntime(this.registry);
     this.server = net.createServer((socket) => this.connect(socket));
   }
@@ -60,12 +63,12 @@ export class WorkspaceDaemon {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.clients.size) return;
     const configured = Number(process.env.CONTEXTOS_DAEMON_IDLE_MS);
-    const delay = Number.isFinite(configured) && configured > 0 ? configured : 60_000;
+    const delay = Number.isFinite(configured) && configured > 0 ? configured : 30 * 60_000;
     this.idleTimer = setTimeout(() => void this.stop(), delay);
     this.idleTimer.unref();
   }
   async start(): Promise<void> {
-    const lease = this.registry.takeLease('workspace:shared', {
+    const lease = await this.registry.takeWorkspaceLease({
       pid: process.pid,
       token: this.token,
       endpoint: this.endpoint,
@@ -73,16 +76,15 @@ export class WorkspaceDaemon {
     });
     if (lease.token !== this.token)
       throw new Error(`Workspace daemon already running (PID ${lease.pid})`);
+    process.once('exit', this.releaseOnExit);
     try {
+      const startupDelay = Number(process.env.CONTEXTOS_TEST_DAEMON_STARTUP_DELAY_MS);
+      if (startupDelay > 0) await new Promise((resolve) => setTimeout(resolve, startupDelay));
       if (fs.existsSync(this.pidFile)) {
         const pid = Number(fs.readFileSync(this.pidFile, 'utf8'));
         if (Number.isSafeInteger(pid) && pid > 0) {
-          try {
-            process.kill(pid, 0);
+          if (verifiedDaemonProcess(pid))
             throw new Error(`Workspace daemon already running (PID ${pid})`);
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-          }
         }
       }
       if (process.platform !== 'win32' && fs.existsSync(this.endpoint)) {
@@ -100,7 +102,10 @@ export class WorkspaceDaemon {
         if (this.refreshing) return;
         this.refreshing = true;
         try {
-          await this.runtime.refreshWatchers([...new Set(this.clientWorkspaces.values())]);
+          await this.runtime.refreshWatchers(
+            [...new Set(this.clientWorkspaces.values())],
+            [...this.clientViews.values()]
+          );
         } catch (error) {
           process.stderr.write(`Workspace refresh: ${getErrorMessage(error)}\n`);
         } finally {
@@ -120,13 +125,14 @@ export class WorkspaceDaemon {
         }
       }
       this.registry.releaseLease('workspace:shared', this.token);
+      process.removeListener('exit', this.releaseOnExit);
       throw error;
     }
   }
   private connect(socket: net.Socket): void {
     let buffer = Buffer.alloc(0);
     socket.setTimeout(5000, () => socket.destroy());
-    const receive = (data: Buffer) => {
+    const receive = async (data: Buffer) => {
       buffer = Buffer.concat([buffer, data]);
       if (buffer.length > 8192) {
         socket.destroy();
@@ -212,7 +218,10 @@ export class WorkspaceDaemon {
         if (setup.action === 'refresh') {
           socket.resume();
           void this.runtime
-            .refreshWatchers([...new Set(this.clientWorkspaces.values())])
+            .refreshWatchers(
+              [...new Set(this.clientWorkspaces.values())],
+              [...this.clientViews.values()]
+            )
             .then(() => this.runtime.waitForIdle())
             .then(
               () => socket.end(JSON.stringify({ ok: true }) + '\n'),
@@ -221,6 +230,8 @@ export class WorkspaceDaemon {
             );
           return;
         }
+        await this.registry.reconcileAsync();
+        if (this.closing || socket.destroyed) return;
         const source =
           (setup.cwd && this.registry.active(setup.cwd)) ||
           (setup.activeRepoId ? this.registry.resolve(setup.activeRepoId) : undefined);
@@ -240,8 +251,12 @@ export class WorkspaceDaemon {
         this.clients.set(socket, server);
         if (this.idleTimer) clearTimeout(this.idleTimer);
         this.clientWorkspaces.set(socket, workspace.name);
+        this.clientViews.set(socket, source.repoId);
         void this.runtime
-          .refreshWatchers([...new Set(this.clientWorkspaces.values())])
+          .refreshWatchers(
+            [...new Set(this.clientWorkspaces.values())],
+            [...this.clientViews.values()]
+          )
           .catch((error) => process.stderr.write(`Workspace refresh: ${getErrorMessage(error)}\n`));
         const rest = buffer.subarray(newline + 1);
         if (rest.length) socket.unshift(rest);
@@ -260,32 +275,52 @@ export class WorkspaceDaemon {
       const server = this.clients.get(socket);
       this.clients.delete(socket);
       this.clientWorkspaces.delete(socket);
+      this.clientViews.delete(socket);
       void server?.close();
       if (this.closing) return;
       this.scheduleIdleStop();
       void this.runtime
-        .refreshWatchers([...new Set(this.clientWorkspaces.values())])
+        .refreshWatchers(
+          [...new Set(this.clientWorkspaces.values())],
+          [...this.clientViews.values()]
+        )
         .catch((error) => process.stderr.write(`Workspace refresh: ${getErrorMessage(error)}\n`));
     });
   }
+  private releaseOnExit = (): void => {
+    // Synchronous fallback also runs after uncaught errors and process.exit().
+    try {
+      if (this.registry.lease('workspace:shared')?.token !== this.token) return;
+      try {
+        if (this.started) removePrivateStateFile(this.pidFile);
+        if (this.started && process.platform !== 'win32' && fs.existsSync(this.endpoint)) {
+          assertNoSymlinkInPath(this.endpoint);
+          fs.unlinkSync(this.endpoint);
+        }
+      } finally {
+        this.registry.releaseLease('workspace:shared', this.token);
+      }
+    } catch {
+      /* best effort during process teardown */
+    }
+  };
   stop(): Promise<void> {
     return (this.closing ??= (async () => {
-      if (this.refresh) clearInterval(this.refresh);
-      if (this.idleTimer) clearTimeout(this.idleTimer);
-      if (this.server.listening) this.server.close();
-      for (const [socket, server] of this.clients) {
-        await server.close();
-        socket.destroy();
-      }
-      this.clients.clear();
-      while (this.refreshing) await new Promise((resolve) => setTimeout(resolve, 20));
-      await this.runtime.close();
-      if (this.started) this.registry.releaseLease('workspace:shared', this.token);
-      this.registry.close();
-      if (this.started) removePrivateStateFile(this.pidFile);
-      if (this.started && process.platform !== 'win32' && fs.existsSync(this.endpoint)) {
-        assertNoSymlinkInPath(this.endpoint);
-        fs.unlinkSync(this.endpoint);
+      try {
+        if (this.refresh) clearInterval(this.refresh);
+        if (this.idleTimer) clearTimeout(this.idleTimer);
+        if (this.server.listening) this.server.close();
+        for (const [socket, server] of this.clients) {
+          await server.close();
+          socket.destroy();
+        }
+        this.clients.clear();
+        while (this.refreshing) await new Promise((resolve) => setTimeout(resolve, 20));
+        await this.runtime.close();
+      } finally {
+        this.releaseOnExit();
+        this.registry.close();
+        process.removeListener('exit', this.releaseOnExit);
       }
     })());
   }

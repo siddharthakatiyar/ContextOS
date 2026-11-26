@@ -19,14 +19,14 @@
       }
     ],
     "component": {
-      "bom-ref": "@siddharthakatiyar/contextos@1.2.2",
+      "bom-ref": "@siddharthakatiyar/contextos@1.2.3",
       "type": "library",
       "name": "ContextOS",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "scope": "required",
       "author": "Siddhartha Katiyar",
       "description": "ContextOS - Universal knowledge graph for coding agents",
-      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.2.2",
+      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.2.3",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -58,12 +58,12 @@
   },
   "components": [
     {
-      "bom-ref": "docs@1.2.2",
+      "bom-ref": "docs@1.2.3",
       "type": "library",
       "name": "docs",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "scope": "required",
-      "purl": "pkg:npm/docs@1.2.2",
+      "purl": "pkg:npm/docs@1.2.3",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -24258,9 +24258,9 @@
   ],
   "dependencies": [
     {
-      "ref": "@siddharthakatiyar/contextos@1.2.2",
+      "ref": "@siddharthakatiyar/contextos@1.2.3",
       "dependsOn": [
-        "docs@1.2.2",
+        "docs@1.2.3",
         "@huggingface/transformers@4.3.0",
         "@modelcontextprotocol/sdk@1.32.1",
         "better-sqlite3@12.10.0",
@@ -24294,7 +24294,7 @@
       ]
     },
     {
-      "ref": "docs@1.2.2",
+      "ref": "docs@1.2.3",
       "dependsOn": [
         "@base-ui/react@1.6.0",
         "@vercel/analytics@2.0.1",

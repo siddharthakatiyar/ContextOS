@@ -125,6 +125,16 @@ export const serveCommand = new Command('serve')
         process.stderr.write(`ContextOS unhandled rejection: ${reason}\n`);
       });
 
+      const checkUpdateNotice = async () => {
+        const updateNotice = formatUpdateNotice(await checkForUpdates());
+        if (updateNotice) process.stderr.write(updateNotice);
+      };
+      const advisoryUpdateCheck = async () => {
+        if (process.env.CONTEXTOS_DAEMON_PROXY_BACKEND === '1') {
+          // Advisory network latency must not delay connecting a tool to a warm daemon.
+          void checkUpdateNotice().catch(() => {});
+        } else await checkUpdateNotice();
+      };
       const wasAutoPatchReexec = process.env[AUTO_PATCH_REEXEC_ENV] === '1';
       delete process.env[AUTO_PATCH_REEXEC_ENV];
       if (!wasAutoPatchReexec && readAutoPatchPolicy() === 'auto-patch') {
@@ -134,8 +144,7 @@ export const serveCommand = new Command('serve')
           !result.latestVersion &&
           !result.registryCheckAttempted
         ) {
-          const updateNotice = formatUpdateNotice(await checkForUpdates());
-          if (updateNotice) process.stderr.write(updateNotice);
+          await advisoryUpdateCheck();
         }
         const notice = formatAutoPatchNotice(result);
         if (notice) process.stderr.write(notice);
@@ -144,8 +153,7 @@ export const serveCommand = new Command('serve')
           return;
         }
       } else if (!wasAutoPatchReexec) {
-        const updateNotice = formatUpdateNotice(await checkForUpdates());
-        if (updateNotice) process.stderr.write(updateNotice);
+        await advisoryUpdateCheck();
       }
 
       // Serve now just connects to the daemon or spawns it

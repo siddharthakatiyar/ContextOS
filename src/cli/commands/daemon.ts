@@ -19,7 +19,7 @@ import {
   removePrivateStateFile,
   preparePrivateStateFile
 } from '../../utils/secure-state.js';
-import { verifiedDaemonProcess } from '../utils/installation-setup.js';
+import { verifiedDaemonProcess } from '../utils/daemon-process.js';
 import { getActiveUpgradeToken, isUpgradeInProgress } from '../../core/updater/upgrade-lock.js';
 
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
@@ -278,12 +278,16 @@ daemonCommand
       }
       if (options.detach || options.background) return startDetached(group);
       const daemon = new WorkspaceDaemon(group);
-      await daemon.start();
+      const starting = daemon.start();
       const cleanup = () => {
-        void daemon.stop().then(() => process.exit(0));
+        void starting
+          .catch(() => {})
+          .then(() => daemon.stop())
+          .then(() => process.exit(0));
       };
       process.once('SIGINT', cleanup);
       process.once('SIGTERM', cleanup);
+      await starting;
     }
   );
 
@@ -303,7 +307,10 @@ daemonCommand
         const pid = Number(fs.readFileSync(pidPath, 'utf8').trim());
         if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('Daemon PID file is invalid.');
         try {
-          process.kill(pid, 'SIGTERM');
+          if (!verifiedDaemonProcess(pid)) {
+            if (!(await waitForProcessExit(pid, 1)))
+              throw new Error(`Cannot verify ContextOS daemon PID ${pid}; refusing to signal it.`);
+          } else process.kill(pid, 'SIGTERM');
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
         }

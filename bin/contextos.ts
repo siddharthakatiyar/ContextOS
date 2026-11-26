@@ -91,6 +91,16 @@ function skipsFirstUseAutoPatchNotice(args: string[]): boolean {
 }
 
 async function main(): Promise<void> {
+  const serveArgs = process.argv.slice(2);
+  if (
+    serveArgs.find((arg) => !arg.startsWith('-')) === 'serve' &&
+    !serveArgs.some((arg) => ['--help', '-h', '--version', '--cli-version', '-V'].includes(arg)) &&
+    process.env.CONTEXTOS_DAEMON_PROXY_BACKEND !== '1'
+  ) {
+    const { runHandshakeProxy } = await import('../src/mcp/handshake-proxy.js');
+    await runHandshakeProxy();
+    return;
+  }
   // Keep the entrypoint light until the updater lock is clear. A package swap
   // must not make new commands import a mix of the old and new package trees.
   const { waitForUpgradeToFinish } = await import('../src/core/updater/upgrade-lock.js');

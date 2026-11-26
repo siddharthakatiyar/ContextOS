@@ -376,3 +376,56 @@ describe('global runtime', () => {
     }
   });
 });
+
+it('keeps untouched views unopened during refresh, watching only the active view', async () => {
+  const linked = path.join(temp, 'lazy-linked');
+  git('worktree', 'add', '-b', 'lazy-feature', linked);
+  const source = registry.register(root);
+  const workspace = new WorkspaceRuntime(registry, 'default');
+  const get = vi.spyOn(workspace, 'get');
+  try {
+    await workspace.refreshWatchers();
+    expect(get).not.toHaveBeenCalled();
+    await workspace.refreshWatchers(['default'], [source.repoId]);
+    expect(new Set(get.mock.calls.map(([view]) => view.repoId))).toEqual(new Set([source.repoId]));
+    expect(registry.active(linked)?.state).toBe('registered');
+    await workspace.refreshWatchers([]);
+    expect(registry.lease(source.repoId)).toBeUndefined();
+  } finally {
+    await workspace.close();
+  }
+});
+
+it('defaults to a thirty minute idle shutdown and releases all shared state on stop', async () => {
+  const timer = vi.spyOn(globalThis, 'setTimeout');
+  const daemon = new WorkspaceDaemon('default');
+  try {
+    await daemon.start();
+    expect(timer.mock.calls.some(([, delay]) => delay === 30 * 60_000)).toBe(true);
+    expect(registry.lease('workspace:shared')).toBeDefined();
+    await daemon.stop();
+    expect(registry.lease('workspace:shared')).toBeUndefined();
+    expect(fs.existsSync(path.join(workspaceStateDirectory('default'), 'daemon.pid'))).toBe(false);
+    if (process.platform !== 'win32') expect(fs.existsSync(workspaceSocketPath())).toBe(false);
+  } finally {
+    await daemon.stop();
+  }
+});
+
+it('takes over an unrelated live PID in both the shared lease and stale pid file', async () => {
+  const state = workspaceStateDirectory('default');
+  fs.writeFileSync(path.join(state, 'daemon.pid'), String(process.pid));
+  registry.takeLease('workspace:shared', {
+    pid: process.pid,
+    token: 'recycled',
+    endpoint: path.join(state, 'missing.sock'),
+    protocol: 1
+  });
+  const daemon = new WorkspaceDaemon('default');
+  try {
+    await daemon.start();
+    expect(registry.lease('workspace:shared')?.token).not.toBe('recycled');
+  } finally {
+    await daemon.stop();
+  }
+});
