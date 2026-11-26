@@ -76,10 +76,15 @@ describe('built CLI and workspace daemon', () => {
       expect(
         (all.structuredContent as { scope: { repoIds: string[] } }).scope.repoIds
       ).toHaveLength(4);
-      await backend.callTool({
+      const savedFact = await backend.callTool({
         name: 'ctx_remember',
-        arguments: { type: 'cross_session_fact', content: 'PaymentMemorySurvivesReindex' }
+        arguments: {
+          type: 'cross_session_fact',
+          content: 'PaymentMemorySurvivesReindex',
+          provenance: 'user'
+        }
       });
+      expect(savedFact.isError).not.toBe(true);
       run(['reindex', '--repo', 'backend']);
       const memory = await backend.callTool({
         name: 'get_context',
@@ -92,13 +97,23 @@ describe('built CLI and workspace daemon', () => {
         arguments: { prompt: 'payment status' }
       });
       expect(removed.isError).toBe(true);
-      expect(fs.existsSync(path.join(root, 'frontend', '.contextos', 'index.db'))).toBe(true);
+      expect(
+        fs.existsSync(
+          list.repositories.find((view: { name: string }) => view.name === 'frontend').dbPath
+        )
+      ).toBe(true);
+      expect(fs.existsSync(path.join(root, 'frontend', '.contextos'))).toBe(false);
       run(['repo', 'add', path.join(root, 'frontend')]);
+      const owner = JSON.parse(run(['repo', 'status', 'frontend', '--json'])).repositories[0].owner;
+      const daemonPid = Number(fs.readFileSync(path.join(home, '.contextos/runtime/daemon.pid')));
+      expect(owner?.pid, 'Re-added projects must return with the live daemon watching them').toBe(
+        daemonPid
+      );
       const restored = await frontend.callTool({
         name: 'get_context',
         arguments: { prompt: 'displayPaymentStatus', tier: 'full' }
       });
-      expect(restored.isError).not.toBe(true);
+      expect(restored.isError, JSON.stringify(restored.content)).not.toBe(true);
       expect(JSON.stringify(restored.content)).toContain('frontend/payment.ts');
       watcher = spawn(process.execPath, [cli, 'watch', '-w', 'legacy-label'], {
         cwd: path.join(root, 'backend'),

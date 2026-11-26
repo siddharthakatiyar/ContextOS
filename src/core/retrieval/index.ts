@@ -262,8 +262,8 @@ export class RetrievalEngine {
       }
       expandedEntities = this.expander.expand(
         Array.from(seedEntities),
-        config.graphExpansionDepth || 2,
-        config.graphExpansionMaxNodes || 20
+        config.graphExpansionDepth ?? 2,
+        config.graphExpansionMaxNodes ?? 20
       );
     }
 

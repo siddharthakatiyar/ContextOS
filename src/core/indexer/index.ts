@@ -16,6 +16,7 @@ import { chunkCode } from '../chunker/code-chunker.js';
 import { extractRelationships, extractImportRelationships } from '../graph/extractor.js';
 import { scoreFileImportance } from './importance-scorer.js';
 import { hashContent } from '../../utils/hash.js';
+import { parseOpenApi, parseProtobuf } from '../parser/contracts.js';
 import { isBinaryFile, isGeneratedFile } from '../../utils/file-heuristics.js';
 import { Layer, Chunk, Relationship } from '../storage/types.js';
 import { indexChunkEmbeddings } from '../embeddings/index.js';
@@ -46,7 +47,12 @@ export class Indexer {
   private rootDir: string;
   private indexIgnore: IndexIgnore;
 
-  constructor(db: DB, rootDir?: string, configuredIgnorePatterns: readonly string[] = []) {
+  constructor(
+    db: DB,
+    rootDir?: string,
+    configuredIgnorePatterns: readonly string[] = [],
+    private readonly assertCurrent?: () => void
+  ) {
     this.chunksRepo = new ChunksRepo(db.getInstance());
     this.filesRepo = new FilesRepo(db.getInstance());
     this.relsRepo = new RelationshipsRepo(db.getInstance());
@@ -96,6 +102,7 @@ export class Indexer {
     workspaceName?: string,
     signal?: AbortSignal
   ): Promise<IndexStats> {
+    this.assertCurrent?.();
     const startTime = Date.now();
     let chunksCreated = 0;
     let relationshipsFound = 0;
@@ -207,12 +214,16 @@ export class Indexer {
 
     // Parse and chunk based on file type
     signal?.throwIfAborted();
-    if (isCode) {
+    if (ext === '.proto') {
+      chunks = chunkCode(parseProtobuf(filePath, content), chunkOptions);
+    } else if (isCode) {
       const parsed = await parseCode(filePath, content);
       imports = parsed.imports || [];
       chunks = chunkCode(parsed, chunkOptions);
     } else if (isConfig) {
-      const parsed = parseConfig(filePath, content);
+      const parsed = ['.json', '.yaml', '.yml'].includes(ext)
+        ? (parseOpenApi(filePath, content) ?? parseConfig(filePath, content))
+        : parseConfig(filePath, content);
       chunks = chunkCode(parsed, chunkOptions); // Config files are structurally similar to code
     } else if (isMarkdown) {
       const parsed = parseMarkdown(filePath, content);
@@ -252,6 +263,7 @@ export class Indexer {
     // (bulkUpsert's internal transaction nests as a savepoint.)
     signal?.throwIfAborted();
     const persistFile = this.chunksRepo.getDatabase().transaction(() => {
+      this.assertCurrent?.();
       // Update file record first to satisfy foreign key constraints
       this.filesRepo.upsert({
         path: filePath,
@@ -282,6 +294,7 @@ export class Indexer {
       if (allRels.length > 0) {
         this.relsRepo.bulkUpsert(allRels);
       }
+      this.assertCurrent?.();
     });
     persistFile();
     chunksCreated = chunks.length;
@@ -314,6 +327,7 @@ export class Indexer {
     // watcher or MCP index request that reassigns the same path to another
     // layer; the layer predicate must cover both the check and all cascades.
     const remove = db.transaction(() => {
+      this.assertCurrent?.();
       const record = this.filesRepo.getByPath(filePath);
       if (!record || (expectedLayer && record.layer !== expectedLayer)) return false;
 
@@ -324,6 +338,7 @@ export class Indexer {
       }
       // Delete the file record, which cascades to chunks and relationships.
       this.filesRepo.deleteByPath(filePath);
+      this.assertCurrent?.();
       return true;
     }).immediate;
     return remove();
@@ -331,6 +346,7 @@ export class Indexer {
 
   /** Remove files from a layer that were absent from a completed full scan. */
   public async removeFilesNotIn(paths: Iterable<string>, layer: Layer = 'repo'): Promise<number> {
+    this.assertCurrent?.();
     const current = new Set(Array.from(paths, (filePath) => path.resolve(filePath)));
     const stale = this.filesRepo
       .listByLayer(layer)

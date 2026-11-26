@@ -41,6 +41,35 @@ describe('BackgroundIndexer', () => {
     else process.env.CONTEXTOS_EMBEDDINGS = previousEmbeddings;
   });
 
+  test('indexes separate view databases for the same checkout independently', async () => {
+    const state = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-view-scans-'));
+    const first = new DB(path.join(state, 'first', 'index.db'));
+    const second = new DB(path.join(state, 'second', 'index.db'));
+    try {
+      const config = { indexablePatterns: ['**/*.ts'], ignorePatterns: [] };
+      const a = new BackgroundIndexer(first, tempDir);
+      const b = new BackgroundIndexer(second, tempDir);
+      const firstJob = a.startFullIndex(config);
+      const secondJob = b.startFullIndex(config);
+      expect(firstJob).not.toBe(secondJob);
+      await Promise.all([firstJob, secondJob]);
+      for (const view of [first, second]) {
+        expect(
+          (view.getInstance().prepare('SELECT count(*) AS n FROM chunks').get() as { n: number }).n
+        ).toBeGreaterThan(0);
+        expect(
+          JSON.parse(
+            fs.readFileSync(path.join(path.dirname(view.getInstance().name), 'status.json'), 'utf8')
+          ).fullIndexCompleted
+        ).toBe(true);
+      }
+    } finally {
+      first.close();
+      second.close();
+      fs.rmSync(state, { recursive: true, force: true });
+    }
+  });
+
   test('indexes repository in background', async () => {
     const indexer = new BackgroundIndexer(db, tempDir);
 

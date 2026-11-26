@@ -1,3 +1,4 @@
+import { WorkspaceRegistry } from '../workspace/registry.js';
 import Database from 'better-sqlite3';
 import { loadConfig } from '../../config/index.js';
 import path from 'path';
@@ -27,7 +28,11 @@ function isContextOSStateDatabase(dbPath: string): boolean {
   if (dbPath === ':memory:') return false;
   const dir = path.resolve(path.dirname(dbPath));
   const contextHome = path.resolve(getContextOSHome());
-  return path.basename(dir) === '.contextos' || dir === contextHome;
+  return (
+    path.basename(dir) === '.contextos' ||
+    dir === contextHome ||
+    dir.startsWith(contextHome + path.sep)
+  );
 }
 
 /**
@@ -100,8 +105,13 @@ export class DB {
     let resolvedPath = dbPath;
     if (!resolvedPath) {
       // Per-project isolation: use .contextos/index.db in current working directory
-      const localDbPath = path.join(canonicalDirectory(process.cwd()), '.contextos', 'index.db');
-      resolvedPath = localDbPath;
+      const registry = new WorkspaceRegistry();
+      try {
+        const source = registry.active(process.cwd()) ?? registry.register(process.cwd());
+        resolvedPath = source.dbPath;
+      } finally {
+        registry.close();
+      }
     }
     const privateState = isContextOSStateDatabase(resolvedPath);
     const dir = path.dirname(resolvedPath);
@@ -236,11 +246,19 @@ export class DB {
     const projectDir = canonicalDirectory(startDir);
 
     // 1. Open the local project DB (CWD)
-    const localDbPath = path.join(projectDir, '.contextos', 'index.db');
+    let localDbPath: string | undefined;
+    let registry: WorkspaceRegistry | undefined;
     try {
+      registry = new WorkspaceRegistry();
+      registry.reconcile();
+      localDbPath = (registry.active(projectDir) ?? registry.register(projectDir)).dbPath;
       dbs.push(new DB(localDbPath));
     } catch (error) {
-      console.error(`Failed to open local DB at ${localDbPath}: ${getErrorMessage(error)}`);
+      console.error(
+        `Failed to open project DB at ${localDbPath ?? projectDir}: ${getErrorMessage(error)}`
+      );
+    } finally {
+      registry?.close();
     }
 
     // 2. Add global DB if it exists and is different from local

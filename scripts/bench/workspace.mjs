@@ -12,9 +12,13 @@ const arg = (name, fallback) => {
   return i < 0 ? fallback : args[i + 1];
 };
 const root = path.resolve(import.meta.dirname, '../..');
+const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'))).version;
 const baseline = arg('--baseline-dir');
 if (!baseline) throw new Error('Pass --baseline-dir <built v1.1.0 checkout>');
-const output = arg('--output', path.join(root, 'validation', 'contextos-1.1.1-workspace.json'));
+const output = arg(
+  '--output',
+  path.join(root, 'validation', `contextos-${version}-workspace.json`)
+);
 const load = (base, file) => import(pathToFileURL(path.join(base, 'dist', 'src', file)).href);
 const [
   { WorkspaceRegistry },
@@ -105,8 +109,10 @@ try {
     workspaceP95 = p95(workspaceTimes),
     individualSumP95 = p95(individualSums);
   const metrics = {
-    version: '1.1.1',
-    baselineVersion: '1.1.0',
+    version,
+    baselineVersion: JSON.parse(fs.readFileSync(path.join(baseline, 'package.json'), 'utf8'))
+      .version,
+    baselineReference: arg('--baseline-reference', 'built baseline checkout'),
     nodeVersion: process.version,
     corpus: 'four-repository payment fixture',
     embeddingMode: 'disabled for deterministic keyword baseline',

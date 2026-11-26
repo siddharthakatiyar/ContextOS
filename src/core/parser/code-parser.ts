@@ -255,6 +255,8 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
   const language = detectLanguage(filePath);
   const symbols: CodeSymbol[] = [];
   const imports: string[] = [];
+  const importSpecifiers: string[] = [];
+  const importReferences: NonNullable<ParsedCodeDocument['importReferences']> = [];
 
   const parser = await getParser(language);
   if (!parser) {
@@ -270,6 +272,32 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
 
       if (IMPORT_TYPES.has(node.type)) {
         const targets = extractImportTargets(node);
+        if (
+          ['typescript', 'tsx'].includes(language) &&
+          node.type === 'import_statement' &&
+          node.parent?.type === 'program' &&
+          !node.hasError
+        ) {
+          const source = node.childForFieldName('source');
+          // Escaped literals and import-equals/require syntax need a separate resolver.
+          if (source?.type === 'string' && !source.text.includes('\\')) {
+            importReferences.push({
+              specifier: source.text.slice(1, -1),
+              mode: node.children.some((child) => child.type === 'type') ? 'types' : 'import',
+              startLine: node.startPosition.row + 1
+            });
+          }
+        }
+        if (language === 'go') {
+          const collectPaths = (part: Parser.SyntaxNode) => {
+            if (['interpreted_string_literal', 'raw_string_literal'].includes(part.type)) {
+              importSpecifiers.push(part.text.slice(1, -1));
+              return;
+            }
+            for (const child of part.children) collectPaths(child);
+          };
+          collectPaths(node);
+        } else if (targets[0]) importSpecifiers.push(targets[0]);
         for (const target of targets) {
           imports.push(target);
           symbols.push({
@@ -458,6 +486,8 @@ export async function parseCode(filePath: string, rawContent: string): Promise<P
     language,
     symbols,
     imports: Array.from(new Set(imports)),
+    importSpecifiers: Array.from(new Set(importSpecifiers)),
+    importReferences,
     rawContent
   };
 }

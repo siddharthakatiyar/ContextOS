@@ -1,16 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ContextOS Configuration",
-  "description": "Configuration schema for ContextOS (.contextos/config.json in a repo, or ~/.contextos/config.json global).",
+  "description": "ContextOS configuration: ~/.contextos/config.json globally, with per-project overrides in ~/.contextos/projects/<project-id>/config.json. Legacy project .contextos/config.json is read for compatibility.",
   "type": "object",
   "properties": {
     "dbPath": {
       "type": "string",
-      "description": "Path to the local SQLite database. Default: .contextos/index.db"
+      "description": "Selected project/worktree view database, managed by the registry under ~/.contextos/projects/<project-id>/views/<view-id>/index.db. Legacy project .contextos/index.db is a migration source."
     },
     "globalContextDir": {
       "type": "string",
-      "description": "Path to the global context directory. Default: ~/.contextos/global"
+      "description": "Legacy source-directory setting retained for configuration compatibility. Shared indexed content is read from ~/.contextos/index.db; the workspace server does not automatically scan this directory. Legacy default: ~/.contextos/global."
     },
     "indexablePatterns": {
       "type": "array",
@@ -20,7 +20,7 @@
     "ignorePatterns": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Glob patterns for files to ignore."
+      "description": "Glob patterns for files to ignore, in addition to safety exclusions and the project root .gitignore and .contextosignore files."
     },
     "maxChunkTokens": {
       "type": "number",
@@ -111,7 +111,8 @@
       "type": "number"
     },
     "adaptiveResponse": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "Reserved compatibility setting. The workspace server uses the request tier and token budgets instead."
     },
     "execAllowRepoScripts": {
       "type": "boolean",

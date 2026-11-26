@@ -148,6 +148,9 @@ export function stubLocLabel(c: ScoredChunk): string {
   const normalized = c.sourceFile.replace(/\\/g, '/');
   // Prefer last 2–3 path segments so agents can pass a usable relative path
   const parts = normalized.split('/').filter(Boolean);
+  const viewLabel = c.worktreeId
+    ? ` [${c.branch ?? (c.head ? 'detached@' + c.head.slice(0, 8) : 'working')}; ${c.worktreeId.slice(0, 8)}]`
+    : '';
   const display =
     c.repoName && c.relativePath
       ? `${c.repoName}/${c.relativePath}`
@@ -157,9 +160,9 @@ export function stubLocLabel(c: ScoredChunk): string {
           ? parts.slice(-2).join('/')
           : parts[0] || c.sourceFile;
   if (c.startLine != null && c.endLine != null) {
-    return `${display}:${c.startLine}-${c.endLine}`;
+    return `${display}:${c.startLine}-${c.endLine}${viewLabel}`;
   }
-  return display;
+  return display + viewLabel;
 }
 
 function extractCompactSignature(c: ScoredChunk): string | null {
@@ -974,7 +977,10 @@ export function packToBudget(
   let used = 0;
 
   const config = loadConfig();
-  const suppressSent = ctx.opts?.sentRegistry !== null && config.memoryInjection !== 'off';
+  const suppressSent =
+    ctx.opts?.sentRegistry !== null &&
+    config.sentDedupEnabled !== false &&
+    config.memoryInjection !== 'off';
   const sentRegistry = ctx.opts?.sentRegistry ?? globalSentRegistry;
 
   const finalCandidates: ScoredChunk[] = [];

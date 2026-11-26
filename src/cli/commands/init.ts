@@ -1,187 +1,164 @@
 import { Command } from 'commander';
-import fs from 'fs';
-import path from 'path';
-import { DB, getContextOSHome } from '../../core/storage/database.js';
+import { nestedProjectWarning } from '../../core/workspace/project-boundary.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { discoverProject } from '../../core/workspace/discovery.js';
+import { WorkspaceRegistry } from '../../core/workspace/registry.js';
+import { WorkspaceRuntime } from '../../core/workspace/runtime.js';
+import { refreshWorkspaceDaemon } from '../../core/workspace/daemon.js';
 import { generateCursorConfig } from '../../mcp/cursor/config-generator.js';
-import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
-import chalk from 'chalk';
 import { mergeContextosMcpConfig, validateJsonConfigs } from '../utils/mcp-config.js';
+import { AGENT_BLOCK_START, installAgentInstructions } from '../utils/agent-instructions.js';
+import { loadConfig } from '../../config/index.js';
+import { projectGitFiles } from '../utils/project-git-files.js';
 import {
-  canonicalDirectory,
-  ensurePrivateStateDir,
-  preparePrivateStateFile,
-  writePrivateStateFile
-} from '../../utils/secure-state.js';
+  installProjectAgentConfigs,
+  projectAgentJsonPaths
+} from '../utils/project-agent-config.js';
+
+function projectSetupPlan(cwd: string, options: { integrations?: boolean }) {
+  const configs = [
+    path.join(cwd, '.mcp.json'),
+    ...(fs.existsSync(path.join(cwd, '.cursor')) ? [path.join(cwd, '.cursor', 'mcp.json')] : []),
+    ...projectAgentJsonPaths(cwd),
+    path.join(cwd, '.vscode', 'cline_mcp_settings.json'),
+    path.join(cwd, '.vscode', 'roo_mcp_settings.json')
+  ];
+  const integrations =
+    options.integrations !== false &&
+    loadConfig({ cwd, forceReload: true }).cursor.autoGenerateConfig !== false;
+  if (integrations) validateJsonConfigs(configs.filter(projectGitFiles(cwd).canWrite));
+  return { configs, integrations };
+}
+
+/** Refresh checkout integration without changing registration or group membership. */
+export function refreshProjectSetup(
+  cwd: string,
+  options: { group?: string; integrations?: boolean } = {},
+  plan = projectSetupPlan(cwd, options)
+): string[] {
+  if (!plan.integrations)
+    return ['Automatic project integrations are disabled; no checkout files were changed.'];
+  const git = projectGitFiles(cwd);
+  const instructionFiles = ['AGENTS.md', 'CLAUDE.md'].map((name) => path.join(cwd, name));
+  const excludableInstructions = instructionFiles.filter(
+    (file) => !fs.existsSync(file) || fs.readFileSync(file, 'utf8').includes(AGENT_BLOCK_START)
+  );
+  installAgentInstructions(cwd, git.canWrite);
+  const generated = generateCursorConfig({ projectRoot: cwd, workspaceName: options.group });
+  const written = excludableInstructions.filter(git.canWrite);
+  for (const config of plan.configs) {
+    if (!git.canWrite(config)) continue;
+    mergeContextosMcpConfig(config, generated);
+    written.push(config);
+  }
+  const agents = installProjectAgentConfigs(cwd, generated, git.canWrite);
+  git.exclude([...written, ...agents.configured]);
+  return agents.warnings;
+}
+
+export async function initializeProject(
+  input: string,
+  options: {
+    name?: string;
+    group?: string;
+    workspace?: string;
+    index?: boolean;
+    integrations?: boolean;
+    json?: boolean;
+  } = {}
+): Promise<void> {
+  const registry = new WorkspaceRegistry();
+  const runtime = new WorkspaceRuntime(registry);
+  try {
+    const canonical = fs.realpathSync(input);
+    const discovered = discoverProject(canonical);
+    const cwd =
+      discovered.worktrees
+        .filter(
+          (tree) => canonical === tree.rootPath || canonical.startsWith(tree.rootPath + path.sep)
+        )
+        .sort((a, b) => b.rootPath.length - a.rootPath.length)[0]?.rootPath ?? discovered.rootPath;
+    const boundaryWarning = nestedProjectWarning(cwd, registry);
+    if (boundaryWarning && !options.json) console.warn(boundaryWarning);
+    const plan = projectSetupPlan(cwd, options);
+    const source = registry.register(cwd, {
+      name: options.name,
+      workspace: options.group ?? options.workspace ?? 'default'
+    });
+    const views = registry.listAll().filter((view) => view.projectId === source.projectId);
+    const integrationWarnings = refreshProjectSetup(
+      cwd,
+      { ...options, group: options.group ?? options.workspace },
+      plan
+    );
+    for (const root of new Set(views.map((view) => view.rootPath))) {
+      if (root === cwd || !fs.existsSync(root)) continue;
+      integrationWarnings.push(
+        ...refreshProjectSetup(root, {
+          ...options,
+          group: options.group ?? options.workspace
+        })
+      );
+    }
+    if (boundaryWarning) integrationWarnings.push(boundaryWarning);
+    if (!options.json)
+      for (const warning of integrationWarnings.filter((warning) => warning !== boundaryWarning))
+        console.warn(warning);
+    if (!options.json)
+      console.log(
+        `Registered ${source.name} in ${options.group ?? options.workspace ?? 'default'} (${views.length} checkout${views.length === 1 ? '' : 's'}).`
+      );
+    if (options.index !== false) {
+      await Promise.all(
+        views.map(async (view) => {
+          await runtime
+            .get(view)
+            .index(
+              false,
+              options.json ? (message) => process.stderr.write(`${message}\n`) : undefined
+            );
+        })
+      );
+      if (!options.json)
+        console.log(
+          `Indexed ${source.name}. Data: ${path.dirname(path.dirname(path.dirname(source.dbPath)))}`
+        );
+    }
+    if (options.json) {
+      const current = registry.listAll().find((view) => view.viewId === source.viewId) ?? source;
+      process.stdout.write(
+        `${JSON.stringify({ status: 'registered', projectId: current.projectId, worktreeId: current.worktreeId, viewId: current.viewId, rootPath: current.rootPath, dbPath: current.dbPath, state: current.state, generation: current.generation, integrationWarnings, restart: 'Restart the coding agent or reconnect its MCP server to load project configuration.' })}\n`
+      );
+    }
+  } finally {
+    await runtime.close();
+    registry.close();
+  }
+  // Release this command's indexing leases before handing new memberships to
+  // the live service. Waiting for its refresh prevents immediate reads racing
+  // the periodic watcher's first scan after a project is re-added.
+  if (options.index !== false)
+    await refreshWorkspaceDaemon(options.group ?? options.workspace ?? 'default');
+}
 
 export const initCommand = new Command('init')
-  .description('Initialize ContextOS in the current repository')
-  .action(async () => {
-    const cwd = canonicalDirectory(process.cwd());
-    const repoContextDir = path.join(cwd, '.contextos');
-    const globalContextDir = path.join(getContextOSHome(), 'global');
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    const antigravityGlobalPath = homeDir
-      ? path.join(homeDir, '.gemini', 'config', 'mcp_config.json')
-      : null;
-    const jsonConfigPaths = [
-      fs.existsSync(path.join(cwd, '.cursor')) ? path.join(cwd, '.cursor', 'mcp.json') : null,
-      antigravityGlobalPath,
-      fs.existsSync(path.join(cwd, '.agents'))
-        ? path.join(cwd, '.agents', 'mcp_config.json')
-        : null,
-      path.join(cwd, '.mcp.json'),
-      path.join(cwd, '.vscode', 'cline_mcp_settings.json'),
-      path.join(cwd, '.vscode', 'roo_mcp_settings.json')
-    ].filter((configPath): configPath is string => configPath !== null);
-
-    // Fail before writing any client configuration or starting the daemon. An
-    // invalid existing config must never be silently replaced.
-    validateJsonConfigs(jsonConfigPaths);
-
-    // Create owner-private state directories. A symlinked state path is
-    // rejected before any fixed-name file can be redirected outside the repo.
-    ensurePrivateStateDir(repoContextDir);
-    ensurePrivateStateDir(globalContextDir);
-
-    // Create default global template if not exists
-    const defaultGlobalDoc = path.join(globalContextDir, 'engineering.md');
-    if (!fs.existsSync(defaultGlobalDoc)) {
-      writePrivateStateFile(
-        defaultGlobalDoc,
-        '# Global Engineering Rules\n\nAdd your organization-wide engineering rules here.\n'
-      );
-    } else {
-      preparePrivateStateFile(defaultGlobalDoc);
-    }
-
-    console.log(`Initialized ContextOS in ${cwd}`);
-    console.log(`Global context dir: ${globalContextDir}`);
-
-    const db = new DB();
-
-    try {
-      const startTime = Date.now();
-
-      // Mark repo as needing a full index so the daemon will pick it up
-      const statusPath = path.join(repoContextDir, 'status.json');
-      writePrivateStateFile(statusPath, JSON.stringify({ fullIndexCompleted: false }));
-
-      const elapsedMs = Date.now() - startTime;
-      console.log(
-        chalk.green.bold(`\n\u2714 Initialized ContextOS in ${(elapsedMs / 1000).toFixed(1)}s`)
-      );
-      console.log(`Repository is scheduled for background indexing.\n`);
-
-      // Generate cursor config if .cursor exists
-      if (fs.existsSync(path.join(cwd, '.cursor'))) {
-        const configPath = path.join(cwd, '.cursor', 'mcp.json');
-        const result = mergeContextosMcpConfig(
-          configPath,
-          generateCursorConfig({ projectRoot: cwd })
-        );
-        console.log(
-          `${result === 'preserved' ? 'Preserved' : 'Updated'} Cursor MCP configuration at ${configPath}`
-        );
+  .description('Initialize global project storage and discover local Git worktrees')
+  .argument('[path]', 'Project or worktree path', '.')
+  .option('--name <name>', 'Unique project name')
+  .option('--group <name>', 'Add this project to a group', 'default')
+  .option('--no-index', 'Register without indexing')
+  .option('--no-integrations', 'Register without writing project instructions or client config')
+  .option('--json', 'Output a structured result')
+  .action(
+    async (
+      input: string,
+      options: {
+        name?: string;
+        group: string;
+        index: boolean;
+        integrations: boolean;
+        json?: boolean;
       }
-
-      // Generate Antigravity MCP config
-      // 1. Global config: ~/.gemini/config/mcp_config.json (always written)
-      if (antigravityGlobalPath) {
-        const result = mergeContextosMcpConfig(
-          antigravityGlobalPath,
-          generateCursorConfig({ projectRoot: cwd })
-        );
-        console.log(
-          `${result === 'preserved' ? 'Preserved' : 'Updated'} Antigravity global MCP configuration at ${antigravityGlobalPath}`
-        );
-      }
-
-      // 2. Project-level config: .agents/mcp_config.json (if .agents dir exists)
-      if (fs.existsSync(path.join(cwd, '.agents'))) {
-        const configPath = path.join(cwd, '.agents', 'mcp_config.json');
-        const result = mergeContextosMcpConfig(
-          configPath,
-          generateCursorConfig({ projectRoot: cwd })
-        );
-        console.log(
-          `${result === 'preserved' ? 'Preserved' : 'Updated'} Antigravity project MCP configuration at ${configPath}`
-        );
-      }
-
-      // Generate Claude Code (and generic) MCP config (.mcp.json)
-      const claudeConfigPath = path.join(cwd, '.mcp.json');
-      const generated = generateCursorConfig({ projectRoot: cwd });
-      const claudeResult = mergeContextosMcpConfig(claudeConfigPath, generated);
-      console.log(
-        `${claudeResult === 'preserved' ? 'Preserved' : 'Updated'} Claude Code MCP configuration at ${claudeConfigPath}`
-      );
-
-      // Ensure CLAUDE.md has instructions since Claude Code currently ignores MCP SDK instructions
-      const claudeMdPath = path.join(cwd, 'CLAUDE.md');
-      const claudeMdInstructions = `\n## ContextOS\n${MCP_SERVER_INSTRUCTIONS}\n`;
-      if (!fs.existsSync(claudeMdPath)) {
-        fs.writeFileSync(claudeMdPath, claudeMdInstructions.trim() + '\n');
-        console.log(`Created CLAUDE.md with ContextOS instructions`);
-      } else {
-        const currentClaudeMd = fs.readFileSync(claudeMdPath, 'utf8');
-        if (!currentClaudeMd.includes('get_context')) {
-          fs.appendFileSync(claudeMdPath, claudeMdInstructions);
-          console.log(`Appended ContextOS instructions to CLAUDE.md`);
-        }
-      }
-
-      // Generate VS Code MCP configs (Cline and Roo Code)
-      const vscodeDir = path.join(cwd, '.vscode');
-      if (!fs.existsSync(vscodeDir)) {
-        fs.mkdirSync(vscodeDir, { recursive: true });
-      }
-
-      const vscodeMcpConfigs = [
-        { name: 'Cline', file: 'cline_mcp_settings.json' },
-        { name: 'Roo Code', file: 'roo_mcp_settings.json' }
-      ];
-
-      for (const { name, file } of vscodeMcpConfigs) {
-        const configPath = path.join(vscodeDir, file);
-        const result = mergeContextosMcpConfig(configPath, generated);
-        console.log(
-          `${result === 'preserved' ? 'Preserved' : 'Updated'} ${name} (VS Code) MCP configuration at ${configPath}`
-        );
-      }
-
-      // Generate Codex CLI config if .codex exists
-      if (fs.existsSync(path.join(cwd, '.codex'))) {
-        const codexConfigPath = path.join(cwd, '.codex', 'config.toml');
-        let codexConfig = '';
-        if (fs.existsSync(codexConfigPath)) {
-          codexConfig = fs.readFileSync(codexConfigPath, 'utf8');
-        }
-        if (!codexConfig.includes('[mcp_servers.contextos]')) {
-          codexConfig += `\n\n[mcp_servers.contextos]\ncommand = "npx"\nargs = ["-y", "@siddharthakatiyar/contextos@latest", "serve"]\n`;
-          codexConfig += `[mcp_servers.contextos.env]\nCONTEXTOS_REPO_ROOT = "${cwd}"\nCONTEXTOS_WORKSPACE = ""\n`;
-          fs.writeFileSync(codexConfigPath, codexConfig.trim() + '\n');
-          console.log(`Updated Codex CLI configuration at ${codexConfigPath}`);
-        }
-      }
-
-      // Auto-start daemon in background for zero-config DX
-      try {
-        const { spawn } = await import('child_process');
-        // Use the current process's executable and script to start the daemon,
-        // rather than 'npx contextos' which would fetch from npm in CI environments.
-        const cliPath = process.argv[1];
-        const daemonProcess = spawn(process.execPath, [cliPath, 'daemon', 'start'], {
-          detached: true,
-          stdio: 'ignore'
-        });
-        daemonProcess.unref();
-        console.log('ContextOS daemon started in background (zero-config).');
-      } catch {
-        console.log('Failed to auto-start daemon, you can run `npx contextos daemon` manually.');
-      }
-
-      console.log('ContextOS initialization complete. You can now use the agent!');
-    } finally {
-      db.close();
-    }
-  });
+    ) => initializeProject(path.resolve(input), options)
+  );

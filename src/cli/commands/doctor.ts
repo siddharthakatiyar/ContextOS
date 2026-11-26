@@ -1,4 +1,5 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
+import { formatIndexWarning } from '../../core/daemon/index-status.js';
 import Database from 'better-sqlite3';
 import chalk from 'chalk';
 import crypto from 'node:crypto';
@@ -8,7 +9,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { INDEXER_VERSION } from '../../core/daemon/background-indexer.js';
 import { getPackageVersion } from '../../utils/version.js';
-import { canonicalDirectory } from '../../utils/secure-state.js';
+import { canonicalDirectory, unixSocketPath } from '../../utils/secure-state.js';
+import { registeredProjectPaths } from '../../core/workspace/project-paths.js';
+import {
+  DIAGNOSTIC_CLIENTS,
+  inspectAgentDiagnostics,
+  inspectRegisteredScope,
+  type DiagnosticClient
+} from '../utils/agent-diagnostics.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'unknown';
 
@@ -165,10 +173,10 @@ function readJsonMcpEntry(contents: string): { entry: McpServerEntry | null; err
   let parsed: unknown;
   try {
     parsed = JSON.parse(contents);
-  } catch (error) {
+  } catch {
     return {
       entry: null,
-      error: error instanceof Error ? error.message : String(error)
+      error: 'invalid JSON (contents omitted)'
     };
   }
 
@@ -368,7 +376,7 @@ function inspectMcpConfigs(root: string, cliVersion: string): DoctorCheck[] {
         checks.push({
           id: `mcp-version:${config.relativePath}${serverSuffix}`,
           status: 'fail',
-          summary: `The configured ContextOS script does not exist at ${configuredScript.path}`,
+          summary: `The configured ContextOS script does not exist at ${configuredScript.path} (config: ${configPath}, server: ${entry.serverName ?? 'contextos'}). Update this server entry to the installed ContextOS script path, or run contextos init in this project to regenerate its MCP configuration.`,
           details: { path: configPath, scriptPath: configuredScript.path }
         });
         continue;
@@ -413,8 +421,10 @@ function inspectMcpConfigs(root: string, cliVersion: string): DoctorCheck[] {
   return checks;
 }
 
-function inspectIndexDatabase(root: string): DoctorCheck {
-  const databasePath = path.join(root, '.contextos', 'index.db');
+function inspectIndexDatabase(
+  root: string,
+  databasePath = path.join(root, '.contextos', 'index.db')
+): DoctorCheck {
   if (!fs.existsSync(databasePath)) {
     return {
       id: 'index-database',
@@ -527,8 +537,10 @@ function inspectIndexDatabase(root: string): DoctorCheck {
   }
 }
 
-function inspectIndexStatus(root: string): DoctorCheck {
-  const statusPath = path.join(root, '.contextos', 'status.json');
+function inspectIndexStatus(
+  root: string,
+  statusPath = path.join(root, '.contextos', 'status.json')
+): DoctorCheck {
   if (!fs.existsSync(statusPath)) {
     return {
       id: 'index-status',
@@ -556,8 +568,22 @@ function inspectIndexStatus(root: string): DoctorCheck {
     return {
       id: 'index-status',
       status: 'fail',
-      summary: `The last index run reported an error: ${status.error.slice(0, 300)}`,
-      details: { path: statusPath }
+      summary: [
+        `The last index run reported an error: ${status.error.slice(0, 300)}`,
+        formatIndexWarning(status)
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      details: { path: statusPath, ...status }
+    };
+  }
+
+  if (status.fullIndexCompleted === true && status.partial === true) {
+    return {
+      id: 'index-status',
+      status: 'warn',
+      summary: formatIndexWarning(status) ?? 'The index has partial coverage',
+      details: { path: statusPath, ...status }
     };
   }
 
@@ -639,8 +665,10 @@ function inspectIndexStatus(root: string): DoctorCheck {
   };
 }
 
-function inspectDaemonPid(root: string): DaemonPidResult {
-  const pidPath = path.join(root, '.contextos', 'daemon.pid');
+function inspectDaemonPid(
+  root: string,
+  pidPath = path.join(root, '.contextos', 'daemon.pid')
+): DaemonPidResult {
   if (!fs.existsSync(pidPath)) {
     return {
       check: {
@@ -728,7 +756,7 @@ function daemonSocketPath(root: string, homeDirectory: string): string {
     return path.join('\\\\?\\pipe', `contextos-${Buffer.from(root).toString('hex')}`);
   }
   const hash = crypto.createHash('md5').update(root).digest('hex').slice(0, 12);
-  return path.join(homeDirectory, '.contextos', 'run', `d-${hash}.sock`);
+  return unixSocketPath(path.join(homeDirectory, '.contextos', 'run'), `d-${hash}.sock`, false);
 }
 
 function unpackRpcError(message: Record<string, unknown>): Error | null {
@@ -736,7 +764,11 @@ function unpackRpcError(message: Record<string, unknown>): Error | null {
   return new Error(asString(message.error.message) ?? 'MCP request failed');
 }
 
-async function probeDaemon(socketPath: string, cliVersion: string): Promise<DaemonProbeResult> {
+async function probeDaemon(
+  socketPath: string,
+  cliVersion: string,
+  sharedRoot?: string
+): Promise<DaemonProbeResult> {
   const socket = net.createConnection(socketPath);
   const pending = new Map<
     number,
@@ -812,6 +844,7 @@ async function probeDaemon(socketPath: string, cliVersion: string): Promise<Daem
 
   try {
     await waitForConnection;
+    if (sharedRoot) socket.write(JSON.stringify({ action: 'doctor', cwd: sharedRoot }) + '\n');
     const initializeResponse = await request(1, 'initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
@@ -896,23 +929,52 @@ export async function collectDoctorReport(
   options: {
     cwd?: string;
     homeDirectory?: string;
+    client?: DiagnosticClient;
+    noninteractive?: boolean;
   } = {}
 ): Promise<DoctorReport> {
   const root = canonicalDirectory(options.cwd ?? process.cwd());
   const homeDirectory = options.homeDirectory ?? os.homedir();
   const cliVersion = getPackageVersion();
+  const registered = registeredProjectPaths(root, homeDirectory);
   const checks = inspectMcpConfigs(root, cliVersion);
-  checks.push(inspectIndexDatabase(root));
-  checks.push(inspectIndexStatus(root));
+  checks.push(...inspectRegisteredScope(root, homeDirectory));
+  checks.push(
+    ...inspectAgentDiagnostics({
+      root,
+      projectRoot: registered?.rootPath,
+      homeDirectory,
+      client: options.client,
+      noninteractive: options.noninteractive
+    })
+  );
+  checks.push(inspectIndexDatabase(registered?.rootPath ?? root, registered?.dbPath));
+  checks.push(
+    inspectIndexStatus(
+      root,
+      registered ? path.join(path.dirname(registered.dbPath), 'status.json') : undefined
+    )
+  );
 
-  const daemonPid = inspectDaemonPid(root);
+  const sharedDir = path.join(homeDirectory, '.contextos', 'runtime');
+  const sharedPid = path.join(sharedDir, 'daemon.pid');
+  const usingShared = fs.existsSync(sharedPid);
+  const daemonPid = inspectDaemonPid(root, usingShared ? sharedPid : undefined);
   checks.push(daemonPid.check);
 
   let daemon: DaemonProbeResult | null = null;
-  const socketPath = daemonSocketPath(root, homeDirectory);
+  const socketPath = usingShared
+    ? process.platform === 'win32'
+      ? daemonSocketPath(sharedDir, homeDirectory)
+      : unixSocketPath(sharedDir, 'daemon.sock', false)
+    : daemonSocketPath(root, homeDirectory);
   if (fs.existsSync(socketPath)) {
     try {
-      daemon = await probeDaemon(socketPath, cliVersion);
+      daemon = await probeDaemon(
+        socketPath,
+        cliVersion,
+        usingShared ? (registered?.rootPath ?? root) : undefined
+      );
       checks.push({
         id: 'daemon-mcp',
         status: 'pass',
@@ -970,7 +1032,40 @@ function renderHumanReport(report: DoctorReport): string {
     `CLI version: ${report.cliVersion}`,
     ''
   ];
-  for (const check of report.checks) lines.push(`${labels[check.status]}  ${check.summary}`);
+  for (const check of report.checks) {
+    lines.push(`${labels[check.status]}  ${check.summary}`);
+    if (check.id === 'agent-instructions' && Array.isArray(check.details?.files)) {
+      for (const file of check.details.files as Array<{
+        path: string;
+        exists: boolean;
+        importedBy?: string;
+        containsContextOS?: boolean;
+        unreadable?: boolean;
+      }>) {
+        if (!file.exists && !file.importedBy) continue;
+        const state = !file.exists
+          ? 'missing import'
+          : file.unreadable
+            ? 'unreadable'
+            : file.containsContextOS
+              ? 'ContextOS guidance'
+              : 'no ContextOS guidance';
+        lines.push(
+          `  ${file.path} (${state}${file.importedBy ? `; imported by ${file.importedBy}` : ''})`
+        );
+      }
+    }
+    if (check.id === 'agent-mcp-registration' && Array.isArray(check.details?.registrations)) {
+      for (const registration of check.details.registrations as Array<{
+        path: string;
+        serverName: string;
+        enabled: boolean;
+      }>)
+        lines.push(
+          `  ${registration.path} (${registration.serverName}; ${registration.enabled ? 'enabled' : 'disabled'})`
+        );
+    }
+  }
   lines.push(
     '',
     `Checks: ${report.summary.pass} pass, ${report.summary.warn} warning(s), ${report.summary.fail} failure(s), ${report.summary.unknown} unknown`
@@ -981,9 +1076,21 @@ function renderHumanReport(report: DoctorReport): string {
 export const doctorCommand = new Command('doctor')
   .description('Diagnose ContextOS configuration, daemon, and index state without changing files')
   .option('--json', 'Output diagnostics as JSON')
-  .action(async (options: { json?: boolean }) => {
-    const report = await collectDoctorReport();
-    if (options.json) console.log(JSON.stringify(report, null, 2));
-    else console.log(renderHumanReport(report));
-    if (report.exitCode !== 0) process.exitCode = report.exitCode;
-  });
+  .addOption(
+    new Option(
+      '--client <client>',
+      'Inspect instruction discovery, MCP registration, and configured tool permissions for one client'
+    ).choices([...DIAGNOSTIC_CLIENTS])
+  )
+  .option('--noninteractive', 'Diagnose approval requirements for a run that cannot answer prompts')
+  .action(
+    async (options: { json?: boolean; client?: DiagnosticClient; noninteractive?: boolean }) => {
+      const report = await collectDoctorReport({
+        client: options.client,
+        noninteractive: options.noninteractive
+      });
+      if (options.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(renderHumanReport(report));
+      if (report.exitCode !== 0) process.exitCode = report.exitCode;
+    }
+  );

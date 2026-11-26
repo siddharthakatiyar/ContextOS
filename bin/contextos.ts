@@ -28,10 +28,15 @@ function findPackageManifest(start: string): { path: string; version: string } {
 function skipsStartupNotice(args: string[]): boolean {
   const commands = new Set([
     'init',
+    'setup',
+    'enable',
     'serve',
     'query',
     'workspace',
     'repo',
+    'project',
+    'group',
+    'worktree',
     'watch',
     'export',
     'import',
@@ -43,13 +48,17 @@ function skipsStartupNotice(args: string[]): boolean {
     'daemon',
     'visualize',
     'upgrade',
+    'update',
     'updates'
   ]);
   const commandIndex = args.findIndex((arg) => commands.has(arg));
   const command = commandIndex >= 0 ? args[commandIndex] : undefined;
   return (
     command === 'doctor' ||
+    command === 'enable' ||
+    command === 'setup' ||
     command === 'upgrade' ||
+    command === 'update' ||
     command === 'updates' ||
     command === 'serve' ||
     args.includes('--version') ||
@@ -61,7 +70,15 @@ function skipsStartupNotice(args: string[]): boolean {
 }
 
 function skipsFirstUseAutoPatchNotice(args: string[]): boolean {
-  const maintenanceCommands = new Set(['doctor', 'upgrade', 'updates', 'daemon', 'help']);
+  const maintenanceCommands = new Set([
+    'doctor',
+    'enable',
+    'setup',
+    'upgrade',
+    'updates',
+    'daemon',
+    'help'
+  ]);
   const command = args.find((arg) => !arg.startsWith('-'));
   return (
     (command !== undefined && maintenanceCommands.has(command)) ||
@@ -74,6 +91,16 @@ function skipsFirstUseAutoPatchNotice(args: string[]): boolean {
 }
 
 async function main(): Promise<void> {
+  const serveArgs = process.argv.slice(2);
+  if (
+    serveArgs.find((arg) => !arg.startsWith('-')) === 'serve' &&
+    !serveArgs.some((arg) => ['--help', '-h', '--version', '--cli-version', '-V'].includes(arg)) &&
+    process.env.CONTEXTOS_DAEMON_PROXY_BACKEND !== '1'
+  ) {
+    const { runHandshakeProxy } = await import('../src/mcp/handshake-proxy.js');
+    await runHandshakeProxy();
+    return;
+  }
   // Keep the entrypoint light until the updater lock is clear. A package swap
   // must not make new commands import a mix of the old and new package trees.
   const { waitForUpgradeToFinish } = await import('../src/core/updater/upgrade-lock.js');
@@ -84,6 +111,16 @@ async function main(): Promise<void> {
   if (args.includes('--version') && !args.includes('upgrade')) {
     process.stdout.write(`${manifest.version}\n`);
     return;
+  }
+
+  const command = args.find((arg) => !arg.startsWith('-'));
+  if (
+    command &&
+    ['serve', 'query', 'watch', 'reindex', 'status'].includes(command) &&
+    !args.some((arg) => ['--help', '-h'].includes(arg))
+  ) {
+    const { upgradeExistingProjects } = await import('../src/cli/utils/installation-setup.js');
+    await upgradeExistingProjects({ cwd: process.env.CONTEXTOS_REPO_ROOT || process.cwd() });
   }
 
   if (!skipsFirstUseAutoPatchNotice(args) && process.env.CONTEXTOS_AUTO_PATCH_REEXEC !== '1') {
@@ -114,6 +151,8 @@ async function main(): Promise<void> {
 
   const commands = await Promise.all([
     import('../src/cli/commands/init.js'),
+    import('../src/cli/commands/setup.js'),
+    import('../src/cli/commands/enable.js'),
     import('../src/cli/commands/serve.js'),
     import('../src/cli/commands/query.js'),
     import('../src/cli/commands/workspace.js'),
@@ -129,10 +168,14 @@ async function main(): Promise<void> {
     import('../src/cli/commands/visualize.js'),
     import('../src/cli/commands/upgrade.js'),
     import('../src/cli/commands/updates.js'),
-    import('../src/cli/commands/repo.js')
+    import('../src/cli/commands/repo.js'),
+    import('../src/cli/commands/group.js'),
+    import('../src/cli/commands/worktree.js')
   ]);
   const [
     init,
+    setup,
+    enable,
     serve,
     query,
     workspace,
@@ -148,7 +191,9 @@ async function main(): Promise<void> {
     visualize,
     upgrade,
     updates,
-    repo
+    repo,
+    group,
+    worktree
   ] = commands;
 
   program
@@ -170,6 +215,8 @@ async function main(): Promise<void> {
 
   for (const command of [
     init.initCommand,
+    setup.setupCommand,
+    enable.enableCommand,
     serve.serveCommand,
     query.queryCommand,
     workspace.workspaceCommand,
@@ -185,7 +232,9 @@ async function main(): Promise<void> {
     visualize.visualizeCommand,
     upgrade.upgradeCommand,
     updates.updatesCommand,
-    repo.repoCommand
+    repo.repoCommand,
+    group.groupCommand,
+    worktree.worktreeCommand
   ]) {
     program.addCommand(command);
   }
@@ -196,7 +245,7 @@ async function main(): Promise<void> {
       performance.mark('contextos_end');
       performance.measure('Execution Time', 'contextos_start', 'contextos_end');
       const measure = performance.getEntriesByName('Execution Time')[0];
-      process.stdout.write(`\n[Profile] Total execution time: ${measure.duration.toFixed(2)}ms\n`);
+      process.stderr.write(`\n[Profile] Total execution time: ${measure.duration.toFixed(2)}ms\n`);
     }
   } catch (error) {
     handleCliError(error);

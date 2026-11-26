@@ -22,7 +22,7 @@ const outputDir = process.env.CONTEXTOS_BENCH_OUTPUT_DIR ||
 const child = spawnSync(process.execPath, [tsxCli, benchmarkScript, '--json'], {
   cwd: root,
   encoding: 'utf8',
-  env: { ...process.env }
+  env: { ...process.env, CONTEXTOS_EMBEDDINGS: process.env.CONTEXTOS_EMBEDDINGS ?? '0' }
 });
 
 if (child.error) {

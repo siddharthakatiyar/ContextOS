@@ -1,19 +1,68 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import {
   ensurePrivateStateDir,
   preparePrivateStateFile,
   removePrivateStateFile,
   writePrivateStateFile,
   PRIVATE_DIR_MODE,
-  PRIVATE_FILE_MODE
+  PRIVATE_FILE_MODE,
+  getDaemonSocketPath,
+  getDaemonControlSocketPath,
+  unixSocketPath,
+  secureBoundSocket
 } from '../../src/utils/secure-state.js';
 
 const mode = (filePath: string) => fs.statSync(filePath).mode & 0o777;
 
 describe('private ContextOS state paths', () => {
+  it.skipIf(process.platform === 'win32')(
+    'binds private channels with a long home path',
+    async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-long-home-'));
+      const home = path.join(root, 'nested-home-'.repeat(12));
+      fs.mkdirSync(home);
+      const homedir = vi.spyOn(os, 'homedir').mockReturnValue(home);
+      const addresses = [
+        getDaemonSocketPath(root),
+        getDaemonControlSocketPath(root, '.index'),
+        unixSocketPath(path.join(home, '.contextos', 'runtime'), 'daemon.sock')
+      ];
+      try {
+        expect(new Set(addresses).size).toBe(3);
+        for (const address of addresses) {
+          expect(Buffer.byteLength(address)).toBeLessThanOrEqual(100);
+          expect(mode(path.dirname(address))).toBe(PRIVATE_DIR_MODE);
+          const server = net.createServer((socket) => socket.end());
+          try {
+            await new Promise<void>((resolve, reject) => {
+              server.once('error', reject);
+              server.listen(address, resolve);
+            });
+            secureBoundSocket(address);
+            expect(mode(address)).toBe(PRIVATE_FILE_MODE);
+            await new Promise<void>((resolve, reject) => {
+              const client = net.createConnection(address);
+              client.once('error', reject);
+              client.once('close', resolve);
+            });
+          } finally {
+            if (server.listening)
+              await new Promise<void>((resolve) => server.close(() => resolve()));
+          }
+        }
+      } finally {
+        homedir.mockRestore();
+        fs.rmSync(root, { recursive: true, force: true });
+        for (const directory of new Set(addresses.map((address) => path.dirname(address))))
+          fs.rmSync(directory, { recursive: true, force: true });
+      }
+    }
+  );
+
   it('creates owner-only directories and files', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'contextos-private-state-'));
     try {

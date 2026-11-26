@@ -1,6 +1,6 @@
 {
   "name": "@siddharthakatiyar/contextos",
-  "version": "1.1.1",
+  "version": "1.2.3",
   "description": "ContextOS - Universal knowledge graph for coding agents",
   "repository": {
     "type": "git",
@@ -8,7 +8,7 @@
   },
   "type": "module",
   "bin": {
-    "contextos": "./dist/bin/contextos.js"
+    "contextos": "dist/bin/contextos.js"
   },
   "main": "dist/src/index.js",
   "workspaces": [
@@ -21,10 +21,11 @@
     "README.md",
     ".contextosignore.default",
     "config.schema.json",
-    "THIRD-PARTY-NOTICES.md"
+    "THIRD-PARTY-NOTICES.md",
+    "UPGRADING.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/generate-tool-catalog.mjs",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
@@ -34,7 +35,8 @@
     "postinstall": "node scripts/postinstall.mjs",
     "prepublishOnly": "npm run build",
     "bench": "node scripts/bench/run.mjs",
-    "generate:large-repo": "tsx tools/generate-large-repo.ts"
+    "generate:large-repo": "tsx tools/generate-large-repo.ts",
+    "test:packed-install": "node scripts/packed-install-smoke.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -64,6 +66,7 @@
     "glob": "^14.0.2",
     "gpt-tokenizer": "^3.4.0",
     "ignore": "7.0.9",
+    "js-yaml": "4.3.2",
     "minimatch": "^11.0.1",
     "ora": "^9.4.0",
     "sqlite-vec": "^0.1.9",

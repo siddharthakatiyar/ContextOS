@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:7db8227d-35ce-4066-b850-063b671b52a4",
+  "serialNumber": "urn:uuid:a79dfab8-f1be-43c2-af27-a0f6478ea870",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-03T13:22:36.678Z",
+    "timestamp": "2026-11-17T08:13:23.455Z",
     "lifecycles": [
       {
         "phase": "pre-build"
@@ -19,14 +19,14 @@
       }
     ],
     "component": {
-      "bom-ref": "@siddharthakatiyar/contextos@1.1.0",
+      "bom-ref": "@siddharthakatiyar/contextos@1.2.3",
       "type": "library",
-      "name": "ContextOS-release-v1.1.0",
-      "version": "1.1.0",
+      "name": "ContextOS",
+      "version": "1.2.3",
       "scope": "required",
       "author": "Siddhartha Katiyar",
       "description": "ContextOS - Universal knowledge graph for coding agents",
-      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.1.0",
+      "purl": "pkg:npm/%40siddharthakatiyar/contextos@1.2.3",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -58,12 +58,12 @@
   },
   "components": [
     {
-      "bom-ref": "docs@1.1.0",
+      "bom-ref": "docs@1.2.3",
       "type": "library",
       "name": "docs",
-      "version": "1.1.0",
+      "version": "1.2.3",
       "scope": "required",
-      "purl": "pkg:npm/docs@1.1.0",
+      "purl": "pkg:npm/docs@1.2.3",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -75,340 +75,6 @@
         }
       ],
       "externalReferences": []
-    },
-    {
-      "bom-ref": "@next/env@16.4.3",
-      "type": "library",
-      "name": "@next/env",
-      "version": "16.4.3",
-      "scope": "required",
-      "purl": "pkg:npm/%40next/env@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/env"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/env/-/env-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "6bbb73d5009c5969300bfacf25c3cc264fd4351bbd085843777387604e6175d6c9aecf01a914da97123a1a52825841b344b1cdf92fc1edae0f0070ad9b6e5a05"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/eslint-plugin-next@16.4.3",
-      "type": "library",
-      "name": "@next/eslint-plugin-next",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/eslint-plugin-next@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/eslint-plugin-next"
-        },
-        {
-          "name": "cdx:npm:package:development",
-          "value": "true"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/eslint-plugin-next/-/eslint-plugin-next-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "a31b82d3ac2dffbd61e80098095f466ca39f9dfe5aed59517bfa7cd181d3badd794cd803126ca70e76aaf2dff1872e6b96f93b76122d20fb3a1f7aef20ce24cb"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/swc-darwin-arm64@16.4.3",
-      "type": "library",
-      "name": "@next/swc-darwin-arm64",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/swc-darwin-arm64@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/swc-darwin-arm64"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "e32ab911706df950ed019c13c9f8a3685a790f60b9a33dc8930e5ada4897d8af67c3bdafad95f6ab952e02590fb5430ed6d433e894caa5a2968d2ece39e7d30d"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/swc-darwin-x64@16.4.3",
-      "type": "library",
-      "name": "@next/swc-darwin-x64",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/swc-darwin-x64@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/swc-darwin-x64"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-darwin-x64/-/swc-darwin-x64-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "d51be49ff2d4867105f16c674643aba8685bc17ba2d5b91617138d2886cdfabec2fbd2870d267e894a23e02cf2995316532648cb1f6ccdc6fdfa46ca843e74d0"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/swc-linux-arm64-gnu@16.4.3",
-      "type": "library",
-      "name": "@next/swc-linux-arm64-gnu",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/swc-linux-arm64-gnu@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/swc-linux-arm64-gnu"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-linux-arm64-gnu/-/swc-linux-arm64-gnu-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "7422a95c4ac683769b50ceade494c957fa2db550534ad241e654494db81d51d41a43e8cd1e22b9e87b1cd1800483fae29d2878da1606dc75a262610c762967c6"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/swc-linux-arm64-musl@16.4.3",
-      "type": "library",
-      "name": "@next/swc-linux-arm64-musl",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/swc-linux-arm64-musl@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/swc-linux-arm64-musl"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-linux-arm64-musl/-/swc-linux-arm64-musl-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "5b061b856921601bc1b626f52b85b490bf0c5b6b27043d80e5bdd2378bcfa6a6a565b66ce7e6d0d72cc075ea55a0eaab15f116ddd991132e19b3532b59cac56f"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/swc-linux-x64-gnu@16.4.3",
-      "type": "library",
-      "name": "@next/swc-linux-x64-gnu",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/swc-linux-x64-gnu@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/swc-linux-x64-gnu"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-linux-x64-gnu/-/swc-linux-x64-gnu-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "432996bdf5300c40b9fe5a493acc57e5501bca84760f5dfed89b23cf86deee04f82cfa8481da6478b211fc715f08b80ace8321a496e9e88fc99e88323591dc68"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/swc-linux-x64-musl@16.4.3",
-      "type": "library",
-      "name": "@next/swc-linux-x64-musl",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/swc-linux-x64-musl@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/swc-linux-x64-musl"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-linux-x64-musl/-/swc-linux-x64-musl-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "5668ddf43ec3a40e15bf771496bf364168090ff0506669ecf34d6fb42e5558783a8c2200e1ae6f30aa509dfaccda9c82ae9d9e57410d7548383e53776c073663"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/swc-win32-arm64-msvc@16.4.3",
-      "type": "library",
-      "name": "@next/swc-win32-arm64-msvc",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/swc-win32-arm64-msvc@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/swc-win32-arm64-msvc"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-win32-arm64-msvc/-/swc-win32-arm64-msvc-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "946d693dd3cb93b813c866f4d27e4920c2dd0498236fe504852759bc56e150c8340f20bacf807b467a52285f5509de229a42ce6d56d73850349050a9c3bc85a3"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "@next/swc-win32-x64-msvc@16.4.3",
-      "type": "library",
-      "name": "@next/swc-win32-x64-msvc",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/%40next/swc-win32-x64-msvc@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/@next/swc-win32-x64-msvc"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-win32-x64-msvc/-/swc-win32-x64-msvc-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "366402f519097673d745a331b640b3a1b077b5e563a85df7a123a7c037e2f97606596629b7ec6518ade6b64b5228b6dd8f06966c9bb63a490c8911465149dc2a"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
     },
     {
       "bom-ref": "@types/node@20.19.43",
@@ -723,43 +389,6 @@
       ]
     },
     {
-      "bom-ref": "eslint-config-next@16.4.3",
-      "type": "library",
-      "name": "eslint-config-next",
-      "version": "16.4.3",
-      "scope": "optional",
-      "purl": "pkg:npm/eslint-config-next@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/eslint-config-next"
-        },
-        {
-          "name": "cdx:npm:package:development",
-          "value": "true"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/eslint-config-next/-/eslint-config-next-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "8fd22a0666ba69ba7cd347eb7545116a2cd83205ce2be8cd1b2aba0ac61c33d031a5226ce43fd380c346780991522959bc0ee0f55d53afbd60360f7f4954ee31"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
       "bom-ref": "glob-parent@5.1.2",
       "type": "library",
       "name": "glob-parent",
@@ -788,43 +417,6 @@
         {
           "license": {
             "id": "ISC"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "globals@16.4.0",
-      "type": "library",
-      "name": "globals",
-      "version": "16.4.0",
-      "scope": "optional",
-      "purl": "pkg:npm/globals@16.4.0",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/globals"
-        },
-        {
-          "name": "cdx:npm:package:development",
-          "value": "true"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/globals/-/globals-16.4.0.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "a1bff62dc55569518260dfabd78727c27a033d4b9f8e26204aa4618850f4435888e0e768adae5113c22fd43db8840cf9a0ca298511a41b3fb2baf42699432733"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
           }
         }
       ]
@@ -885,39 +477,6 @@
         {
           "alg": "SHA-512",
           "content": "e37af6991bf3fbc25120a9d627ede3f09b6344a67a1a68f37da13faa20499e290d9d8bffe9b6a0449d64521364f11e445ff1a4a1b0feafeb1fc423c9b222812d"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "bom-ref": "next@16.4.3",
-      "type": "library",
-      "name": "next",
-      "version": "16.4.3",
-      "scope": "required",
-      "purl": "pkg:npm/next@16.4.3",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "docs/node_modules/next"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/next/-/next-16.4.3.tgz"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "3aac4a4c68bdbbcd05c9dc9db0c3583639ee8def40bbe92f1e5b76199fff7ed7690c79b57712aa01a10da0e3935f9c0ace7fbdbda2943487d97b2654b8b8429c"
         }
       ],
       "licenses": [
@@ -5640,6 +5199,340 @@
       ]
     },
     {
+      "bom-ref": "@next/env@16.4.6",
+      "type": "library",
+      "name": "@next/env",
+      "version": "16.4.6",
+      "scope": "required",
+      "purl": "pkg:npm/%40next/env@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/env"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/env/-/env-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "4ae9c18c9eadfa806d79c4b77538dd56e32152880fe700ffbeb18be4456e418335892e0ee6294be751e4889dec3e33334478820a1bebe1d6da4896d1ec5de5c4"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/eslint-plugin-next@16.4.6",
+      "type": "library",
+      "name": "@next/eslint-plugin-next",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/eslint-plugin-next@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/eslint-plugin-next"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/eslint-plugin-next/-/eslint-plugin-next-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "1dda8445539a7ce0fc25a512024c1ff5a4aeff5aec1e590df02e467176011f70bfcf5331061645c41e6bcffc6a30c462223eebf6d22ff0e08b43d2565310af58"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/swc-darwin-arm64@16.4.6",
+      "type": "library",
+      "name": "@next/swc-darwin-arm64",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/swc-darwin-arm64@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/swc-darwin-arm64"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "909e155599257b2d7bc4a689c7bd90376201aa3ae3ef37a709065a505d25f52852ff532dda45b8f99e4a186eaf82bdcbfc9e7adb14ce8b3572335880feee6796"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/swc-darwin-x64@16.4.6",
+      "type": "library",
+      "name": "@next/swc-darwin-x64",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/swc-darwin-x64@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/swc-darwin-x64"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-darwin-x64/-/swc-darwin-x64-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "7883c6648a82fbc24a69e666be7080349405e315a4907a929c001a8ed1718300cc00e9c283136f3f9d92796678d4fc95c287be2defcd42e652690f23ed8b2148"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/swc-linux-arm64-gnu@16.4.6",
+      "type": "library",
+      "name": "@next/swc-linux-arm64-gnu",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/swc-linux-arm64-gnu@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/swc-linux-arm64-gnu"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-linux-arm64-gnu/-/swc-linux-arm64-gnu-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "f6723a3bcbef7331f60fd64d74c1aa6ffdcdb93d794fd92c3999c09b1f7f82317670e8bbe3ec71c9fd4793deae20c7e6d7873dcbac07781aba487f20eae76f70"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/swc-linux-arm64-musl@16.4.6",
+      "type": "library",
+      "name": "@next/swc-linux-arm64-musl",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/swc-linux-arm64-musl@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/swc-linux-arm64-musl"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-linux-arm64-musl/-/swc-linux-arm64-musl-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "effa8f853c43a7649c96e3893a12ee8569a5035ee8d72674488829212042a41c5782d9cae3e286cb00691647cb3e2535ae748cd5f6851b36241fa8bb25d4eba8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/swc-linux-x64-gnu@16.4.6",
+      "type": "library",
+      "name": "@next/swc-linux-x64-gnu",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/swc-linux-x64-gnu@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/swc-linux-x64-gnu"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-linux-x64-gnu/-/swc-linux-x64-gnu-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "a0ea5b35af17396d6a08677d56fcc2e1f6e4911c4496ceff588eadcfe6070b4c5103b2a957553b0eb02708f8f35723a4fe46abcd611ea4239c4c80e6c0af05c1"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/swc-linux-x64-musl@16.4.6",
+      "type": "library",
+      "name": "@next/swc-linux-x64-musl",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/swc-linux-x64-musl@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/swc-linux-x64-musl"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-linux-x64-musl/-/swc-linux-x64-musl-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "68cf0267e391d84c17680630eca1a45b618398d0ec2c12117b530c4590893d3770ff18530f420c5153b8b1fdcaaabcee468b86cf0c0b667df8fa015e55789440"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/swc-win32-arm64-msvc@16.4.6",
+      "type": "library",
+      "name": "@next/swc-win32-arm64-msvc",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/swc-win32-arm64-msvc@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/swc-win32-arm64-msvc"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-win32-arm64-msvc/-/swc-win32-arm64-msvc-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "534a7bfed12daaf1d7d9cae177ce35083c0ab69e421642975633a199f71c4773efa7ae2c8fc281c11aacbe5b6a2cec1505b8f436d931c17483a441d819bc5e5d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@next/swc-win32-x64-msvc@16.4.6",
+      "type": "library",
+      "name": "@next/swc-win32-x64-msvc",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/%40next/swc-win32-x64-msvc@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@next/swc-win32-x64-msvc"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-win32-x64-msvc/-/swc-win32-x64-msvc-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "dd91b5e7fe5621d95342c204bdcf6c3d34d22f95c5ae52e49482a67c5e1fc2c0e7a0086ee8d7010d7b24de66c6c4dca8e9a54b1067b1f9f1c2bf631a858edaf6"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "@nodelib/fs.scandir@2.1.5",
       "type": "library",
       "name": "@nodelib/fs.scandir",
@@ -8887,16 +8780,12 @@
       "type": "library",
       "name": "argparse",
       "version": "2.0.1",
-      "scope": "optional",
+      "scope": "required",
       "purl": "pkg:npm/argparse@2.0.1",
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/argparse"
-        },
-        {
-          "name": "cdx:npm:package:development",
-          "value": "true"
         }
       ],
       "externalReferences": [],
@@ -12057,6 +11946,80 @@
       ]
     },
     {
+      "bom-ref": "eslint-config-next@16.4.6",
+      "type": "library",
+      "name": "eslint-config-next",
+      "version": "16.4.6",
+      "scope": "optional",
+      "purl": "pkg:npm/eslint-config-next@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/eslint-config-next"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/eslint-config-next/-/eslint-config-next-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "201186ad57fd13aa4bd0d18bd2199e89c546792cafd55133216aba21e703aa4c3e605072844b43252f6ed6beace9ad55c4aeabb2c87af4ac8d1505207da69cab"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "globals@16.4.0",
+      "type": "library",
+      "name": "globals",
+      "version": "16.4.0",
+      "scope": "optional",
+      "purl": "pkg:npm/globals@16.4.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/eslint-config-next/node_modules/globals"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/globals/-/globals-16.4.0.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "a1bff62dc55569518260dfabd78727c27a033d4b9f8e26204aa4618850f4435888e0e768adae5113c22fd43db8840cf9a0ca298511a41b3fb2baf42699432733"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "eslint-import-resolver-node@0.3.10",
       "type": "library",
       "name": "eslint-import-resolver-node",
@@ -13706,7 +13669,18 @@
           "value": "true"
         }
       ],
-      "externalReferences": [],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/fast-glob/-/fast-glob-3.3.1.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "90d14fca3861e5c2a3ad496dc6cfb0171f9991b45ac71999f97d19537d523acc4212d3fd54f82dab6b5e670d4379bba92f91a60da350eb228c31570ce358aa0e"
+        }
+      ],
       "licenses": [
         {
           "license": {
@@ -13732,7 +13706,18 @@
           "value": "true"
         }
       ],
-      "externalReferences": [],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/glob-parent/-/glob-parent-5.1.2.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "00e22049009ea62258c0fdc04671b1fb95674eed870587736c63f8e5e2f0d6faf7cc1def64b7b279dd6c0bd8676dc39cf7f4ab33233944f42b906cf8692f59a3"
+        }
+      ],
       "licenses": [
         {
           "license": {
@@ -16665,16 +16650,12 @@
       "type": "library",
       "name": "js-yaml",
       "version": "4.3.2",
-      "scope": "optional",
+      "scope": "required",
       "purl": "pkg:npm/js-yaml@4.3.2",
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/js-yaml"
-        },
-        {
-          "name": "cdx:npm:package:development",
-          "value": "true"
         }
       ],
       "externalReferences": [
@@ -18319,6 +18300,39 @@
         }
       ],
       "externalReferences": [],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "next@16.4.6",
+      "type": "library",
+      "name": "next",
+      "version": "16.4.6",
+      "scope": "required",
+      "purl": "pkg:npm/next@16.4.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/next"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/next/-/next-16.4.6.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "4192626216992c9328d8aa64406408c2f99defd595b0059e608539e786bc77bcc0ad2dec8bf211cb7941355febb58844ef4a0bc1d2d884f0172cfc7c1f0730b4"
+        }
+      ],
       "licenses": [
         {
           "license": {
@@ -24244,9 +24258,9 @@
   ],
   "dependencies": [
     {
-      "ref": "@siddharthakatiyar/contextos@1.1.0",
+      "ref": "@siddharthakatiyar/contextos@1.2.3",
       "dependsOn": [
-        "docs@1.1.0",
+        "docs@1.2.3",
         "@huggingface/transformers@4.3.0",
         "@modelcontextprotocol/sdk@1.32.1",
         "better-sqlite3@12.10.0",
@@ -24257,6 +24271,7 @@
         "glob@14.0.2",
         "gpt-tokenizer@3.4.0",
         "ignore@7.0.9",
+        "js-yaml@4.3.2",
         "minimatch@11.0.1",
         "ora@9.4.0",
         "sqlite-vec@0.1.9",
@@ -24279,7 +24294,7 @@
       ]
     },
     {
-      "ref": "docs@1.1.0",
+      "ref": "docs@1.2.3",
       "dependsOn": [
         "@base-ui/react@1.6.0",
         "@vercel/analytics@2.0.1",
@@ -24287,7 +24302,7 @@
         "clsx@2.1.1",
         "framer-motion@12.42.2",
         "lucide-react@1.25.0",
-        "next@16.4.3",
+        "next@16.4.6",
         "react@19.2.4",
         "react-dom@19.2.4",
         "shadcn@4.23.0",
@@ -24300,53 +24315,10 @@
         "@types/react@19.2.17",
         "@types/react-dom@19.2.3",
         "eslint@9.39.5",
-        "eslint-config-next@16.4.3",
+        "eslint-config-next@16.4.6",
         "tailwindcss@4.3.3",
         "typescript@5.9.3"
       ]
-    },
-    {
-      "ref": "@next/env@16.4.3",
-      "dependsOn": []
-    },
-    {
-      "ref": "@next/eslint-plugin-next@16.4.3",
-      "dependsOn": [
-        "@eslint-community/eslint-utils@4.9.1",
-        "fast-glob@3.3.1"
-      ]
-    },
-    {
-      "ref": "@next/swc-darwin-arm64@16.4.3",
-      "dependsOn": []
-    },
-    {
-      "ref": "@next/swc-darwin-x64@16.4.3",
-      "dependsOn": []
-    },
-    {
-      "ref": "@next/swc-linux-arm64-gnu@16.4.3",
-      "dependsOn": []
-    },
-    {
-      "ref": "@next/swc-linux-arm64-musl@16.4.3",
-      "dependsOn": []
-    },
-    {
-      "ref": "@next/swc-linux-x64-gnu@16.4.3",
-      "dependsOn": []
-    },
-    {
-      "ref": "@next/swc-linux-x64-musl@16.4.3",
-      "dependsOn": []
-    },
-    {
-      "ref": "@next/swc-win32-arm64-msvc@16.4.3",
-      "dependsOn": []
-    },
-    {
-      "ref": "@next/swc-win32-x64-msvc@16.4.3",
-      "dependsOn": []
     },
     {
       "ref": "@types/node@20.19.43",
@@ -24357,7 +24329,7 @@
     {
       "ref": "@vercel/analytics@2.0.1",
       "dependsOn": [
-        "next@16.4.3",
+        "next@16.4.6",
         "react@19.2.4"
       ]
     },
@@ -24403,30 +24375,10 @@
       "dependsOn": []
     },
     {
-      "ref": "eslint-config-next@16.4.3",
-      "dependsOn": [
-        "eslint@9.39.5",
-        "typescript@5.9.3",
-        "@next/eslint-plugin-next@16.4.3",
-        "eslint-import-resolver-node@0.3.10",
-        "eslint-import-resolver-typescript@3.10.1",
-        "eslint-plugin-import@2.32.0",
-        "eslint-plugin-jsx-a11y@6.10.2",
-        "eslint-plugin-react@7.37.5",
-        "eslint-plugin-react-hooks@7.1.1",
-        "globals@16.4.0",
-        "typescript-eslint@8.64.0"
-      ]
-    },
-    {
       "ref": "glob-parent@5.1.2",
       "dependsOn": [
         "is-glob@4.0.3"
       ]
-    },
-    {
-      "ref": "globals@16.4.0",
-      "dependsOn": []
     },
     {
       "ref": "log-symbols@6.0.0",
@@ -24438,28 +24390,6 @@
     {
       "ref": "is-unicode-supported@1.3.0",
       "dependsOn": []
-    },
-    {
-      "ref": "next@16.4.3",
-      "dependsOn": [
-        "react@19.2.4",
-        "react-dom@19.2.4",
-        "@next/env@16.4.3",
-        "@swc/helpers@0.5.23",
-        "baseline-browser-mapping@2.11.34",
-        "caniuse-lite@1.0.30001820",
-        "postcss@8.5.23",
-        "styled-jsx@5.1.6",
-        "@next/swc-darwin-arm64@16.4.3",
-        "@next/swc-darwin-x64@16.4.3",
-        "@next/swc-linux-arm64-gnu@16.4.3",
-        "@next/swc-linux-arm64-musl@16.4.3",
-        "@next/swc-linux-x64-gnu@16.4.3",
-        "@next/swc-linux-x64-musl@16.4.3",
-        "@next/swc-win32-arm64-msvc@16.4.3",
-        "@next/swc-win32-x64-msvc@16.4.3",
-        "sharp@0.35.5"
-      ]
     },
     {
       "ref": "node-releases@2.0.63",
@@ -25482,6 +25412,49 @@
         "@modelcontextprotocol/core@2.4.0",
         "zod@4.6.7"
       ]
+    },
+    {
+      "ref": "@next/env@16.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "@next/eslint-plugin-next@16.4.6",
+      "dependsOn": [
+        "@eslint-community/eslint-utils@4.9.1",
+        "fast-glob@3.3.1"
+      ]
+    },
+    {
+      "ref": "@next/swc-darwin-arm64@16.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "@next/swc-darwin-x64@16.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "@next/swc-linux-arm64-gnu@16.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "@next/swc-linux-arm64-musl@16.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "@next/swc-linux-x64-gnu@16.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "@next/swc-linux-x64-musl@16.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "@next/swc-win32-arm64-msvc@16.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "@next/swc-win32-x64-msvc@16.4.6",
+      "dependsOn": []
     },
     {
       "ref": "@nodelib/fs.scandir@2.1.5",
@@ -27081,6 +27054,26 @@
       ]
     },
     {
+      "ref": "eslint-config-next@16.4.6",
+      "dependsOn": [
+        "eslint@9.39.5",
+        "typescript@6.0.3",
+        "@next/eslint-plugin-next@16.4.6",
+        "eslint-import-resolver-node@0.3.10",
+        "eslint-import-resolver-typescript@3.10.1",
+        "eslint-plugin-import@2.32.0",
+        "eslint-plugin-jsx-a11y@6.10.2",
+        "eslint-plugin-react@7.37.5",
+        "eslint-plugin-react-hooks@7.1.1",
+        "globals@16.4.0",
+        "typescript-eslint@8.64.0"
+      ]
+    },
+    {
+      "ref": "globals@16.4.0",
+      "dependsOn": []
+    },
+    {
       "ref": "eslint-import-resolver-node@0.3.10",
       "dependsOn": [
         "debug@3.2.7",
@@ -28476,6 +28469,28 @@
     {
       "ref": "negotiator@1.0.0",
       "dependsOn": []
+    },
+    {
+      "ref": "next@16.4.6",
+      "dependsOn": [
+        "react@19.2.4",
+        "react-dom@19.2.4",
+        "@next/env@16.4.6",
+        "@swc/helpers@0.5.23",
+        "baseline-browser-mapping@2.11.25",
+        "caniuse-lite@1.0.30001810",
+        "postcss@8.5.23",
+        "styled-jsx@5.1.6",
+        "@next/swc-darwin-arm64@16.4.6",
+        "@next/swc-darwin-x64@16.4.6",
+        "@next/swc-linux-arm64-gnu@16.4.6",
+        "@next/swc-linux-arm64-musl@16.4.6",
+        "@next/swc-linux-x64-gnu@16.4.6",
+        "@next/swc-linux-x64-musl@16.4.6",
+        "@next/swc-win32-arm64-msvc@16.4.6",
+        "@next/swc-win32-x64-msvc@16.4.6",
+        "sharp@0.35.5"
+      ]
     },
     {
       "ref": "node-abi@3.92.0",

@@ -1,6 +1,12 @@
 export type Layer = 'global' | 'workspace' | 'repo' | 'session';
 
 export interface Chunk {
+  projectId?: string;
+  viewId?: string;
+  worktreeId?: string;
+  branch?: string | null;
+  head?: string | null;
+  worktreePath?: string;
   repoId?: string;
   repoName?: string;
   relativePath?: string;
