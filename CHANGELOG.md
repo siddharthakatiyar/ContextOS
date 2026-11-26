@@ -10,6 +10,10 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-11-26
+
+Version 1.2.3 was tagged but never published to npm because its release validation caught the race fixed below; 1.2.4 contains everything in 1.2.3.
+
 ### Fixed
 
 - Retry context retrieval once from a fresh scope when startup indexing or checkout reconciliation invalidates the first read after a live daemon upgrade. Preserve per-view failure details and retire stale runtimes before retrying, without changing the local MCP handshake.
