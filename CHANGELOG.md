@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Stop running the packed-install smoke test on Windows in CI and the release workflow to save Actions minutes; Linux and macOS remain covered.
+
 ## [1.2.3] - 2026-11-26
 
 ### Fixed

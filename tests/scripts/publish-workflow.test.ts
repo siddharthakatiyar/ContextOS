@@ -23,7 +23,7 @@ describe('release artifact validation', () => {
     ) as { jobs: Record<string, Job> };
     const { prepare, 'packed-install': smoke, 'build-and-publish': publish } = workflow.jobs;
     expect(smoke.needs).toBe('prepare');
-    expect(smoke.strategy?.matrix.os).toEqual(['ubuntu-latest', 'macos-latest', 'windows-latest']);
+    expect(smoke.strategy?.matrix.os).toEqual(['ubuntu-latest', 'macos-latest']);
     expect(smoke.strategy?.matrix.node).toEqual(['22.x', '24.x']);
     expect(publish.needs).toEqual(['prepare', 'packed-install']);
     for (const job of [smoke, publish]) {
