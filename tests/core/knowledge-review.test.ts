@@ -173,7 +173,7 @@ describe('persisted review operations', () => {
         'Invalid knowledge status transition'
       );
       setKnowledgeStatus(ids, 'stale', f.options);
-      expect(f.graph.listLinks()[0].status).toBe('stale');
+      expect(f.graph.listLinks({ includeStale: true })[0].status).toBe('stale');
       expect(
         f.graph.trace({ start: f.input.source, target: f.input.target }, f.scope.repoIds).found
       ).toBe(false);
@@ -251,7 +251,8 @@ describe('persisted review operations', () => {
       expect(facts.find((c) => c.content.includes('verified'))!.score).toBeGreaterThan(
         facts.find((c) => c.content.includes('proposal'))!.score
       );
-      expect(facts.find((c) => c.localId === stale.id)?.content).toContain('"status":"stale"');
+      // Stale knowledge (evidence no longer holds) is hidden from default retrieval.
+      expect(facts.find((c) => c.localId === stale.id)).toBeUndefined();
       expect(result.knowledgeLinks).not.toContainEqual(expect.objectContaining({ id: link.id }));
       expect(f.graph.exportKnowledge(f.scope.repoIds).links).toContainEqual(
         expect.objectContaining({ id: link.id, status: 'proposed' })

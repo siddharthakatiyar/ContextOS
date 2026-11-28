@@ -533,9 +533,15 @@ it('does not report result truncation when only unused trace witness paths are c
     .prepare('SELECT id FROM chunks WHERE source_file != ?')
     .all(path.join(scope.views[0].source.rootPath, 'src/client.ts')) as { id: string }[];
   expect(rows.length).toBeGreaterThan(20);
-  const links = rows.map((row) =>
-    link(entityRef(scope.views[0].source.repoId, 'chunk', row.id), target)
-  );
+  // Infra files are indexed too; skip any chunk whose file no longer matches its index.
+  const links = rows.flatMap((row) => {
+    try {
+      return [link(entityRef(scope.views[0].source.repoId, 'chunk', row.id), target)];
+    } catch {
+      return [];
+    }
+  });
+  expect(links.length).toBeGreaterThan(20);
   const result = await analyzeImpact({
     files: [{ path: 'src/client.ts', viewId: scope.views[0].source.repoId }],
     scope: { ...scope, links },

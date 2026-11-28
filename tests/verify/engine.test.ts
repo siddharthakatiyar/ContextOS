@@ -102,17 +102,28 @@ describe('knowledge re-verification', { timeout: 30_000 }, () => {
   });
   it('hides stale links from default, expansion, trace and exposes flagged MCP results', async () => {
     const source = fixture.sources[0];
-    const other = indexes[0]
-      .prepare('SELECT id FROM chunks WHERE source_file<>? ORDER BY id LIMIT 1')
-      .get(chunk.source_file) as { id: string };
-    const input = {
-      source: entityRef(source.repoId, 'chunk', other.id),
-      target: fact.evidence[0].ref,
-      type: 'imports' as const,
-      rationale: 'Fixture evidence',
-      expectedGenerations: { [source.repoId]: source.generation }
-    };
-    const link = graph.link(input, [source.repoId]);
+    const candidates = indexes[0]
+      .prepare('SELECT id FROM chunks WHERE source_file<>? ORDER BY id')
+      .all(chunk.source_file) as { id: string }[];
+    let input!: Parameters<typeof graph.link>[0];
+    let link!: ReturnType<typeof graph.link>;
+    // Earlier tests in this file edit some files; use the first chunk whose file still matches its index.
+    for (const other of candidates) {
+      input = {
+        source: entityRef(source.repoId, 'chunk', other.id),
+        target: fact.evidence[0].ref,
+        type: 'imports' as const,
+        rationale: 'Fixture evidence',
+        expectedGenerations: { [source.repoId]: source.generation }
+      };
+      try {
+        link = graph.link(input, [source.repoId]);
+        break;
+      } catch {
+        continue;
+      }
+    }
+    expect(link).toBeDefined();
     indexes[0].prepare('UPDATE chunks SET hash=? WHERE id=?').run('changed', chunk.id);
     expect(graph.pruneInvalid()).toBe(2);
     expect(graph.listLinks()).toEqual([]);
@@ -342,7 +353,9 @@ describe('knowledge re-verification', { timeout: 30_000 }, () => {
   it('reanchors link endpoints and identity so subsequent agent writes retain the ID', async () => {
     const source = fixture.sources[0];
     const other = indexes[0]
-      .prepare('SELECT id FROM chunks WHERE id<>? ORDER BY id LIMIT 1')
+      .prepare(
+        "SELECT id FROM chunks WHERE id<>? AND source_file LIKE '%server.ts' ORDER BY id LIMIT 1"
+      )
       .get(chunk.id) as { id: string };
     const target = entityRef(source.repoId, 'chunk', other.id);
     const link = graph.link(
@@ -398,7 +411,9 @@ describe('knowledge re-verification', { timeout: 30_000 }, () => {
   it('keeps old references when a replacement link identity already exists', async () => {
     const source = fixture.sources[0];
     const other = indexes[0]
-      .prepare('SELECT id FROM chunks WHERE id<>? ORDER BY id LIMIT 1')
+      .prepare(
+        "SELECT id FROM chunks WHERE id<>? AND source_file LIKE '%server.ts' ORDER BY id LIMIT 1"
+      )
       .get(chunk.id) as { id: string };
     const input = {
       source: fact.evidence[0].ref,

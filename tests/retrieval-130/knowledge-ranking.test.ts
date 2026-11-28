@@ -240,9 +240,10 @@ describe('knowledge ranking', () => {
       ).toEqual([fact.id, link.id].sort());
       expect(result.chunks.find((c) => c.id === ref(a))?.score).toBe(130);
       const positions = new Map(result.chunks.map((c, i) => [c.localId, i]));
-      expect(positions.get(proposed.id)).toBeLessThan(positions.get(stale.id)!);
+      expect(positions.has(proposed.id)).toBe(true);
+      expect(positions.has(stale.id)).toBe(false);
       expect(positions.get(proposedLink.id)).toBeGreaterThan(1);
-      expect(positions.get(proposedLink.id)).toBeLessThan(positions.get(staleLink.id)!);
+      expect(positions.has(staleLink.id)).toBe(false);
       expect(positions.get(old)).toBeGreaterThan(1);
       expect(run().chunks.map((c) => [c.id, c.score])).toEqual(
         result.chunks.map((c) => [c.id, c.score])
