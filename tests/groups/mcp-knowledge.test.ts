@@ -718,3 +718,43 @@ it('returns removable session note IDs and accepts aggregated session event refs
   expect(JSON.stringify(result)).not.toContain('SessionMarkerBeta');
   expect(JSON.stringify(result)).not.toContain('SessionMarkerGamma');
 });
+
+it('removes obsolete links with compact endpoint metadata without pruning away the requested removal', async () => {
+  const backend = registry.resolve('backend'),
+    frontend = registry.resolve('frontend');
+  const ref = (source: typeof backend, symbol: string) =>
+    entityRef(
+      source.repoId,
+      'chunk',
+      new ChunksRepo(runtime.get(source).db.getInstance()).findBySymbolName(symbol)[0].id
+    );
+  const linked = await client.callTool({
+    name: 'ctx_link',
+    arguments: {
+      group: 'default',
+      source: ref(backend, 'processPaymentStatus'),
+      target: ref(frontend, 'displayPaymentStatus'),
+      relationship: 'implements_contract',
+      rationale: 'Fixture payment state transition and display contract.',
+      expected_generations: {
+        [backend.repoId]: backend.generation,
+        [frontend.repoId]: frontend.generation
+      }
+    }
+  });
+  const id = (linked.structuredContent as { link: { id: string } }).link.id;
+  fs.appendFileSync(path.join(backend.rootPath, 'payment.ts'), '\n// obsolete evidence\n');
+  const removed = await client.callTool({
+    name: 'ctx_unlink',
+    arguments: { group: 'default', id }
+  });
+  expect(removed.structuredContent).toMatchObject({
+    ok: true,
+    removed: true,
+    id,
+    type: 'implements_contract',
+    endpoints: [{ name: 'backend' }, { name: 'frontend' }],
+    warnings: []
+  });
+  expect(removed.structuredContent).not.toHaveProperty('scope');
+});

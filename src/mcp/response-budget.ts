@@ -25,7 +25,6 @@ export function boundResponse(result: CallToolResult, budget: number): void {
     'compilation',
     'omittedRepositories',
     'sources',
-    'scope',
     'linkSuggestions',
     'learnedLinks',
     'knowledgeLinks',
@@ -37,6 +36,7 @@ export function boundResponse(result: CallToolResult, budget: number): void {
   // Preserve the first, highest-ranked hits when possible.
   const chunks = data.chunks as unknown[] | undefined;
   while (chunks?.length && recount() > budget) chunks.pop();
+  if (recount() > budget) delete data.scope;
   const text = result.content.find((item) => item.type === 'text');
   if (text?.type === 'text' && recount() > budget) {
     const original = text.text;

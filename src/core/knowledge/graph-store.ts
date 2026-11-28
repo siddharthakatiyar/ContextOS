@@ -385,10 +385,13 @@ export class GraphStore {
       )
     };
   }
-  unlink(id: string, permittedViewIds: string[]): boolean {
+  getLink(id: string, permittedViewIds: string[]): VerifiedLink | undefined {
     const link = this.records<VerifiedLink>('verified_links').find((item) => item.id === id);
-    if (!link) return false;
-    link.evidence.forEach((item) => this.assertScope(item.ref, permittedViewIds));
+    link?.evidence.forEach((item) => this.assertScope(item.ref, permittedViewIds));
+    return link;
+  }
+  unlink(id: string, permittedViewIds: string[]): boolean {
+    if (!this.getLink(id, permittedViewIds)) return false;
     return this.remove('verified_links', id);
   }
   trace(options: TraceOptions, permittedViewIds: string[]): TraceResult {

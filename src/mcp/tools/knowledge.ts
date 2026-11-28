@@ -165,7 +165,10 @@ export function registerWorkspaceKnowledgeTools(
     args: Record<string, unknown>,
     value: Record<string, unknown>,
     scope: ReturnType<typeof scopeFor>
-  ) => (args.verbose ? { ...value, scope } : { ok: true, ...value });
+  ) =>
+    args.verbose
+      ? { ...value, scope }
+      : { ok: true, warnings: [], generations: {}, endpoints: [], ...value };
   const scopeFor = (args: Record<string, unknown>) =>
     context.select({
       group: args.group,
@@ -434,6 +437,7 @@ export function registerWorkspaceKnowledgeTools(
     { ...selectors, ...verbose, id: z.string() },
     wrap((args, graph) => {
       const scope = scopeFor(args);
+      const link = graph.getLink(args.id as string, scope.repoIds);
       const removed = graph.unlink(args.id as string, scope.repoIds);
       context.clearCache();
       return writeResult(
@@ -441,6 +445,17 @@ export function registerWorkspaceKnowledgeTools(
         {
           removed,
           id: args.id ?? args.content,
+          ...(link
+            ? {
+                type: link.type,
+                endpoints: [link.source, link.target].map((ref) => ({
+                  ref,
+                  name: scope.sources.find((source) =>
+                    ref.startsWith(`contextos:${source.repoId}:`)
+                  )?.name
+                }))
+              }
+            : {}),
           ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
         },
         scope
@@ -481,7 +496,8 @@ export function registerWorkspaceKnowledgeTools(
             saved: 'session_note',
             id,
             ref: entityRef(source.repoId, 'memory', id),
-            type: 'session_note'
+            type: 'session_note',
+            endpoints: [{ ref: entityRef(source.repoId, 'memory', id), name: source.name }]
           },
           scope
         );
@@ -545,6 +561,7 @@ export function registerWorkspaceKnowledgeTools(
           id: fact.id,
           fact: args.verbose ? fact : { id: fact.id, scope: fact.scope, scopeId: fact.scopeId },
           type: 'cross_session_fact',
+          endpoints: [{ ref: entityRef(source.repoId, 'fact', fact.id), name: source.name }],
           generations: Object.fromEntries(fact.evidence.map((e) => [e.viewId, e.generation])),
           warnings: []
         },
@@ -569,6 +586,7 @@ export function registerWorkspaceKnowledgeTools(
         args,
         {
           removed,
+          type: 'memory',
           id: args.id ?? args.content,
           ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
         },

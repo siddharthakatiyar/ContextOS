@@ -292,7 +292,8 @@ export function registerWorkspaceTools(
           framingReserve: responseConfig.framingReserve,
           sentRegistry: sent,
           outputFormat: args.output_format,
-          explain: args.explain
+          // The included IDs also drive the compact hit list, even without inspector output.
+          explain: true
         });
         for (const source of scope.sources) {
           if (result.unavailableSources?.some((s) => s.repoId === source.repoId)) continue;
@@ -334,11 +335,8 @@ export function registerWorkspaceTools(
             omittedRepositories: omitted,
             tokens: compiled.tokenCount,
             chunks: result.chunks
-              .filter(
-                (chunk) =>
-                  compiled.output.includes(chunk.id) ||
-                  compiled.output.includes(chunk.sourceFile) ||
-                  (chunk.sourceFile === 'memory.fact' && compiled.output.includes(chunk.content))
+              .filter((chunk) =>
+                compiled.diagnostics?.includedChunks.some((item) => item.id === chunk.id)
               )
               .map((chunk) => ({
                 ref: chunk.id,
@@ -361,7 +359,11 @@ export function registerWorkspaceTools(
               viewId: s.repoId,
               projectId: s.projectId,
               name: s.name,
-              generation: s.generation
+              generation: s.generation,
+              checkoutGeneration: s.checkoutGeneration,
+              worktreeId: s.worktreeId,
+              branch: s.branch,
+              state: s.state
             })),
             knowledgeLinks: result.knowledgeLinks,
             learnedLinks: result.learnedLinks,
