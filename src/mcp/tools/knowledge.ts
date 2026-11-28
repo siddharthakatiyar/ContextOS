@@ -4,6 +4,7 @@ import { DB } from '../../core/storage/database.js';
 import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
 import { SessionStore } from '../../core/session/session-store.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import { entityRef } from '../../core/workspace/identity.js';
 import { KnowledgeInspector } from '../../core/knowledge/inspector.js';
 
 export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
@@ -128,7 +129,11 @@ export function registerWorkspaceKnowledgeTools(
     saveSession: (
       source: import('../../core/workspace/registry.js').RepositorySource,
       content: string
-    ) => void;
+    ) => string;
+    forgetSession?: (
+      id: string,
+      sources: import('../../core/workspace/registry.js').RepositorySource[]
+    ) => boolean;
     defaultGroup?: string;
     catalog?: () => unknown;
   }
@@ -460,15 +465,26 @@ export function registerWorkspaceKnowledgeTools(
       const source = scope.sources.find((s) => s.repoId === scope.activeRepoId) ?? scope.sources[0];
       if (!source) throw new Error('No selected view.');
       if (args.type === 'session_note') {
-        context.saveSession(source, args.content as string);
+        const id = context.saveSession(source, args.content as string);
         context.clearCache();
-        return writeResult(args, { saved: 'session_note' }, scope);
+        return writeResult(
+          args,
+          {
+            saved: 'session_note',
+            id,
+            ref: entityRef(source.repoId, 'memory', id),
+            type: 'session_note'
+          },
+          scope
+        );
       }
       if (args.type === 'forget_fact') {
-        const removed = graph.forget(args.content as string, scope.repoIds, {
-          projectIds: scope.sources.map((source) => source.projectId),
-          groupId: scope.groupId ?? scope.workspaceId
-        });
+        const removed =
+          context.forgetSession?.(args.content as string, scope.sources) ||
+          graph.forget(args.content as string, scope.repoIds, {
+            projectIds: scope.sources.map((source) => source.projectId),
+            groupId: scope.groupId ?? scope.workspaceId
+          });
         context.clearCache();
         return writeResult(
           args,
@@ -518,6 +534,7 @@ export function registerWorkspaceKnowledgeTools(
       return writeResult(
         args,
         {
+          id: fact.id,
           fact: args.verbose ? fact : { id: fact.id, scope: fact.scope, scopeId: fact.scopeId },
           type: 'cross_session_fact',
           generations: Object.fromEntries(fact.evidence.map((e) => [e.viewId, e.generation])),
@@ -533,10 +550,12 @@ export function registerWorkspaceKnowledgeTools(
     { ...selectors, ...verbose, id: z.string() },
     wrap((args, graph) => {
       const scope = scopeFor(args);
-      const removed = graph.forget(args.id as string, scope.repoIds, {
-        projectIds: scope.sources.map((source) => source.projectId),
-        groupId: scope.groupId ?? scope.workspaceId
-      });
+      const removed =
+        context.forgetSession?.(args.id as string, scope.sources) ||
+        graph.forget(args.id as string, scope.repoIds, {
+          projectIds: scope.sources.map((source) => source.projectId),
+          groupId: scope.groupId ?? scope.workspaceId
+        });
       context.clearCache();
       return writeResult(
         args,

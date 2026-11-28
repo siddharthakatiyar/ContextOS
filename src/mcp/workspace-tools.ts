@@ -637,12 +637,38 @@ export function registerWorkspaceTools(
       },
       saveSession: (source, content) => {
         const state = session(source);
-        state.store.addEvent({
+        const event = state.store.addEvent({
           sessionId: state.manager.getSessionId(),
           eventType: 'system_response',
           content,
           relatedFiles: null
         });
+        return `session:note:${event.sessionId}:${event.id}`;
+      },
+      forgetSession: (id, sources) => {
+        const ref = parseRef(id);
+        const local = ref?.kind === 'memory' ? ref.localId : id.replace(/^memory:/, '');
+        const note = /^session:note:([^:]+):(\d+)$/.exec(local);
+        const events = /^session:events:([^:]+)$/.exec(local);
+        if (!note && !events) return false;
+        const candidates = ref ? sources.filter((s) => s.repoId === ref.repoId) : sources;
+        let removed = false;
+        for (const source of candidates) {
+          const db = runtime.get(source).db.getInstance();
+          const change = note
+            ? db
+                .prepare(
+                  "DELETE FROM session_events WHERE session_id=? AND id=? AND event_type='system_response'"
+                )
+                .run(note[1], Number(note[2]))
+            : db
+                .prepare(
+                  "DELETE FROM session_events WHERE session_id=? AND event_type='system_response'"
+                )
+                .run(events![1]);
+          removed ||= change.changes > 0;
+        }
+        return removed;
       }
     })
   );

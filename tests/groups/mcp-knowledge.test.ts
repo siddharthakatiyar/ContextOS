@@ -679,3 +679,42 @@ it('accepts selected repo-relative inspection paths and rejects ambiguous paths 
   expect(ambiguous.isError).toBe(true);
   expect(JSON.stringify(ambiguous.content)).toContain('Ambiguous path');
 });
+
+it('returns removable session note IDs and accepts aggregated session event refs', async () => {
+  const save = async (content: string) => {
+    const result = await client.callTool({
+      name: 'ctx_remember',
+      arguments: { type: 'session_note', content }
+    });
+    expect(result.isError).not.toBe(true);
+    return result.structuredContent as { id: string; ref: string };
+  };
+  const a = await save('SessionMarkerAlpha');
+  const b = await save('SessionMarkerBeta');
+  expect(a.id).toBeTruthy();
+  expect(a.id).not.toBe(b.id);
+  const removed = await client.callTool({ name: 'ctx_forget', arguments: { id: a.id } });
+  expect(removed.structuredContent).toMatchObject({ removed: true });
+  const missing = await client.callTool({ name: 'ctx_forget', arguments: { id: a.ref } });
+  expect(missing.structuredContent).toMatchObject({
+    removed: false,
+    reason: expect.stringContaining('No matching')
+  });
+  const sessionId = b.id.split(':')[2];
+  const aggregate = b.ref.replace(/session:note:.+$/, `session:events:${sessionId}`);
+  const forgotten = await client.callTool({ name: 'ctx_forget', arguments: { id: aggregate } });
+  expect(forgotten.structuredContent).toMatchObject({ removed: true });
+  const c = await save('SessionMarkerGamma');
+  const unqualified = await client.callTool({
+    name: 'ctx_forget',
+    arguments: { id: `memory:session:events:${c.id.split(':')[2]}` }
+  });
+  expect(unqualified.structuredContent).toMatchObject({ removed: true });
+  const result = await client.callTool({
+    name: 'get_context',
+    arguments: { prompt: 'SessionMarkerAlpha SessionMarkerBeta SessionMarkerGamma', tier: 'full' }
+  });
+  expect(JSON.stringify(result)).not.toContain('SessionMarkerAlpha');
+  expect(JSON.stringify(result)).not.toContain('SessionMarkerBeta');
+  expect(JSON.stringify(result)).not.toContain('SessionMarkerGamma');
+});

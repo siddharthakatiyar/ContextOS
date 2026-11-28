@@ -231,7 +231,7 @@ describe('agent knowledge MCP contract', () => {
       },
       graph: () => new GraphStore({ home: temp, resolve: (id) => sources.get(id)! }),
       clearCache: () => {},
-      saveSession: () => {},
+      saveSession: () => 'session:note:fixture:1',
       catalog: () => ({ projects: ['a', 'b'] })
     });
     const [aTransport, bTransport] = InMemoryTransport.createLinkedPair();
