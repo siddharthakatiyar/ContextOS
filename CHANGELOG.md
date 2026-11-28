@@ -10,6 +10,30 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-11-28
+
+### Fixed
+
+- Default `ctx_links` to 20 compact connections with endpoint locations, bounded rationales, evidence refs and pagination cursors; compact `ctx_trace` nodes and links, retaining full metadata through `verbose: true`.
+
+- Add opt-in, explicitly inferred same-file trace adjacency and gap hints; accept project root directory selectors and suggest known projects for unknown names.
+
+- Return IDs for session notes and support removing individual notes or session-event references, with reasons when nothing is removed.
+
+- Preserve reconciled Git identity mismatch details in project status text and JSON.
+
+- Refuse implicit initialization of non-Git parent folders containing registered projects, with explicit path and existing-registration exceptions.
+
+- Route update/upgrade version options to the subcommand while preserving top-level CLI version flags.
+
+- Record unreadable source files as indexing failures with partial coverage and failed-file retry support; keep genuine binary files skipped.
+
+- Fail pending tool calls promptly when a daemon connection closes, and reconnect through a fresh MCP session on retry.
+
+- Return file ranges, expansion windows and command output in structured tool results; accept selected repository paths for import and contract inspection.
+
+- Bound MCP retrieval payloads, compact knowledge writes and scope summaries, and paginate unique saved links; include fact text and project attribution.
+
 ## [1.2.4] - 2026-11-26
 
 Version 1.2.3 was tagged but never published to npm because its release validation caught the race fixed below; 1.2.4 contains everything in 1.2.3.

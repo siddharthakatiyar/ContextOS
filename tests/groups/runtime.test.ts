@@ -429,3 +429,36 @@ it('takes over an unrelated live PID in both the shared lease and stale pid file
     await daemon.stop();
   }
 });
+
+it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+  'records unreadable files as partial failures and retries them after permissions are restored',
+  async () => {
+    const unreadable = path.join(root, 'unreadable.ts');
+    fs.writeFileSync(unreadable, 'export const unreadable = 42;\n');
+    fs.writeFileSync(path.join(root, 'binary.ts'), Buffer.from([0, 1, 2, 3]));
+    fs.chmodSync(unreadable, 0);
+    try {
+      const source = registry.register(root);
+      runtime = new RepositoryRuntime(source, registry);
+      await runtime.index();
+      const status = runtime.status();
+      expect(status).toMatchObject({
+        state: 'ready',
+        progress: { partial: true, failedFileCount: 1 }
+      });
+      expect(JSON.stringify(status)).toContain('unreadable.ts');
+      expect(JSON.stringify(status)).toMatch(/EACCES|EPERM/);
+      fs.chmodSync(unreadable, 0o600);
+      await runtime.index(false, undefined, true);
+      expect(runtime.status()).toMatchObject({ progress: { partial: false, failedFileCount: 0 } });
+      expect(
+        runtime.db
+          .getInstance()
+          .prepare('SELECT source_file FROM chunks WHERE source_file=?')
+          .get(unreadable)
+      ).toBeTruthy();
+    } finally {
+      fs.chmodSync(unreadable, 0o600);
+    }
+  }
+);

@@ -91,6 +91,7 @@ for (const command of ['list', 'status']) {
       for (const source of sources) {
         let runtime: RepositoryRuntime | undefined;
         try {
+          if (source.state === 'unavailable' && source.lastError) throw new Error(source.lastError);
           runtime = new RepositoryRuntime(source, registry);
           rows.push({
             ...runtime.status(),

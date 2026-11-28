@@ -71,6 +71,21 @@ export class KnowledgeInspector {
   }
   private readRef(ref: string): InspectionSource {
     const parsed = parseRef(ref);
+    if (!parsed && !ref.startsWith('contextos:')) {
+      if (path.isAbsolute(ref))
+        throw new Error('Use a repo-relative path or qualified chunk reference.');
+      const candidates = this.views.filter((view) => {
+        const file = resolveWithinWorkspace(view.rootPath, ref);
+        return file && fs.existsSync(file);
+      });
+      if (candidates.length > 1)
+        throw new Error(
+          `Ambiguous path ${ref} across selected views; select one project/worktree or use a qualified chunk reference.`
+        );
+      if (!candidates.length)
+        throw new Error(`Path not found or Access denied in selected views: ${ref}`);
+      return this.readFile(candidates[0], ref);
+    }
     if (!parsed || parsed.kind !== 'chunk')
       throw new Error('Expected a qualified chunk reference.');
     if (!this.views.some((view) => view.repoId === parsed.repoId))

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getContextOSHome } from '../storage/database.js';
 import type { RepositorySource } from '../workspace/registry.js';
-import { parseRef } from '../workspace/identity.js';
+import { entityRef, parseRef } from '../workspace/identity.js';
 import { hashContent } from '../../utils/hash.js';
 import { resolveWithinWorkspace } from '../../utils/fs-guard.js';
 import { preparePrivateStateFile, tightenPrivateStateFile } from '../../utils/secure-state.js';
@@ -385,10 +385,13 @@ export class GraphStore {
       )
     };
   }
-  unlink(id: string, permittedViewIds: string[]): boolean {
+  getLink(id: string, permittedViewIds: string[]): VerifiedLink | undefined {
     const link = this.records<VerifiedLink>('verified_links').find((item) => item.id === id);
-    if (!link) return false;
-    link.evidence.forEach((item) => this.assertScope(item.ref, permittedViewIds));
+    link?.evidence.forEach((item) => this.assertScope(item.ref, permittedViewIds));
+    return link;
+  }
+  unlink(id: string, permittedViewIds: string[]): boolean {
+    if (!this.getLink(id, permittedViewIds)) return false;
     return this.remove('verified_links', id);
   }
   trace(options: TraceOptions, permittedViewIds: string[]): TraceResult {
@@ -440,6 +443,35 @@ export class GraphStore {
           if (links.length > limit) break;
         }
         return { links: links.slice(0, limit), truncated: links.length > limit };
+      },
+      sameFile: (ref, limit) => {
+        const parsed = parseRef(ref)!;
+        const evidence = this.captureEvidence(ref);
+        const { db } = this.options.resolve(parsed.repoId);
+        const rows = db
+          .prepare('SELECT id FROM chunks WHERE source_file=? AND id<>? ORDER BY start_line,id')
+          .iterate(evidence.file, parsed.localId);
+        const refs: string[] = [];
+        for (const row of rows) {
+          const candidate = entityRef(parsed.repoId, 'chunk', (row as { id: string }).id);
+          // Bridge to connection-bearing chunks only; no exhaustive discovery or writes.
+          const connections = this.listLinks({ refs: [candidate], viewIds: permittedViewIds });
+          if (
+            !connections.some(
+              (link) =>
+                (!options.relationships || options.relationships.includes(link.type)) &&
+                (options.direction === 'incoming'
+                  ? link.target === candidate
+                  : options.direction === 'outgoing'
+                    ? link.source === candidate
+                    : true)
+            )
+          )
+            continue;
+          refs.push(candidate);
+          if (refs.length > limit) break;
+        }
+        return { refs: refs.slice(0, limit), truncated: refs.length > limit };
       },
       status: (link) => {
         const status = this.evidenceStatus(link.evidence);

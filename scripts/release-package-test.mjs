@@ -407,8 +407,16 @@ try {
       'reindex_context'
     ])
       assert.ok(tools.includes(tool), tool);
-    assert.equal((await call(backend, 'ctx_scope')).sources[0].name, 'backend');
-    assert.equal((await call(frontend, 'ctx_scope')).sources[0].name, 'frontend');
+    assert.equal(
+      (await call(backend, 'ctx_scope')).projects.find((project) => project.name === 'backend')
+        .name,
+      'backend'
+    );
+    assert.equal(
+      (await call(frontend, 'ctx_scope')).projects.find((project) => project.name === 'frontend')
+        .name,
+      'frontend'
+    );
     for (const output_format of ['markdown', 'xml']) {
       const result = await call(backend, 'get_context', {
         prompt: 'payment status',
@@ -449,7 +457,7 @@ try {
         mode: 'types'
       });
       assert.equal(resolved.resolved, true, JSON.stringify(resolved));
-      const scope = await call(backend, 'ctx_scope', { group: 'payments' });
+      const scope = await call(backend, 'ctx_scope', { group: 'payments', verbose: true });
       const expected_generations = Object.fromEntries(
         scope.sources.map((view) => [view.viewId, view.generation])
       );

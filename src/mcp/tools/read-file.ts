@@ -83,10 +83,10 @@ export function registerReadFileTool(
         let endIdx = Math.min(lines.length, MAX_LINES);
         let ranged = false;
 
-        if (start_line != null) {
+        if (start_line != null || end_line != null) {
           ranged = true;
-          startIdx = Math.max(0, start_line - 1);
-          const defaultEnd = startIdx + MAX_LINES;
+          startIdx = Math.max(0, (start_line ?? 1) - 1);
+          const defaultEnd = startIdx + 200;
           endIdx =
             end_line != null
               ? Math.min(lines.length, end_line)
@@ -120,6 +120,12 @@ export function registerReadFileTool(
         }
 
         return {
+          structuredContent: {
+            text: output,
+            startLine: startIdx + 1,
+            endLine: endIdx,
+            path: resolvedPath
+          },
           content: [
             {
               type: 'text',

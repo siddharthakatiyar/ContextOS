@@ -24,6 +24,7 @@ import { registerUpdateStatusTool } from './tools/update-status.js';
 import { resolveWithinWorkspace } from '../utils/fs-guard.js';
 import { getErrorMessage } from '../utils/errors.js';
 import crypto from 'node:crypto';
+import { boundResponse } from './response-budget.js';
 import { registerLegacyReadTopicTool } from './tools/read-topic.js';
 import { registerSaveContextTool } from './tools/save-context.js';
 import { ChunksRepo } from '../core/storage/chunks-repo.js';
@@ -291,7 +292,8 @@ export function registerWorkspaceTools(
           framingReserve: responseConfig.framingReserve,
           sentRegistry: sent,
           outputFormat: args.output_format,
-          explain: args.explain
+          // The included IDs also drive the compact hit list, even without inspector output.
+          explain: true
         });
         for (const source of scope.sources) {
           if (result.unavailableSources?.some((s) => s.repoId === source.repoId)) continue;
@@ -332,19 +334,37 @@ export function registerWorkspaceTools(
             unavailableSources: result.unavailableSources,
             omittedRepositories: omitted,
             tokens: compiled.tokenCount,
-            chunks: result.chunks.map((chunk) => ({
-              ref: chunk.id,
-              viewId: chunk.repoId,
-              projectId: chunk.projectId,
-              worktreeId: chunk.worktreeId,
-              branch: chunk.branch,
-              head: chunk.head,
-              relativePath: chunk.relativePath,
-              sourceFile: chunk.sourceFile,
-              startLine: chunk.startLine,
-              endLine: chunk.endLine
+            chunks: result.chunks
+              .filter((chunk) =>
+                compiled.diagnostics?.includedChunks.some((item) => item.id === chunk.id)
+              )
+              .map((chunk) => ({
+                ref: chunk.id,
+                viewId: chunk.repoId,
+                projectId:
+                  chunk.projectId ??
+                  scope.sources.find((s) => s.repoId === chunk.repoId)?.projectId,
+                projectName:
+                  chunk.repoName ?? scope.sources.find((s) => s.repoId === chunk.repoId)?.name,
+                ...(chunk.sourceFile === 'memory.fact' ? { text: chunk.content } : {}),
+                worktreeId: chunk.worktreeId,
+                branch: chunk.branch,
+                head: chunk.head,
+                relativePath: chunk.relativePath,
+                sourceFile: chunk.sourceFile,
+                startLine: chunk.startLine,
+                endLine: chunk.endLine
+              })),
+            sources: scope.sources.map((s) => ({
+              viewId: s.repoId,
+              projectId: s.projectId,
+              name: s.name,
+              generation: s.generation,
+              checkoutGeneration: s.checkoutGeneration,
+              worktreeId: s.worktreeId,
+              branch: s.branch,
+              state: s.state
             })),
-            sources: scope.sources,
             knowledgeLinks: result.knowledgeLinks,
             learnedLinks: result.learnedLinks,
             linkSuggestions: result.linkSuggestions,
@@ -353,6 +373,7 @@ export function registerWorkspaceTools(
               : {})
           }
         };
+        if (args.max_tokens !== undefined) boundResponse(output, args.max_tokens);
         cache.set(key, { at: Date.now(), result: output });
         while (cache.size > 8) cache.delete(cache.keys().next().value!);
         return output;
@@ -481,7 +502,10 @@ export function registerWorkspaceTools(
               const tool = definitions(target).find((d) => d.name === definition.name)!;
               const output = await tool.handler({ ...args, paths: [file] });
               owner.assertReadable();
-              output.structuredContent = provenance(target, args, file);
+              output.structuredContent = {
+                ...output.structuredContent,
+                ...provenance(target, args, file)
+              };
               output.content.unshift({
                 type: 'text',
                 text: `Project: ${target.name}; branch: ${target.branch ?? 'detached/non-Git'}; worktree: ${target.worktreeId}; view: ${target.repoId}`
@@ -504,7 +528,10 @@ export function registerWorkspaceTools(
           const tool = definitions(source).find((d) => d.name === definition.name)!;
           const output = await tool.handler(args);
           if (reading) owner.assertReadable();
-          output.structuredContent = provenance(source, args, file);
+          output.structuredContent = {
+            ...output.structuredContent,
+            ...provenance(source, args, file)
+          };
           output.content.unshift({
             type: 'text',
             text: `Project: ${source.name}; branch: ${source.branch ?? 'detached/non-Git'}; worktree: ${source.worktreeId}; view: ${source.repoId}`
@@ -612,12 +639,38 @@ export function registerWorkspaceTools(
       },
       saveSession: (source, content) => {
         const state = session(source);
-        state.store.addEvent({
+        const event = state.store.addEvent({
           sessionId: state.manager.getSessionId(),
           eventType: 'system_response',
           content,
           relatedFiles: null
         });
+        return `session:note:${event.sessionId}:${event.id}`;
+      },
+      forgetSession: (id, sources) => {
+        const ref = parseRef(id);
+        const local = ref?.kind === 'memory' ? ref.localId : id.replace(/^memory:/, '');
+        const note = /^session:note:([^:]+):(\d+)$/.exec(local);
+        const events = /^session:events:([^:]+)$/.exec(local);
+        if (!note && !events) return false;
+        const candidates = ref ? sources.filter((s) => s.repoId === ref.repoId) : sources;
+        let removed = false;
+        for (const source of candidates) {
+          const db = runtime.get(source).db.getInstance();
+          const change = note
+            ? db
+                .prepare(
+                  "DELETE FROM session_events WHERE session_id=? AND id=? AND event_type='system_response'"
+                )
+                .run(note[1], Number(note[2]))
+            : db
+                .prepare(
+                  "DELETE FROM session_events WHERE session_id=? AND event_type='system_response'"
+                )
+                .run(events![1]);
+          removed ||= change.changes > 0;
+        }
+        return removed;
       }
     })
   );

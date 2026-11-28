@@ -558,3 +558,309 @@ it('adds scoped legacy aliases only when configured and preserves verified knowl
     await otherServer.close();
   }
 });
+
+it('bounds complete retrieval payloads, includes fact text and project attribution, and paginates unique links', async () => {
+  await client.callTool({
+    name: 'ctx_remember',
+    arguments: { content: 'Payment marker durable fact', provenance: 'user' }
+  });
+  const result = await client.callTool({
+    name: 'get_context',
+    arguments: { prompt: 'Payment marker durable fact', tier: 'full', max_tokens: 1500 }
+  });
+  const { responseTokens } = await import('../../src/mcp/response-budget.js');
+  expect(result.isError).not.toBe(true);
+  expect(
+    responseTokens(result as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
+  ).toBeLessThanOrEqual(1500);
+  expect((result.structuredContent as { tokens: number })?.tokens).toBe(
+    responseTokens(result as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
+  );
+  const full = await client.callTool({
+    name: 'get_context',
+    arguments: { prompt: 'Payment marker durable fact', tier: 'full', max_tokens: 8000 }
+  });
+  expect((full.structuredContent as { chunks: unknown[] })?.chunks).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        sourceFile: 'memory.fact',
+        text: expect.stringContaining('Payment marker durable fact'),
+        projectName: 'backend'
+      })
+    ])
+  );
+  // Populate the group: empty pages cannot catch evidence/scope payload regressions.
+  const backend = registry.resolve('backend');
+  const frontend = registry.resolve('frontend');
+  fs.writeFileSync(
+    path.join(backend.rootPath, 'many.ts'),
+    Array.from({ length: 26 }, (_, i) => `export function item${i}() { return ${i}; }`).join('\n')
+  );
+  await runtime.get(backend).index(true);
+  const chunks = new ChunksRepo(runtime.get(backend).db.getInstance());
+  const targetChunk = new ChunksRepo(runtime.get(frontend).db.getInstance()).findBySymbolName(
+    'displayPaymentStatus'
+  )[0];
+  const target = entityRef(frontend.repoId, 'chunk', targetChunk.id);
+  const refs: string[] = [];
+  for (let i = 0; i < 26; i++) {
+    const source = entityRef(backend.repoId, 'chunk', chunks.findBySymbolName(`item${i}`)[0].id);
+    refs.push(source);
+    const saved = await client.callTool({
+      name: 'ctx_link',
+      arguments: {
+        group: 'default',
+        source,
+        target,
+        relationship: 'calls_api',
+        rationale:
+          i === 0 ? 'Verified fixture relationship. '.repeat(30) : 'Verified fixture relationship.',
+        expected_generations: {
+          [backend.repoId]: registry.resolve('backend').generation,
+          [frontend.repoId]: registry.resolve('frontend').generation
+        }
+      }
+    });
+    expect(saved.isError).not.toBe(true);
+  }
+  const page = await client.callTool({ name: 'ctx_links', arguments: { group: 'default' } });
+  expect(page.structuredContent).toMatchObject({
+    total: 26,
+    offset: 0,
+    limit: 20,
+    next_offset: 20
+  });
+  expect(page.structuredContent).not.toHaveProperty('scope');
+  const data = page.structuredContent as {
+    links: { id: string; rationale: string; evidence: { count: number; refs: string[] } }[];
+  };
+  expect(data.links).toHaveLength(20);
+  expect(page.content).toEqual([]);
+  expect(
+    responseTokens(page as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
+  ).toBeLessThan(8000);
+  const longPage = await client.callTool({
+    name: 'ctx_links',
+    arguments: { group: 'default', refs: [refs[0]] }
+  });
+  const truncatedLink = (longPage.structuredContent as typeof data).links[0];
+  expect(truncatedLink).toMatchObject({
+    relationship: 'calls_api',
+    truncated: true,
+    source: {
+      project: 'backend',
+      file: 'many.ts',
+      ref: expect.stringMatching(/^contextos:/),
+      lines: [expect.any(Number), expect.any(Number)]
+    },
+    target: { project: 'frontend', file: 'payment.ts' },
+    evidence: { count: 2 }
+  });
+  expect(truncatedLink.rationale).toHaveLength(240);
+  expect(data.links[0].evidence.refs).toHaveLength(2);
+  const second = await client.callTool({
+    name: 'ctx_links',
+    arguments: { group: 'default', offset: 20 }
+  });
+  expect(second.structuredContent).toMatchObject({ next_offset: null });
+  const remaining = (second.structuredContent as typeof data).links;
+  expect(remaining).toHaveLength(6);
+  expect(new Set([...data.links, ...remaining].map((link) => link.id)).size).toBe(26);
+  const detailed = await client.callTool({
+    name: 'ctx_links',
+    arguments: { group: 'default', verbose: true, refs: [refs[0]] }
+  });
+  expect(detailed.structuredContent).toHaveProperty('scope');
+  expect(
+    (
+      detailed.structuredContent as { links: { evidence: unknown[]; rationale: string }[] }
+    ).links.find((link) => link.rationale.length > 240)
+  ).toMatchObject({
+    rationale: 'Verified fixture relationship. '.repeat(30).trim(),
+    evidence: [
+      expect.objectContaining({ fileHash: expect.any(String), generation: expect.any(Number) }),
+      expect.any(Object)
+    ]
+  });
+  const trace = await client.callTool({
+    name: 'ctx_trace',
+    arguments: { group: 'default', start: target }
+  });
+  expect(
+    responseTokens(trace as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
+  ).toBeLessThan(18000);
+  expect(trace.structuredContent).toMatchObject({
+    nodes: expect.arrayContaining([expect.objectContaining({ ref: target })])
+  });
+  expect(trace.content).toEqual([]);
+  expect((trace.structuredContent as { nodes: unknown[] }).nodes).toHaveLength(27);
+  expect((trace.structuredContent as { paths: unknown[] }).paths.length).toBeLessThanOrEqual(20);
+  expect(JSON.stringify(trace.structuredContent)).not.toContain('fileHash');
+  const detailedTrace = await client.callTool({
+    name: 'ctx_trace',
+    arguments: { group: 'default', start: refs[0], verbose: true }
+  });
+  expect(JSON.stringify(detailedTrace.structuredContent)).toContain('fileHash');
+  const scope = await client.callTool({ name: 'ctx_scope', arguments: {} });
+  expect(scope.structuredContent).toMatchObject({ counts: { projects: 2, views: 2 } });
+  expect(scope.structuredContent).not.toHaveProperty('catalog');
+  const verbose = await client.callTool({ name: 'ctx_scope', arguments: { verbose: true } });
+  expect(verbose.structuredContent).toHaveProperty('catalog');
+});
+
+it('returns source line ranges, matched windows and command results alongside provenance', async () => {
+  const root = registry.resolve('backend').rootPath;
+  fs.writeFileSync(path.join(root, 'lines.txt'), 'first\nneedle here\nthird\nfourth\n');
+  const read = await client.callTool({
+    name: 'ctx_read_file',
+    arguments: { filePath: 'lines.txt', start_line: 2, end_line: 3 }
+  });
+  expect(read.structuredContent).toMatchObject({
+    text: 'needle here\nthird',
+    startLine: 2,
+    endLine: 3
+  });
+  expect(JSON.stringify(read.content)).toContain('needle here');
+  const expand = await client.callTool({
+    name: 'ctx_expand',
+    arguments: { paths: ['lines.txt'], terms: ['needle'], linesBefore: 0, linesAfter: 0 }
+  });
+  expect(JSON.stringify(expand.structuredContent)).toContain('needle here');
+  expect(JSON.stringify(expand.content)).toContain('needle here');
+  const executed = await client.callTool({
+    name: 'ctx_execute',
+    arguments: { command: 'cat lines.txt' }
+  });
+  expect(executed.structuredContent).toMatchObject({
+    stdout: 'first\nneedle here\nthird\nfourth\n',
+    stderr: '',
+    exitCode: 0
+  });
+  const failed = await client.callTool({
+    name: 'ctx_execute',
+    arguments: { command: 'cat missing.txt' }
+  });
+  expect(failed.isError).toBe(true);
+  expect(failed.structuredContent).toMatchObject({
+    stdout: '',
+    exitCode: 1,
+    stderr: expect.stringContaining('missing.txt')
+  });
+  const denied = await client.callTool({
+    name: 'ctx_read_file',
+    arguments: { filePath: '../secret' }
+  });
+  expect(denied.isError).toBe(true);
+  expect(JSON.stringify(denied.content)).toContain('Access denied');
+});
+
+it('accepts selected repo-relative inspection paths and rejects ambiguous paths across views', async () => {
+  const source = registry.resolve('backend');
+  fs.writeFileSync(path.join(source.rootPath, 'helper.ts'), 'export const helper = 1;\n');
+  fs.appendFileSync(
+    path.join(source.rootPath, 'payment.ts'),
+    '\nimport { helper } from "./helper";\n'
+  );
+  fs.writeFileSync(
+    path.join(source.rootPath, 'api.yaml'),
+    'openapi: 3.1.0\npaths:\n  /hello:\n    get:\n      operationId: hello\n      responses: {}\n'
+  );
+  await runtime.get(source).index(true);
+  const resolved = await client.callTool({
+    name: 'ctx_resolve_import',
+    arguments: { project: 'backend', source: 'payment.ts', specifier: './helper' }
+  });
+  expect(resolved.isError).not.toBe(true);
+  expect(resolved.structuredContent).toMatchObject({ resolved: true });
+  const contract = await client.callTool({
+    name: 'ctx_contract',
+    arguments: { project: 'backend', ref: 'api.yaml' }
+  });
+  expect(contract.isError).not.toBe(true);
+  expect(contract.structuredContent).toMatchObject({ operations: [{ id: 'hello' }] });
+  const ambiguous = await client.callTool({
+    name: 'ctx_resolve_import',
+    arguments: { group: 'default', source: 'payment.ts', specifier: './helper' }
+  });
+  expect(ambiguous.isError).toBe(true);
+  expect(JSON.stringify(ambiguous.content)).toContain('Ambiguous path');
+});
+
+it('returns removable session note IDs and accepts aggregated session event refs', async () => {
+  const save = async (content: string) => {
+    const result = await client.callTool({
+      name: 'ctx_remember',
+      arguments: { type: 'session_note', content }
+    });
+    expect(result.isError).not.toBe(true);
+    return result.structuredContent as { id: string; ref: string };
+  };
+  const a = await save('SessionMarkerAlpha');
+  const b = await save('SessionMarkerBeta');
+  expect(a.id).toBeTruthy();
+  expect(a.id).not.toBe(b.id);
+  const removed = await client.callTool({ name: 'ctx_forget', arguments: { id: a.id } });
+  expect(removed.structuredContent).toMatchObject({ removed: true });
+  const missing = await client.callTool({ name: 'ctx_forget', arguments: { id: a.ref } });
+  expect(missing.structuredContent).toMatchObject({
+    removed: false,
+    reason: expect.stringContaining('No matching')
+  });
+  const sessionId = b.id.split(':')[2];
+  const aggregate = b.ref.replace(/session:note:.+$/, `session:events:${sessionId}`);
+  const forgotten = await client.callTool({ name: 'ctx_forget', arguments: { id: aggregate } });
+  expect(forgotten.structuredContent).toMatchObject({ removed: true });
+  const c = await save('SessionMarkerGamma');
+  const unqualified = await client.callTool({
+    name: 'ctx_forget',
+    arguments: { id: `memory:session:events:${c.id.split(':')[2]}` }
+  });
+  expect(unqualified.structuredContent).toMatchObject({ removed: true });
+  const result = await client.callTool({
+    name: 'get_context',
+    arguments: { prompt: 'SessionMarkerAlpha SessionMarkerBeta SessionMarkerGamma', tier: 'full' }
+  });
+  expect(JSON.stringify(result)).not.toContain('SessionMarkerAlpha');
+  expect(JSON.stringify(result)).not.toContain('SessionMarkerBeta');
+  expect(JSON.stringify(result)).not.toContain('SessionMarkerGamma');
+});
+
+it('removes obsolete links with compact endpoint metadata without pruning away the requested removal', async () => {
+  const backend = registry.resolve('backend'),
+    frontend = registry.resolve('frontend');
+  const ref = (source: typeof backend, symbol: string) =>
+    entityRef(
+      source.repoId,
+      'chunk',
+      new ChunksRepo(runtime.get(source).db.getInstance()).findBySymbolName(symbol)[0].id
+    );
+  const linked = await client.callTool({
+    name: 'ctx_link',
+    arguments: {
+      group: 'default',
+      source: ref(backend, 'processPaymentStatus'),
+      target: ref(frontend, 'displayPaymentStatus'),
+      relationship: 'implements_contract',
+      rationale: 'Fixture payment state transition and display contract.',
+      expected_generations: {
+        [backend.repoId]: backend.generation,
+        [frontend.repoId]: frontend.generation
+      }
+    }
+  });
+  const id = (linked.structuredContent as { link: { id: string } }).link.id;
+  fs.appendFileSync(path.join(backend.rootPath, 'payment.ts'), '\n// obsolete evidence\n');
+  const removed = await client.callTool({
+    name: 'ctx_unlink',
+    arguments: { group: 'default', id }
+  });
+  expect(removed.structuredContent).toMatchObject({
+    ok: true,
+    removed: true,
+    id,
+    type: 'implements_contract',
+    endpoints: [{ name: 'backend' }, { name: 'frontend' }],
+    warnings: []
+  });
+  expect(removed.structuredContent).not.toHaveProperty('scope');
+});

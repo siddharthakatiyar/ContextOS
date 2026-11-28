@@ -94,7 +94,16 @@ describe('retrieval readiness transitions', () => {
     const current = registry.resolve(source.repoId);
     expect(current.checkoutGeneration).toBe(source.checkoutGeneration + 1);
     expect(runtime.get(current)).not.toBe(previous);
-    expect(result.structuredContent).toMatchObject({ sources: [current] });
+    expect(result.structuredContent).toMatchObject({
+      sources: [
+        {
+          viewId: current.viewId,
+          generation: current.generation,
+          checkoutGeneration: current.checkoutGeneration,
+          projectId: current.projectId
+        }
+      ]
+    });
   });
 
   it.each([true, false])('retries core search errors only when transient=%s', async (transient) => {

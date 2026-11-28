@@ -38,7 +38,7 @@ export interface GlobalAgentOptions {
 
 const bootstrap = `Installing ContextOS globally does not initialize a project. For a coding task, run \`contextos setup --check --json\` in the project. If it reports the project is not initialized, ask the user once in conversation whether to set it up, including in automatic mode; only with their agreement run \`contextos init --json\`. For already registered projects, follow the reported nextAction to repair missing checkout configuration or readiness. Respect the user's approval policy; do not change client permissions automatically. If ContextOS retrieval tools are unavailable after initialization, inspect \`contextos doctor --client <client> --noninteractive\` and restart the agent or its MCP connection as needed.`;
 export function globalInstructionsBlock(): string {
-  return `${AGENT_BLOCK_START}\n## ContextOS (managed global instructions v1.2.4)\n\n${bootstrap}\n\n${MCP_SERVER_INSTRUCTIONS}\n${AGENT_BLOCK_END}`;
+  return `${AGENT_BLOCK_START}\n## ContextOS (managed global instructions v1.2.5)\n\n${bootstrap}\n\n${MCP_SERVER_INSTRUCTIONS}\n${AGENT_BLOCK_END}`;
 }
 
 function isExecutable(name: string, env: NodeJS.ProcessEnv): boolean {
