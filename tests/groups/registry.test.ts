@@ -501,3 +501,15 @@ describe('restartable cleanup', () => {
     expect(registry.worktrees()).toHaveLength(2);
   });
 });
+
+it('accepts project root directory aliases and suggests registered names for unknown selectors', () => {
+  const root = repository('jsmon-dev-backend-v2');
+  const source = registry.register(root, { name: 'jsmon-dev-backend-v2-org' });
+  expect(registry.resolve('jsmon-dev-backend-v2').projectId).toBe(source.projectId);
+  expect(() => registry.resolve('jsmon-dev-backend-v3')).toThrow(
+    'Did you mean jsmon-dev-backend-v2-org (directory jsmon-dev-backend-v2)'
+  );
+  const other = repository('elsewhere/jsmon-dev-backend-v2');
+  registry.register(other, { name: 'other-backend' });
+  expect(() => registry.resolve('jsmon-dev-backend-v2')).toThrow('Ambiguous repository directory');
+});

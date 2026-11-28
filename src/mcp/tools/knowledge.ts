@@ -345,6 +345,13 @@ export function registerWorkspaceKnowledgeTools(
           ])
         )
         .optional(),
+      bridge_same_file: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+          'Opt in to explicitly inferred adjacency between chunks in the same file; never saves these steps as links.'
+        ),
       max_depth: z.number().int().min(1).max(12).default(6),
       max_nodes: z.number().int().min(1).max(500).default(50),
       max_edges: z.number().int().min(1).max(1000).default(100),
@@ -362,7 +369,8 @@ export function registerWorkspaceKnowledgeTools(
           maxDepth: args.max_depth as number,
           maxNodes: args.max_nodes as number,
           maxEdges: args.max_edges as number,
-          maxPaths: args.max_paths as number
+          maxPaths: args.max_paths as number,
+          bridgeSameFile: args.bridge_same_file as boolean
         },
         scope.repoIds
       );

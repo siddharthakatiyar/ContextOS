@@ -181,3 +181,67 @@ describe('verified cross-project tracing', () => {
     expect(() => graph.trace({ start: refs.frontend }, scope())).toThrow('changed since indexing');
   });
 });
+
+it('bridges different chunks of one file only by opt-in and labels inferred steps without saving them', async () => {
+  const source = registry.resolve('backend');
+  fs.appendFileSync(
+    path.join(source.rootPath, 'checkout.ts'),
+    '\nexport function produceCheckout() { return "checkout.created"; }\n'
+  );
+  await runtime.get(source).index(true);
+  const chunk = new ChunksRepo(runtime.get(source).db.getInstance()).findBySymbolName(
+    'produceCheckout'
+  )[0];
+  refs.producer = entityRef(source.repoId, 'chunk', chunk.id);
+  // The edit invalidated old links: recreate the exact connections for this fixture.
+  graph.listLinks();
+  connect('frontend', 'backend', 'calls_api');
+  connect('producer', 'payments', 'publishes_event');
+  const before = graph.listLinks().length;
+  const disabled = graph.trace(
+    { start: refs.frontend, target: refs.payments, direction: 'outgoing' },
+    scope()
+  );
+  expect(disabled.found).toBe(false);
+  expect(disabled.stops).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        ref: refs.backend,
+        reason: 'no_recorded_connection',
+        note: expect.stringContaining('bridge_same_file')
+      })
+    ])
+  );
+  const enabled = graph.trace(
+    { start: refs.frontend, target: refs.payments, direction: 'outgoing', bridgeSameFile: true },
+    scope()
+  );
+  expect(enabled.found).toBe(true);
+  expect(enabled.paths[0].steps).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        from: refs.backend,
+        to: refs.producer,
+        traversal: 'inferred_same_file',
+        inference: 'same_file_adjacency'
+      })
+    ])
+  );
+  expect(enabled.paths[0].steps.find((step) => step.inference)).not.toHaveProperty('linkId');
+  expect(enabled.coverage).toBe('recorded_links_and_inferred_same_file_adjacency');
+  expect(graph.listLinks()).toHaveLength(before);
+  for (const limits of [{ maxDepth: 1 }, { maxNodes: 2 }, { maxEdges: 1 }]) {
+    const bounded = graph.trace(
+      {
+        start: refs.frontend,
+        target: refs.payments,
+        direction: 'outgoing',
+        bridgeSameFile: true,
+        ...limits
+      },
+      scope()
+    );
+    expect(bounded.found).toBe(false);
+    expect(bounded.truncated).toBe(true);
+  }
+});

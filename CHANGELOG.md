@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Add opt-in, explicitly inferred same-file trace adjacency and gap hints; accept project root directory selectors and suggest known projects for unknown names.
+
 - Return IDs for session notes and support removing individual notes or session-event references, with reasons when nothing is removed.
 
 - Preserve reconciled Git identity mismatch details in project status text and JSON.
