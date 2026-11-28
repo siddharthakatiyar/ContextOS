@@ -1,5 +1,10 @@
+import { recordKnowledgeOperation } from '../../core/knowledge/audit.js';
+import { loadConfig } from '../../config/index.js';
 import { knowledgeWriteSchema } from '../knowledge-write-schema.js';
-import { resolveKnowledgeWriteContext } from '../../core/knowledge/write-context.js';
+import {
+  compactKnowledgeMetadata,
+  resolveMcpKnowledgeWriteContext
+} from '../../core/knowledge/write-context.js';
 import { workspaceToolRegistry } from '../tool-registry.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -30,7 +35,12 @@ export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
     async ({ type, content, category, ...writeContext }) => {
       try {
         if (type === 'forget_fact') {
-          const success = store.forgetFact(content);
+          const success = store.forgetFact(
+            content,
+            resolveMcpKnowledgeWriteContext(writeContext, {
+              clientName: server.server?.getClientVersion()?.name
+            })
+          );
           if (success) {
             return { content: [{ type: 'text', text: `Successfully forgot fact ${content}` }] };
           }
@@ -39,18 +49,28 @@ export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
           const id = store.learnFact(
             content,
             category || 'general',
-            resolveKnowledgeWriteContext(writeContext)
+            resolveMcpKnowledgeWriteContext(writeContext, {
+              clientName: server.server?.getClientVersion()?.name,
+              review: loadConfig().knowledge?.review
+            })
           );
           return { content: [{ type: 'text', text: `Successfully learned fact. ID: ${id}` }] };
         } else {
           let session = sessionStore.getLatestSession();
           if (!session) session = sessionStore.createSession(process.cwd());
-          sessionStore.addEvent({
+          const event = sessionStore.addEvent({
             sessionId: session.id,
             eventType: 'system_response',
             content: content,
             relatedFiles: null
           });
+          recordKnowledgeOperation(
+            'remember_session',
+            `session:note:${event.sessionId}:${event.id}`,
+            resolveMcpKnowledgeWriteContext(writeContext, {
+              clientName: server.server?.getClientVersion()?.name
+            })
+          );
           return {
             content: [{ type: 'text', text: `Successfully saved context note to session memory.` }]
           };
@@ -83,7 +103,14 @@ export function registerLegacyKnowledgeTools(server: McpServer, dbs: DB[]) {
     },
     async ({ fact, category, ...writeContext }) => {
       try {
-        const id = store.learnFact(fact, category, resolveKnowledgeWriteContext(writeContext));
+        const id = store.learnFact(
+          fact,
+          category,
+          resolveMcpKnowledgeWriteContext(writeContext, {
+            clientName: server.server?.getClientVersion()?.name,
+            review: loadConfig().knowledge?.review
+          })
+        );
         return {
           content: [{ type: 'text', text: `Successfully learned fact. ID: ${id}` }]
         };
@@ -100,11 +127,17 @@ export function registerLegacyKnowledgeTools(server: McpServer, dbs: DB[]) {
     'forget_fact',
     'Remove a previously learned cross-session memory fact using its ID.',
     {
+      ...knowledgeWriteSchema,
       id: z.string().describe('The ID of the fact to forget')
     },
-    async ({ id }) => {
+    async ({ id, ...writeContext }) => {
       try {
-        const success = store.forgetFact(id);
+        const success = store.forgetFact(
+          id,
+          resolveMcpKnowledgeWriteContext(writeContext, {
+            clientName: server.server?.getClientVersion()?.name
+          })
+        );
         if (success) {
           return {
             content: [{ type: 'text', text: `Successfully forgot fact ${id}` }]
@@ -208,6 +241,7 @@ export function createWorkspaceKnowledgeContext(
     };
   };
   const compactLink = (link: VerifiedLink) => ({
+    ...compactKnowledgeMetadata(link),
     id: link.id,
     relationship: link.type,
     source: endpoint(link.source),
@@ -245,7 +279,25 @@ export function createWorkspaceKnowledgeContext(
       }
     };
 
+  const resolveWriteContext = (args: Record<string, unknown>) => {
+    const scope = scopeFor(args);
+    const source = scope.sources.find((s) => s.repoId === scope.activeRepoId) ?? scope.sources[0];
+    return resolveMcpKnowledgeWriteContext(args, {
+      clientName: server.server?.getClientVersion()?.name,
+      review: loadConfig({ cwd: source?.rootPath }).knowledge?.review
+    });
+  };
   return {
+    resolveWriteContext,
+    forgetSession: (
+      id: string,
+      scope: ReturnType<typeof scopeFor>,
+      args: Record<string, unknown>
+    ) => {
+      const removed = context.forgetSession?.(id, scope.sources) ?? false;
+      if (removed) recordKnowledgeOperation('forget', id, resolveWriteContext(args));
+      return removed;
+    },
     server,
     context,
     selectors,

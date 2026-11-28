@@ -70,6 +70,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
       "unindexed discovery (e.g. renaming across files, running commands). When output includes '### Also' " +
       'stubs with path:line ranges, expand with ctx_expand, ctx_symbol, or read_file.',
     {
+      include_proposed: z.boolean().optional(),
       prompt: z.string().describe("The user's coding question or task description"),
       max_tokens: z
         .number()

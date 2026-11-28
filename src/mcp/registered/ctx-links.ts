@@ -9,6 +9,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
     {
       ...selectors,
       ...verbose,
+      include_proposed: z.boolean().optional(),
       refs: z.array(z.string()).optional(),
       limit: z.number().int().min(1).max(500).default(20),
       offset: z.number().int().nonnegative().default(0)
@@ -19,6 +20,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
         ...new Map(
           graph
             .listLinks({ viewIds: scope.repoIds, refs: args.refs as string[] | undefined })
+            .filter((link) => args.include_proposed || link.status !== 'proposed')
             .map((link) => [link.id, link])
         ).values()
       ].sort((a, b) => a.id.localeCompare(b.id));

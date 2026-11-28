@@ -1,3 +1,4 @@
+import { recordKnowledgeOperation } from '../knowledge/audit.js';
 import { DB } from '../storage/database.js';
 import crypto from 'crypto';
 import {
@@ -85,7 +86,10 @@ export class KnowledgeStore {
       .run({ id, ...metadata });
   }
 
-  public forgetFact(id: string): boolean {
+  public forgetFact(id: string, context: KnowledgeWriteContext = {}): boolean {
+    if (!this.db.getInstance().prepare('SELECT id FROM knowledge_facts WHERE id=?').get(id))
+      return false;
+    recordKnowledgeOperation('forget', id, context);
     const result = this.db
       .getInstance()
       .prepare('DELETE FROM knowledge_facts WHERE id = ?')
@@ -116,7 +120,7 @@ export class KnowledgeStore {
       FROM knowledge_facts_fts f
       JOIN knowledge_facts k ON f.rowid = k.rowid
       WHERE knowledge_facts_fts MATCH ?
-      ORDER BY f.rank ASC, k.confidence DESC, k.updated_at DESC
+      ORDER BY CASE k.status WHEN 'verified' THEN 0 WHEN 'proposed' THEN 1 ELSE 2 END, f.rank ASC, k.confidence DESC, k.updated_at DESC
       LIMIT ?
     `
       )

@@ -292,7 +292,7 @@ it('constructs and indexes the reusable three-repository group and round-trips k
     );
     expect(graph.listLinks()).toEqual([expect.objectContaining(context)]);
     expect(graph.searchFacts('Fixture user', { viewIds: [a.repoId] })).toEqual([
-      expect.objectContaining(context)
+      expect.objectContaining({ ...context, status: 'verified' })
     ]);
     expect(graph.searchFacts('Fixture user', { viewIds: [a.repoId] })[0]).toMatchObject({
       verifiedAt: 123,

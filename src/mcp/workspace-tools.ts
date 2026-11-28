@@ -54,6 +54,7 @@ export function createWorkspaceToolContext(
 ) {
   const originalServer = server;
   server = {
+    server: originalServer.server,
     tool: (name: string, description: string, schema: z.ZodRawShape, handler: Handler) =>
       originalServer.tool(name, description, schema, async (args) => {
         for (let attempt = 0; ; attempt++) {

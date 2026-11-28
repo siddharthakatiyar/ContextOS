@@ -44,6 +44,42 @@ export function resolveKnowledgeWriteContext(
   return result;
 }
 
+/** Review policy applies only to MCP agent writes. Explicit metadata still wins over env. */
+export function resolveMcpKnowledgeWriteContext(
+  params: KnowledgeWriteContext & { task_id?: string; provenance?: unknown } = {},
+  options: { clientName?: string; review?: boolean; env?: NodeJS.ProcessEnv } = {}
+): KnowledgeWriteContext {
+  const env = options.env ?? process.env;
+  const context = resolveKnowledgeWriteContext(params, env);
+  context.author ??= options.clientName;
+  context.status =
+    params.provenance === 'user'
+      ? 'verified'
+      : (params.status ??
+        (env.CONTEXTOS_REVIEW_MODE === '1' || options.review ? 'proposed' : 'verified'));
+  return context;
+}
+
+/** Default metadata costs no tokens; non-default lifecycle state is always explicit. */
+export function compactKnowledgeMetadata(input: KnowledgeWriteContext = {}) {
+  return {
+    ...(input.author ? { author: input.author } : {}),
+    ...(input.taskId ? { taskId: input.taskId } : {}),
+    ...(input.status && input.status !== 'verified' ? { status: input.status } : {})
+  };
+}
+
+/** Compact persisted metadata without changing the surrounding record shape. */
+export function compactKnowledgeRecord<T extends KnowledgeMetadata>(input: T): T {
+  const result = { ...input };
+  if (result.status === 'verified') delete result.status;
+  if (result.namespace === 'project') delete result.namespace;
+  if (result.expiresAt == null) delete result.expiresAt;
+  if (result.verifiedAt == null) delete result.verifiedAt;
+  if (result.staleReason == null) delete result.staleReason;
+  return result;
+}
+
 /** Validate a lifecycle transition without imposing visibility or review policy. */
 export function transitionStatus(from: KnowledgeStatus, to: KnowledgeStatus): KnowledgeStatus {
   if (

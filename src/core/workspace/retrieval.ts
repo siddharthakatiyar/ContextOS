@@ -1,3 +1,4 @@
+import { compactKnowledgeMetadata } from '../knowledge/write-context.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import { DB, getContextOSHome } from '../storage/database.js';
@@ -175,7 +176,7 @@ export async function retrieveWorkspace(
       const seedScore = Math.max(1, ...chunks.map((chunk) => chunk.score));
       const seenLinks = new Set<string>();
       for (let depth = 1; depth <= 2 && frontier.length; depth++) {
-        const expanded = graph.expand(frontier, permitted, 12, seenLinks);
+        const expanded = graph.expand(frontier, permitted, 12, seenLinks, opts.includeProposed);
         for (const link of expanded.links)
           if (!seenLinks.has(link.id)) {
             seenLinks.add(link.id);
@@ -191,7 +192,13 @@ export async function retrieveWorkspace(
             parsed.localId
           ])[0];
           if (!row || (opts.layers?.length && !opts.layers.includes(row.layer))) continue;
-          const chunk = qualifyChunk({ ...row, score: seedScore * Math.pow(0.6, depth) }, source);
+          const verified = expanded.links.some(
+            (link) => link.status === 'verified' && (link.source === ref || link.target === ref)
+          );
+          const chunk = qualifyChunk(
+            { ...row, score: seedScore * Math.pow(0.6, depth) * (verified ? 1 : 0.25) },
+            source
+          );
           chunks.push(chunk);
           seen.add(ref);
           next.push(ref);
@@ -219,6 +226,7 @@ export async function retrieveWorkspace(
               : scope.sources.find((view) => view.repoId === fact.viewIds[0]);
         if (!source) continue;
         const factChunk: ScoredChunk = {
+          ...compactKnowledgeMetadata(fact),
           id: entityRef(source.repoId, 'fact', fact.id),
           localId: fact.id,
           repoId: source.repoId,
@@ -233,10 +241,18 @@ export async function retrieveWorkspace(
           sourceFile: 'memory.fact',
           layer: 'repo',
           workspaceName: null,
-          sectionTitle: 'Verified knowledge',
+          sectionTitle:
+            fact.status === 'proposed'
+              ? 'Proposed knowledge'
+              : fact.status === 'stale'
+                ? 'Stale knowledge'
+                : 'Verified knowledge',
           sectionDepth: 0,
           content:
             fact.content +
+            (Object.keys(compactKnowledgeMetadata(fact)).length
+              ? '\nKnowledge: ' + JSON.stringify(compactKnowledgeMetadata(fact))
+              : '') +
             (fact.evidence.length
               ? '\nEvidence: ' + fact.evidence.map((e) => e.ref).join(', ')
               : '\nProvenance: explicit user statement'),
@@ -245,7 +261,8 @@ export async function retrieveWorkspace(
           hash: fact.id,
           importance: 8,
           tokenCount: Math.ceil(fact.content.length / 4),
-          score: seedScore * 0.8,
+          score:
+            seedScore * (fact.status === 'proposed' ? 0.3 : fact.status === 'stale' ? 0.2 : 0.8),
           createdAt: fact.createdAt,
           updatedAt: fact.updatedAt
         };

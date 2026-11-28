@@ -10,6 +10,7 @@ export interface DetectedIntent {
 }
 
 export interface RetrievalOptions {
+  includeProposed?: boolean;
   selectedRepo?: boolean;
   limit?: number;
   maxChunks?: number;
@@ -80,6 +81,9 @@ export interface RetrievalExplanation {
 }
 
 export interface ScoredChunk extends Chunk {
+  author?: string;
+  taskId?: string;
+  status?: import('../knowledge/write-context.js').KnowledgeStatus;
   score: number;
   /** Internal containment signal used to prefer a retained child over its dropped parent. */
   parentDropped?: boolean;

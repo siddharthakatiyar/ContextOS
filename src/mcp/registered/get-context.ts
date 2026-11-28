@@ -1,3 +1,8 @@
+import { prepareFactForContext, applyFactMetadata } from '../../core/knowledge/presentation.js';
+import {
+  compactKnowledgeMetadata,
+  compactKnowledgeRecord
+} from '../../core/knowledge/write-context.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
@@ -22,6 +27,7 @@ export default function register(c: WorkspaceToolContext): void {
     'Retrieve engineering context from the active repository, explicit repositories, or the entire workspace. Use repo/workspace/all_repos to select scope.',
     {
       prompt: z.string(),
+      include_proposed: z.boolean().optional(),
       group: z.string().optional(),
       project: z.union([z.string(), z.array(z.string())]).optional(),
       worktree: z.string().optional(),
@@ -78,6 +84,7 @@ export default function register(c: WorkspaceToolContext): void {
           cache.delete(key);
         }
         const result = await retrieveWorkspace(runtime, scope, args.prompt, {
+          includeProposed: args.include_proposed,
           layers: args.layers,
           explain: args.explain
         });
@@ -102,18 +109,20 @@ export default function register(c: WorkspaceToolContext): void {
               : [];
             repo.assertReadable();
             const facts = args.layers.includes('repo')
-              ? new KnowledgeStore(repo.db).searchFacts(args.prompt, 2)
+              ? new KnowledgeStore(repo.db).searchFacts(args.prompt, 2).map(prepareFactForContext)
               : [];
             const memories = mergeMemoryPipeline([], sessionChunks, facts, result.intent).map(
-              (chunk) => ({
-                ...chunk,
-                id: entityRef(source.repoId, 'memory', chunk.id),
-                localId: chunk.id,
-                repoId: source.repoId,
-                repoName: source.name,
-                relativePath: chunk.sourceFile,
-                layer: chunk.sourceFile === 'memory.fact' ? ('repo' as const) : chunk.layer
-              })
+              (chunk) => {
+                return {
+                  ...applyFactMetadata(chunk, facts),
+                  id: entityRef(source.repoId, 'memory', chunk.id),
+                  localId: chunk.id,
+                  repoId: source.repoId,
+                  repoName: source.name,
+                  relativePath: chunk.sourceFile,
+                  layer: chunk.sourceFile === 'memory.fact' ? ('repo' as const) : chunk.layer
+                };
+              }
             );
             result.chunks.push(...memories);
             state.store.addEvent({
@@ -230,6 +239,7 @@ export default function register(c: WorkspaceToolContext): void {
                 compiled.diagnostics?.includedChunks.some((item) => item.id === chunk.id)
               )
               .map((chunk) => ({
+                ...compactKnowledgeMetadata(chunk),
                 ref: chunk.id,
                 viewId: chunk.repoId,
                 projectId:
@@ -256,8 +266,8 @@ export default function register(c: WorkspaceToolContext): void {
               branch: s.branch,
               state: s.state
             })),
-            knowledgeLinks: result.knowledgeLinks,
-            learnedLinks: result.learnedLinks,
+            knowledgeLinks: result.knowledgeLinks?.map(compactKnowledgeRecord),
+            learnedLinks: result.learnedLinks?.map(compactKnowledgeRecord),
             linkSuggestions: result.linkSuggestions,
             ...(args.explain
               ? { explanation: result.explanation, compilation: compiled.diagnostics }
