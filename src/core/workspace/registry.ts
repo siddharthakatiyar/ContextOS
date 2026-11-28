@@ -1,3 +1,4 @@
+import { backupBeforeMigration } from '../backup/pre-migration.js';
 import Database from 'better-sqlite3';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -239,9 +240,7 @@ export class WorkspaceRegistry {
             'Stop existing ContextOS daemons before migrating to global project storage.'
           );
       }
-      const backup = path.join(home, 'registry.pre-groups.db');
-      if (!fs.existsSync(backup))
-        this.db.prepare('VACUUM INTO ?').run(preparePrivateStateFile(backup));
+      backupBeforeMigration(file);
       this.db
         .transaction(() => {
           this.db.exec(
@@ -249,6 +248,14 @@ export class WorkspaceRegistry {
           );
         })
         .immediate();
+    } else if (
+      this.db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='legacy_repositories'")
+        .get() &&
+      !this.db.prepare("SELECT value FROM registry_metadata WHERE key='groups_migrated'").get()
+    ) {
+      // A previous upgrade may have stopped after renaming the legacy tables.
+      backupBeforeMigration(file);
     }
     this.db.exec(`CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, root_path TEXT NOT NULL,

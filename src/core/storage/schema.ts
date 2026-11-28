@@ -1,3 +1,4 @@
+import { backupBeforeMigration } from '../backup/pre-migration.js';
 import Database from 'better-sqlite3';
 import { migrateKnowledgeColumns } from '../knowledge/write-context.js';
 import { getErrorMessage } from '../../utils/errors.js';
@@ -510,6 +511,13 @@ function migrateToV8(db: Database.Database): void {
 }
 
 export function applyMigrations(db: Database.Database) {
+  const hasFiles = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='files'")
+    .get();
+  const hasVersion = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")
+    .get();
+  if (hasFiles && (!hasVersion || getSchemaVersion(db) < 8)) backupBeforeMigration(db.name);
   // First ensure schema_version table exists
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);

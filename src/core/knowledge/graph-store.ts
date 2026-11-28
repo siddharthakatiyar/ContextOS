@@ -1,3 +1,4 @@
+import { backupBeforeMigration } from '../backup/pre-migration.js';
 import { recordKnowledgeOperation } from './audit.js';
 import Database from 'better-sqlite3';
 import {
@@ -105,20 +106,26 @@ export class GraphStore {
     tightenPrivateStateFile(file);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('busy_timeout = 5000');
+    const hasKnowledge = this.db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('verified_links','verified_facts')"
+      )
+      .get();
     this.db
       .exec(`CREATE TABLE IF NOT EXISTS verified_links (id TEXT PRIMARY KEY, identity TEXT NOT NULL UNIQUE, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS verified_facts (id TEXT PRIMARY KEY, identity TEXT NOT NULL UNIQUE, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS graph_metadata (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
       INSERT OR IGNORE INTO graph_metadata VALUES ('revision', 0);`);
-    this.db.transaction(() => {
-      const version = this.db
-        .prepare("SELECT value FROM graph_metadata WHERE key='schema_version'")
-        .get() as { value: number } | undefined;
-      if (!version || version.value < 1) {
+    const version = this.db
+      .prepare("SELECT value FROM graph_metadata WHERE key='schema_version'")
+      .get() as { value: number } | undefined;
+    if (!version || version.value < 1) {
+      if (hasKnowledge) backupBeforeMigration(file);
+      this.db.transaction(() => {
         migrateKnowledgeColumns(this.db, ['verified_links', 'verified_facts']);
         this.db.prepare("INSERT OR REPLACE INTO graph_metadata VALUES ('schema_version', 1)").run();
-      }
-    })();
+      })();
+    }
     this.db
       .exec(`CREATE INDEX IF NOT EXISTS verified_links_source ON verified_links(json_extract(payload,'$.source'));
       CREATE INDEX IF NOT EXISTS verified_links_target ON verified_links(json_extract(payload,'$.target'));`);

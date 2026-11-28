@@ -282,7 +282,11 @@ describe('registry upgrade and cleanup safety', () => {
       expect(source.generation).toBe(3);
       expect(migrated.list('payments')[0].repoId).toBe('old-view');
       expect(source.dbPath).toContain(path.join(home, 'projects'));
-      expect(fs.existsSync(path.join(home, 'registry.pre-groups.db'))).toBe(true);
+      expect(
+        fs
+          .readdirSync(path.join(home, 'pre-migration-backups'))
+          .filter((name) => name.startsWith('registry.db-'))
+      ).toHaveLength(1);
       migrated.close();
       const reopened = new WorkspaceRegistry(home);
       try {

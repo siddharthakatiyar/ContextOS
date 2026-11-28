@@ -1068,6 +1068,7 @@ function renderHumanReport(report: DoctorReport): string {
   }
   lines.push(
     '',
+    'Create an online snapshot with contextos backup before maintenance.',
     `Checks: ${report.summary.pass} pass, ${report.summary.warn} warning(s), ${report.summary.fail} failure(s), ${report.summary.unknown} unknown`
   );
   return lines.join('\n');
