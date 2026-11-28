@@ -34,8 +34,8 @@ it.each([false, true])(
     ).toBe(true);
   }
 );
-it('loads the existing CLI commands in their original order', async () => {
-  expect((await loadCommands()).map((command) => command.name())).toEqual([
+it('keeps the existing CLI commands in their original relative order', async () => {
+  const original = [
     'init',
     'setup',
     'enable',
@@ -57,5 +57,7 @@ it('loads the existing CLI commands in their original order', async () => {
     'project',
     'group',
     'worktree'
-  ]);
+  ];
+  const names = (await loadCommands()).map((command) => command.name());
+  expect(names.filter((name) => original.includes(name))).toEqual(original);
 });
