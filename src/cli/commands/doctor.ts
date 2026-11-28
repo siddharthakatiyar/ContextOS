@@ -1,3 +1,4 @@
+import { getStalenessSummary, type StalenessSummary } from '../../core/verify/index.js';
 import { Command, Option } from 'commander';
 import { formatIndexWarning } from '../../core/daemon/index-status.js';
 import Database from 'better-sqlite3';
@@ -925,6 +926,33 @@ function inspectDaemonTools(daemon: DaemonProbeResult | null): DoctorCheck {
   };
 }
 
+/** Knowledge freshness is reported independently of index/daemon health. */
+export function inspectKnowledgeFreshness(root: string, homeDirectory = os.homedir()): DoctorCheck {
+  const home = path.join(homeDirectory, '.contextos');
+  if (!registeredProjectPaths(root, homeDirectory) || !fs.existsSync(path.join(home, 'graph.db')))
+    return {
+      id: 'knowledge-freshness',
+      status: 'unknown',
+      summary: 'Knowledge freshness: no registered knowledge store; run contextos verify --fix'
+    };
+  try {
+    const freshness = getStalenessSummary({ home, cwd: root });
+    const warning = freshness.byStatus.stale > 0 || freshness.sweepOverdue;
+    return {
+      id: 'knowledge-freshness',
+      status: warning ? 'warn' : 'pass',
+      summary: `Knowledge freshness: ${freshness.byStatus.verified} verified, ${freshness.byStatus.stale} stale, ${freshness.byStatus.proposed} proposed${freshness.sweepOverdue ? '; verification sweep overdue' : ''}${warning ? '; run contextos verify --fix' : ''}`,
+      details: { ...freshness, recommendedCommand: 'contextos verify --fix' }
+    };
+  } catch (error) {
+    return {
+      id: 'knowledge-freshness',
+      status: 'unknown',
+      summary: `Knowledge freshness: ${error instanceof Error ? error.message : String(error)}; run contextos verify --fix`
+    };
+  }
+}
+
 export async function collectDoctorReport(
   options: {
     cwd?: string;
@@ -948,6 +976,7 @@ export async function collectDoctorReport(
       noninteractive: options.noninteractive
     })
   );
+  checks.push(inspectKnowledgeFreshness(root, homeDirectory));
   checks.push(inspectIndexDatabase(registered?.rootPath ?? root, registered?.dbPath));
   checks.push(
     inspectIndexStatus(
@@ -1033,7 +1062,33 @@ function renderHumanReport(report: DoctorReport): string {
     ''
   ];
   for (const check of report.checks) {
+    if (check.id === 'knowledge-freshness') lines.push('', chalk.bold('Knowledge freshness'));
     lines.push(`${labels[check.status]}  ${check.summary}`);
+    if (check.id === 'knowledge-freshness' && check.details?.byStatus) {
+      const freshness = check.details as unknown as StalenessSummary;
+      const date = (time: number | null) =>
+        time === null ? 'never' : new Date(time).toISOString();
+      lines.push(
+        `  Last sweep: ${date(freshness.lastSweepAt)}; interval: ${freshness.intervalMs === 0 ? 'disabled' : freshness.intervalMs + ' ms'}`
+      );
+      lines.push(
+        `  Oldest unverified: ${freshness.oldestUnverifiedAt === null ? 'none' : date(freshness.oldestUnverifiedAt)}`
+      );
+      if (Object.keys(freshness.byReason).length)
+        lines.push(
+          `  Reasons: ${Object.entries(freshness.byReason)
+            .map(([reason, count]) => `${reason}: ${count}`)
+            .join(', ')}`
+        );
+      for (const [label, entries] of [
+        ['Project', freshness.projects],
+        ['Group', freshness.groups]
+      ] as const)
+        for (const counts of Object.values(entries))
+          lines.push(
+            `  ${label} ${counts.name}: ${counts.byStatus.verified} verified, ${counts.byStatus.stale} stale, ${counts.byStatus.proposed} proposed; last sweep: ${date(counts.lastSweepAt)}`
+          );
+    }
     if (check.id === 'agent-instructions' && Array.isArray(check.details?.files)) {
       for (const file of check.details.files as Array<{
         path: string;

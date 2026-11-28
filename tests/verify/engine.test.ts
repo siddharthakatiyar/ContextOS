@@ -176,7 +176,7 @@ describe('knowledge re-verification', { timeout: 30_000 }, () => {
       verified_at: expect.any(Number),
       stale_reason: null
     });
-    expect(getStalenessSummary(scope())).toEqual({
+    expect(getStalenessSummary(scope())).toMatchObject({
       total: 1,
       byStatus: { proposed: 1, verified: 0, stale: 0 },
       byReason: {}

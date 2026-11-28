@@ -14,6 +14,8 @@ import { mergeMemoryPipeline } from '../../core/session/memory-merge.js';
 import { globalSentRegistry } from '../../core/session/sent-registry.js';
 
 export interface GetContextOpts {
+  includeStale?: boolean;
+  includeProposed?: boolean;
   maxTokens?: number;
   layers?: string[];
   outputFormat?: 'markdown' | 'xml';
@@ -64,10 +66,26 @@ export async function executeGetContext(
   });
 
   const sessionChunks = await sessionManager.getSessionContext();
-  const knowledgeFacts = knowledgeStore.searchFacts(prompt, 2).map(prepareFactForContext);
+  const matches = layers.includes('repo')
+    ? knowledgeStore.searchFacts(prompt, Number.MAX_SAFE_INTEGER)
+    : [];
+  const hiddenStale = matches.filter((f) => f.status === 'stale' && !opts.includeStale).length;
+  const knowledgeHealth = hiddenStale
+    ? `${hiddenStale} stale facts hidden; run ctx_links include_stale or contextos verify --fix`
+    : undefined;
+  const knowledgeFacts = matches
+    .filter(
+      (f) =>
+        (opts.includeStale || f.status !== 'stale') &&
+        (opts.includeProposed || f.status !== 'proposed')
+    )
+    .slice(0, 2)
+    .map(prepareFactForContext);
   result.chunks = mergeMemoryPipeline(result.chunks, sessionChunks, knowledgeFacts, result.intent)
     .map((chunk) => applyFactMetadata(chunk, knowledgeFacts))
-    .sort((a, b) => b.score - a.score);
+    .sort(
+      (a, b) => Number(a.status === 'stale') - Number(b.status === 'stale') || b.score - a.score
+    );
 
   const config = loadConfig();
   if (config.sentDedupEnabled !== false && result.chunks.length > 0) {
@@ -116,7 +134,13 @@ export async function executeGetContext(
   });
 
   return {
-    text: compiled.output,
+    text:
+      (knowledgeHealth
+        ? outputFormat === 'xml'
+          ? `<!-- ${knowledgeHealth.replace(/--/g, '—')} -->\n`
+          : knowledgeHealth + '\n\n'
+        : '') + compiled.output,
+    ...(knowledgeHealth ? { knowledgeHealth } : {}),
     compiled,
     result
   };

@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { verificationInterval } from './scheduler.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -341,6 +342,17 @@ export async function verifyKnowledge(options: VerifyOptions = {}): Promise<Veri
         /* Missing views cannot expose legacy records. */
       }
     }
+    // Only complete, mutating passes establish sweep coverage. Dry runs and
+    // bounded/incremental API checks must not hide overdue daemon sweeps.
+    if (!dryRun && options.limit === undefined && since === undefined) {
+      const now = Date.now();
+      const ids = session.viewIds ?? session.registry.listAll().map((s) => s.repoId);
+      db.transaction(() => {
+        const save = db.prepare('INSERT OR REPLACE INTO graph_metadata(key,value) VALUES (?,?)');
+        for (const id of ids) save.run(`verification.lastSweep.view:${id}`, String(now));
+        if (!session.viewIds) save.run('verification.lastSweep.all', String(now));
+      })();
+    }
     return report;
   } finally {
     db.close();
@@ -348,43 +360,155 @@ export async function verifyKnowledge(options: VerifyOptions = {}): Promise<Veri
   }
 }
 
-export interface StalenessSummary {
+export interface FreshnessCounts {
   total: number;
   byStatus: Record<KnowledgeStatus, number>;
   byReason: Record<string, number>;
+  oldestUnverifiedAt: number | null;
 }
-/** Stored lifecycle counts only; does not trigger validation or visibility pruning. */
+export interface ScopedFreshnessCounts extends FreshnessCounts {
+  name: string;
+  lastSweepAt: number | null;
+}
+export interface StalenessSummary extends FreshnessCounts {
+  lastSweepAt: number | null;
+  intervalMs: number;
+  sweepOverdue: boolean;
+  projects: Record<string, ScopedFreshnessCounts>;
+  groups: Record<string, ScopedFreshnessCounts>;
+}
+function emptyCounts(): FreshnessCounts {
+  return {
+    total: 0,
+    byStatus: { proposed: 0, verified: 0, stale: 0 },
+    byReason: {},
+    oldestUnverifiedAt: null
+  };
+}
+/** Stored lifecycle counts only; does not trigger evidence validation or pruning. */
 export function getStalenessSummary(scope?: VerifyScope): StalenessSummary {
   const session = new VerificationSession(scope);
   const db = new Database(path.join(session.home, 'graph.db'), { readonly: true });
+  const sources = session.registry
+    .listAll()
+    .filter((s) => !session.viewIds || session.viewIds.includes(s.repoId));
+  const intervalMs = verificationInterval();
   const summary: StalenessSummary = {
-    total: 0,
-    byStatus: { proposed: 0, verified: 0, stale: 0 },
-    byReason: {}
+    ...emptyCounts(),
+    lastSweepAt: null,
+    intervalMs,
+    sweepOverdue: false,
+    projects: {},
+    groups: {}
   };
-  const add = (status: KnowledgeStatus, reason: string | null) => {
-    summary.total++;
-    summary.byStatus[status]++;
-    if (reason) summary.byReason[reason] = (summary.byReason[reason] ?? 0) + 1;
+  let oldestKnowledgeAt: number | null = null;
+  const addCount = (
+    counts: FreshnessCounts,
+    status: KnowledgeStatus,
+    reason: string | null,
+    created: number,
+    verified: number | null
+  ) => {
+    counts.total++;
+    counts.byStatus[status]++;
+    if (reason) counts.byReason[reason] = (counts.byReason[reason] ?? 0) + 1;
+    if (status !== 'verified' || verified === null) {
+      const time = verified ?? created;
+      counts.oldestUnverifiedAt = Math.min(counts.oldestUnverifiedAt ?? time, time);
+    }
+  };
+  const groups = session.registry
+    .groups()
+    .map((g) => ({ ...g, ids: session.registry.list(g.id, true).map((s) => s.repoId) }));
+  const add = (
+    status: KnowledgeStatus,
+    reason: string | null,
+    created: number,
+    verified: number | null,
+    ids: string[]
+  ) => {
+    oldestKnowledgeAt = Math.min(oldestKnowledgeAt ?? created, created);
+    addCount(summary, status, reason, created, verified);
+    for (const projectId of new Set(
+      sources.filter((s) => ids.includes(s.repoId)).map((s) => s.projectId)
+    )) {
+      const counts = summary.projects[projectId];
+      addCount(counts, status, reason, created, verified);
+    }
+    for (const group of groups.filter((g) => ids.some((id) => g.ids.includes(id)))) {
+      const counts = summary.groups[group.id];
+      if (!counts) continue;
+      addCount(counts, status, reason, created, verified);
+    }
   };
   try {
+    const stamps = new Map(
+      sources.map((s) => {
+        const row = db
+          .prepare('SELECT value FROM graph_metadata WHERE key=?')
+          .get(`verification.lastSweep.view:${s.repoId}`) as { value: string } | undefined;
+        const value = row ? Number(row.value) : NaN;
+        return [s.repoId, Number.isSafeInteger(value) && value >= 0 ? value : null] as const;
+      })
+    );
+    const lastSweep = (ids: string[]) => {
+      const values = ids.map((id) => stamps.get(id) ?? null);
+      return values.length && values.every((value) => value !== null)
+        ? Math.min(...(values as number[]))
+        : null;
+    };
+    summary.lastSweepAt = lastSweep(sources.map((s) => s.repoId));
+    for (const source of sources)
+      summary.projects[source.projectId] ??= {
+        ...emptyCounts(),
+        name: source.name,
+        lastSweepAt: lastSweep(
+          sources.filter((s) => s.projectId === source.projectId).map((s) => s.repoId)
+        )
+      };
+    for (const group of groups) {
+      const ids = group.ids.filter((id) => stamps.has(id));
+      if (ids.length)
+        summary.groups[group.id] = {
+          ...emptyCounts(),
+          name: group.name,
+          lastSweepAt: lastSweep(ids)
+        };
+    }
     for (const table of ['verified_facts', 'verified_links']) {
       for (const row of db.prepare(`SELECT * FROM ${table}`).all() as Row[]) {
-        if (session.selected(JSON.parse(row.payload))) add(row.status, row.stale_reason);
+        const record = JSON.parse(row.payload) as RecordData;
+        if (session.selected(record))
+          add(
+            row.status,
+            row.stale_reason,
+            record.createdAt,
+            row.verified_at,
+            'viewIds' in record ? record.viewIds : record.evidence.map((e) => e.viewId)
+          );
       }
     }
-    for (const source of session.registry.listAll()) {
-      if (session.viewIds && !session.viewIds.includes(source.repoId)) continue;
+    for (const source of sources) {
       try {
         for (const row of session
           .resolve(source.repoId)
-          .db.prepare('SELECT status,stale_reason FROM knowledge_facts')
-          .all() as { status: KnowledgeStatus; stale_reason: string | null }[])
-          add(row.status, row.stale_reason);
+          .db.prepare('SELECT status,stale_reason,created_at,verified_at FROM knowledge_facts')
+          .all() as {
+          status: KnowledgeStatus;
+          stale_reason: string | null;
+          created_at: number;
+          verified_at: number | null;
+        }[])
+          add(row.status, row.stale_reason, row.created_at, row.verified_at, [source.repoId]);
       } catch {
         /* unavailable legacy index */
       }
     }
+    // A never-swept store ages from its oldest saved knowledge, rather than
+    // warning immediately on a freshly initialized empty project.
+    const baseline = summary.lastSweepAt ?? oldestKnowledgeAt;
+    summary.sweepOverdue =
+      intervalMs > 0 && baseline !== null && Date.now() - baseline > 2 * intervalMs;
     return summary;
   } finally {
     db.close();

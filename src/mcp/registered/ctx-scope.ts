@@ -14,11 +14,16 @@ export default function register(c: WorkspaceKnowledgeContext): void {
     async (args) => {
       try {
         const scope = scopeFor(args);
-        const metadata = listKnowledge({ scope }).flatMap((record) => {
+        const records = listKnowledge({ scope });
+        const knowledgeSummary = {
+          stale: records.filter((r) => r.status === 'stale').length,
+          proposed: records.filter((r) => r.status === 'proposed').length
+        };
+        const metadata = records.flatMap((record) => {
           const fields = compactKnowledgeMetadata(record);
           return Object.keys(fields).length ? [{ id: record.id, ...fields }] : [];
         });
-        const knowledge = metadata.length ? { knowledge: metadata } : {};
+        const knowledge = { knowledgeSummary, ...(metadata.length ? { knowledge: metadata } : {}) };
         if (args.verbose) return result({ ...scope, ...knowledge, catalog: context.catalog?.() });
         const catalog = context.catalog?.() as
           { views?: typeof scope.sources; groups?: unknown[] } | undefined;

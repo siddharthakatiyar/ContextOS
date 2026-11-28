@@ -10,6 +10,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
       ...selectors,
       ...verbose,
       include_proposed: z.boolean().optional(),
+      include_stale: z.boolean().optional(),
       start: z.string(),
       target: z.string().optional(),
       direction: z.enum(['outgoing', 'incoming', 'both']).default('both'),
@@ -43,6 +44,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
       const trace = graph.trace(
         {
           includeProposed: args.include_proposed as boolean | undefined,
+          includeStale: args.include_stale as boolean | undefined,
           start: args.start as string,
           target: args.target as string | undefined,
           direction: args.direction as 'outgoing' | 'incoming' | 'both',
@@ -61,12 +63,16 @@ export default function register(c: WorkspaceKnowledgeContext): void {
         ...trace,
         nodes: trace.nodes.map((node) => ({
           ref: node.ref,
+          ...(node.status ? { status: node.status } : {}),
           project: node.project,
           file: node.relativePath,
           lines: [node.startLine ?? null, node.endLine ?? null]
         })),
         links: trace.links.map((link) => ({
           ...compactLink(link),
+          ...(link.status === 'stale'
+            ? { status: link.status, staleReason: link.staleReason }
+            : {}),
           source: link.source,
           target: link.target
         }))

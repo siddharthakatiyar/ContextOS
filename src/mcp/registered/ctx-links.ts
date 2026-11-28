@@ -28,7 +28,10 @@ export default function register(c: WorkspaceKnowledgeContext): void {
             .filter((link) => args.include_proposed || link.status !== 'proposed')
             .map((link) => [link.id, link])
         ).values()
-      ].sort((a, b) => a.id.localeCompare(b.id));
+      ].sort(
+        (a, b) =>
+          Number(a.status === 'stale') - Number(b.status === 'stale') || a.id.localeCompare(b.id)
+      );
       const offset = (args.offset as number) ?? 0,
         limit = (args.limit as number) ?? 20;
       return {

@@ -214,9 +214,11 @@ export async function retrieveWorkspace(
         viewIds: permitted,
         projectIds: [...new Set(scope.sources.map((view) => view.projectId))],
         groupId: scope.groupId ?? scope.workspaceId,
+        includeStale: opts.includeStale,
         limit: 5
       });
       for (const fact of facts) {
+        if (opts.includeProposed === false && fact.status === 'proposed') continue;
         const source =
           fact.provenance === 'user' && fact.scope === 'project'
             ? scope.sources.find((view) => view.projectId === fact.scopeId)

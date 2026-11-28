@@ -1,6 +1,7 @@
 import type { Evidence, LinkType, VerifiedLink } from './graph-store.js';
 
 export interface TraceNode {
+  status?: 'stale';
   ref: string;
   viewId: string;
   projectId?: string;
@@ -16,6 +17,8 @@ export interface TraceNode {
 }
 export interface TraceOptions {
   includeProposed?: boolean;
+  /** Surface stale edges as diagnostics only; never use them as path witnesses. */
+  includeStale?: boolean;
   start: string;
   target?: string;
   direction?: 'outgoing' | 'incoming' | 'both';
@@ -50,6 +53,7 @@ export interface TraceResult {
   target?: string;
   direction: NonNullable<TraceOptions['direction']>;
   coverage:
+    | 'recorded_links_including_stale'
     | 'recorded_verified_links_only'
     | 'recorded_links_including_proposed'
     | 'recorded_links_and_inferred_same_file_adjacency';
@@ -92,15 +96,18 @@ export function traceVerifiedGraph(options: TraceOptions, access: TraceAccess): 
   if (options.target) access.inspect(options.target);
   const nodes = new Map([[root.ref, root]]);
   const links = new Map<string, VerifiedLink>();
+  const staleLinks = new Map<string, VerifiedLink>();
   const result: TraceResult = {
     start: root.ref,
     target: options.target,
     direction,
     coverage: options.bridgeSameFile
       ? 'recorded_links_and_inferred_same_file_adjacency'
-      : options.includeProposed
-        ? 'recorded_links_including_proposed'
-        : 'recorded_verified_links_only',
+      : options.includeStale
+        ? 'recorded_links_including_stale'
+        : options.includeProposed
+          ? 'recorded_links_including_proposed'
+          : 'recorded_verified_links_only',
     found: options.target ? false : null,
     nodes: [],
     links: [],
@@ -137,6 +144,11 @@ export function traceVerifiedGraph(options: TraceOptions, access: TraceAccess): 
       if (options.relationships && !options.relationships.includes(link.type)) continue;
       const status = access.status(link);
       if (status !== 'valid') {
+        if (options.includeStale && link.status === 'stale') {
+          // Reserve the edge budget for live witness paths. Historical edges
+          // are appended only after traversal, so diagnostics cannot block them.
+          staleLinks.set(link.id, link);
+        }
         stop(ref, status === 'invalid' ? 'stale_evidence' : 'unavailable_evidence');
         continue;
       }
@@ -220,6 +232,8 @@ export function traceVerifiedGraph(options: TraceOptions, access: TraceAccess): 
     if (!options.target && !extended) emit(witness);
   }
   result.nodes = [...nodes.values()];
-  result.links = [...links.values()];
+  const diagnosticBudget = Math.max(0, maxEdges - links.size - inferredEdges);
+  if (staleLinks.size > diagnosticBudget) stop(root.ref, 'edge_limit');
+  result.links = [...links.values(), ...[...staleLinks.values()].slice(0, diagnosticBudget)];
   return result;
 }
