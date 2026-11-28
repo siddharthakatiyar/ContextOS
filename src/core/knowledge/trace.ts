@@ -23,15 +23,18 @@ export interface TraceOptions {
   maxNodes?: number;
   maxEdges?: number;
   maxPaths?: number;
+  bridgeSameFile?: boolean;
 }
 export interface TraceStep {
-  linkId: string;
+  linkId?: string;
+  inference?: 'same_file_adjacency';
   from: string;
   to: string;
-  traversal: 'forward' | 'reverse';
+  traversal: 'forward' | 'reverse' | 'inferred_same_file';
 }
 export interface TraceStop {
   ref: string;
+  note?: string;
   reason:
     | 'no_recorded_connection'
     | 'depth_limit'
@@ -45,7 +48,7 @@ export interface TraceResult {
   start: string;
   target?: string;
   direction: NonNullable<TraceOptions['direction']>;
-  coverage: 'recorded_verified_links_only';
+  coverage: 'recorded_verified_links_only' | 'recorded_links_and_inferred_same_file_adjacency';
   found: boolean | null;
   nodes: TraceNode[];
   links: VerifiedLink[];
@@ -61,6 +64,7 @@ export interface TraceAccess {
     direction: NonNullable<TraceOptions['direction']>,
     limit: number
   ) => { links: VerifiedLink[]; truncated: boolean };
+  sameFile?: (ref: string, limit: number) => { refs: string[]; truncated: boolean };
   status: (link: VerifiedLink) => 'valid' | 'invalid' | 'unavailable';
 }
 
@@ -88,7 +92,9 @@ export function traceVerifiedGraph(options: TraceOptions, access: TraceAccess): 
     start: root.ref,
     target: options.target,
     direction,
-    coverage: 'recorded_verified_links_only',
+    coverage: options.bridgeSameFile
+      ? 'recorded_links_and_inferred_same_file_adjacency'
+      : 'recorded_verified_links_only',
     found: options.target ? false : null,
     nodes: [],
     links: [],
@@ -97,6 +103,7 @@ export function traceVerifiedGraph(options: TraceOptions, access: TraceAccess): 
     partial: false,
     truncated: false
   };
+  let inferredEdges = 0;
   const queue = [{ refs: [root.ref], steps: [] as TraceStep[] }];
   const stop = (ref: string, reason: TraceStop['reason']) => {
     if (!result.stops.some((item) => item.ref === ref && item.reason === reason))
@@ -133,7 +140,7 @@ export function traceVerifiedGraph(options: TraceOptions, access: TraceAccess): 
         stop(ref, 'depth_limit');
         continue;
       }
-      if (!links.has(link.id) && links.size >= maxEdges) {
+      if (!links.has(link.id) && links.size + inferredEdges >= maxEdges) {
         stop(ref, 'edge_limit');
         continue;
       }
@@ -159,8 +166,51 @@ export function traceVerifiedGraph(options: TraceOptions, access: TraceAccess): 
       }
       links.set(link.id, link);
     }
-    if (!eligible && !result.stops.some((item) => item.ref === ref))
+    const neighbors = access.sameFile?.(ref, maxNodes + 1);
+    const unseen = neighbors?.refs.filter((next) => !nodes.has(next)) ?? [];
+    if (options.bridgeSameFile) {
+      if (neighbors?.truncated) stop(ref, 'node_limit');
+      for (const next of unseen) {
+        if (witness.steps.length >= maxDepth) {
+          stop(ref, 'depth_limit');
+          break;
+        }
+        if (nodes.size >= maxNodes) {
+          stop(ref, 'node_limit');
+          break;
+        }
+        if (links.size + inferredEdges >= maxEdges) {
+          stop(ref, 'edge_limit');
+          break;
+        }
+        try {
+          nodes.set(next, access.inspect(next));
+        } catch {
+          stop(ref, 'unavailable_evidence');
+          continue;
+        }
+        inferredEdges++;
+        queue.push({
+          refs: [...witness.refs, next],
+          steps: [
+            ...witness.steps,
+            {
+              from: ref,
+              to: next,
+              traversal: 'inferred_same_file',
+              inference: 'same_file_adjacency'
+            }
+          ]
+        });
+        extended = true;
+      }
+    }
+    if ((!eligible || !extended) && !result.stops.some((item) => item.ref === ref)) {
       stop(ref, 'no_recorded_connection');
+      if (!options.bridgeSameFile && unseen.length)
+        result.stops.at(-1)!.note =
+          'Other chunks in this file have recorded connections; bridge_same_file=true may extend traversal using inferred same-file adjacency.';
+    }
     if (!options.target && !extended) emit(witness);
   }
   result.nodes = [...nodes.values()];

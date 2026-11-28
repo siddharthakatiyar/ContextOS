@@ -26,6 +26,7 @@ import {
 import { resolveWithinWorkspace } from '../../utils/fs-guard.js';
 import { getPackageVersion } from '../../utils/version.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import { ReadinessChangedError } from './readiness.js';
 
 type Owner = { pid: number; token: string; endpoint: string; protocol: number };
 export type IndexRequest = {
@@ -72,7 +73,9 @@ function checkoutIdentityReader(
       fs.realpathSync(actualGitDir) !== fs.realpathSync(gitDir) ||
       fs.realpathSync(actualCommonDir) !== fs.realpathSync(commonDir)
     )
-      throw new Error(`Git checkout identity changed: ${root}. Retry after reconciliation.`);
+      throw new ReadinessChangedError(
+        `Git checkout identity changed: ${root}. Retry after reconciliation.`
+      );
     // Git holds this lock while replacing checkout files. HEAD is updated only
     // near the end of a checkout, so checking HEAD alone misses that window.
     if (fs.existsSync(path.join(gitDir, 'index.lock')))
@@ -167,7 +170,7 @@ export class RepositoryRuntime {
         (source.head && commit !== source.head)
       ) {
         this.db.close();
-        throw new Error(
+        throw new ReadinessChangedError(
           `Checkout changed before indexing: ${source.rootPath}. Retry after reconciliation.`
         );
       }
@@ -175,7 +178,7 @@ export class RepositoryRuntime {
   }
   private assertCurrent = (): void => {
     if (this.closing || this.currentCheckout() !== this.checkout)
-      throw new Error(
+      throw new ReadinessChangedError(
         `Checkout changed during indexing: ${this.source.rootPath}. Retry after reconciliation.`
       );
   };
@@ -196,15 +199,22 @@ export class RepositoryRuntime {
       !current.active ||
       current.checkoutGeneration !== this.source.checkoutGeneration ||
       current.state !== 'ready'
-    )
-      throw new Error(`View ${this.source.name} is not ready for retrieval; refresh and retry.`);
+    ) {
+      const ErrorType = ['ready', 'registered', 'indexing'].includes(current.state)
+        ? ReadinessChangedError
+        : Error;
+      throw new ErrorType(
+        `View ${this.source.name} is not ready for retrieval; refresh and retry. ` +
+          `(active=${current.active}, checkoutGeneration=${this.source.checkoutGeneration}->${current.checkoutGeneration}, state=${current.state})`
+      );
+    }
     if (
       this.db
         .getInstance()
         .prepare("SELECT 1 FROM repository_metadata WHERE key='needs_reindex'")
         .get()
     )
-      throw new Error('View requires reconciliation before it can be searched.');
+      throw new ReadinessChangedError('View requires reconciliation before it can be searched.');
   }
   private readOwner(): Owner | undefined {
     const owner = this.registry.lease(this.source.repoId);
@@ -559,6 +569,19 @@ export class WorkspaceRuntime {
       if (!this.requests) await this.drainRetired();
     }
   }
+  /** Called between attempts, outside withSnapshot so refresh can drain readers. */
+  async refreshReadState(): Promise<void> {
+    await this.refreshJob;
+    await this.registry.reconcileAsync();
+    for (const [id, repo] of this.repositories) {
+      const current = this.registry.resolve(id);
+      if (!current.active || current.checkoutGeneration !== repo.source.checkoutGeneration) {
+        this.repositories.delete(id);
+        this.retired.add(repo);
+      }
+    }
+    await this.waitForIdle();
+  }
   private async drainRetired(): Promise<void> {
     const retired = [...this.retired];
     this.retired.clear();
@@ -581,7 +604,7 @@ export class WorkspaceRuntime {
       throw new Error(`Repository unavailable: ${source.rootPath}`);
     let runtime = this.repositories.get(source.repoId);
     if (runtime && runtime.source.checkoutGeneration !== source.checkoutGeneration)
-      throw new Error(
+      throw new ReadinessChangedError(
         `Checkout changed for ${source.name}; indexing is reconciling. Retry shortly.`
       );
     if (!runtime) {

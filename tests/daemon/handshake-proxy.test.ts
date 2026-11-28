@@ -34,6 +34,13 @@ it('builds both tool catalogs and instructions from the real daemon registration
   expect(catalog.instructions).toBe(MCP_SERVER_INSTRUCTIONS);
   expect(catalog.standard).toEqual(await workspaceToolCatalog());
   expect(catalog.legacy).toEqual(await workspaceToolCatalog(true));
+  for (const tools of [catalog.standard.tools, catalog.legacy.tools]) {
+    const links = tools.find((tool: { name: string }) => tool.name === 'ctx_links');
+    const trace = tools.find((tool: { name: string }) => tool.name === 'ctx_trace');
+    expect(links.inputSchema.properties.limit.default).toBe(20);
+    expect(links.inputSchema.properties.verbose.default).toBe(false);
+    expect(trace.inputSchema.properties.verbose.default).toBe(false);
+  }
 });
 it('answers discover, initialize, ping and tools/list locally while daemon startup is slow', async () => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-handshake-'));
@@ -158,3 +165,70 @@ it('returns a clear tool error when the backend cannot initialize before its dea
   });
   expect(output).toContain('"isError":true');
 });
+
+it('fails an immediate tool call after daemon SIGKILL promptly and reconnects on the next call', async () => {
+  home = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-killed-daemon-'));
+  vi.spyOn(os, 'homedir').mockReturnValue(home);
+  const root = path.join(home, 'fixture');
+  fs.mkdirSync(root);
+  const registry = new WorkspaceRegistry();
+  registry.register(root);
+  registry.close();
+  child = spawn(
+    process.execPath,
+    [path.resolve('dist/bin/contextos.js'), 'serve', '--group', 'default'],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        HOME: home,
+        USERPROFILE: home,
+        CONTEXTOS_REPO_ROOT: root,
+        CONTEXTOS_SKIP_SETUP: '1',
+        CONTEXTOS_EMBEDDINGS: '0'
+      }
+    }
+  );
+  child.stderr.resume();
+  let buffer = '';
+  const pending = new Map<number, (value: Record<string, unknown>) => void>();
+  child.stdout.on('data', (data) => {
+    buffer += data.toString();
+    while (buffer.includes('\n')) {
+      const end = buffer.indexOf('\n');
+      const reply = JSON.parse(buffer.slice(0, end));
+      buffer = buffer.slice(end + 1);
+      pending.get(reply.id)?.(reply);
+    }
+  });
+  const request = (id: number, method: string, params = {}, timeoutMs = 10000) =>
+    new Promise<Record<string, unknown>>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${method} lost its reply`)), timeoutMs);
+      pending.set(id, (value) => {
+        clearTimeout(timer);
+        pending.delete(id);
+        resolve(value);
+      });
+      child!.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+    });
+  await request(1, 'initialize', {
+    protocolVersion: '2025-03-26',
+    capabilities: {},
+    clientInfo: { name: 'kill-test', version: '1' }
+  });
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+  expect(await request(2, 'tools/call', { name: 'ctx_scope', arguments: {} })).toHaveProperty(
+    'result.content'
+  );
+  const pidText = fs.readFileSync(path.join(home, '.contextos/runtime/daemon.pid'), 'utf8');
+  const pid = Number(pidText.trim());
+  const started = performance.now();
+  process.kill(pid, 'SIGKILL');
+  // No yield between kill and send: exercise the close/write race.
+  const failed = await request(3, 'tools/call', { name: 'ctx_scope', arguments: {} }, 3000);
+  expect(performance.now() - started).toBeLessThan(3000);
+  expect(JSON.stringify(failed)).toContain('daemon unavailable');
+  expect(await request(4, 'tools/call', { name: 'ctx_scope', arguments: {} })).toHaveProperty(
+    'result.content'
+  );
+}, 20000);

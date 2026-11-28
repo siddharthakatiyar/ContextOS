@@ -338,6 +338,7 @@ export function registerExecuteTool(server: McpServer, rootOverride?: string) {
         if (stderr) output += `STDERR:\n${capOutput(stderr)}\n`;
 
         return {
+          structuredContent: { stdout: capOutput(stdout), stderr: capOutput(stderr), exitCode: 0 },
           content: [
             { type: 'text', text: output || 'Command completed successfully with no output.' }
           ]
@@ -362,6 +363,11 @@ export function registerExecuteTool(server: McpServer, rootOverride?: string) {
         const stdoutText = typeof failure.stdout === 'string' ? failure.stdout : '';
         const stderrText = typeof failure.stderr === 'string' ? failure.stderr : '';
         return {
+          structuredContent: {
+            stdout: capOutput(stdoutText),
+            stderr: capOutput(stderrText),
+            exitCode
+          },
           content: [
             {
               type: 'text',

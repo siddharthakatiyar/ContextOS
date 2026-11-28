@@ -1,5 +1,13 @@
 # Upgrading ContextOS
 
+## 1.2.5 patch
+
+No action is required. MCP responses are now compact by default: `ctx_link`, `ctx_remember`, `ctx_unlink` and `ctx_forget` return a short result instead of echoing every view, `ctx_scope` and `ctx_links` return summaries (pass `verbose: true` for the full payload; `ctx_links` also takes `limit` and `offset`), and `get_context` honours `max_tokens` and includes fact text. `ctx_read_file`, `ctx_expand` and `ctx_execute` return their content, unreadable source files are reported as retryable indexing failures, and `contextos update --version <semver>` works with a space-separated version. `contextos init` with no path no longer registers a non-Git parent folder that contains registered projects; pass the folder path explicitly to do that.
+
+## 1.2.4 patch
+
+No action is required. 1.2.3 was never published to npm; install 1.2.4 to get its fast MCP handshake and lazy daemon startup. The first `get_context` after an upgrade or daemon restart now retries once if indexing or checkout reconciliation is still settling, instead of returning a transient "views changed" error.
+
 ## 1.2.3 patch
 
 No action is required. `contextos serve` now answers the MCP handshake and tool listing immediately, so coding agents that time out after 30 seconds no longer fail while the daemon starts. The daemon opens repositories on demand and stays up for 30 minutes of inactivity by default (`CONTEXTOS_DAEMON_IDLE_MS` still overrides it). The first tool call after an idle period can still take a moment while the daemon starts.

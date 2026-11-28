@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import fsDefault from 'node:fs';
+import { describe, it, expect, vi } from 'vitest';
 import { isBinaryFile, isGeneratedFile } from '../../src/utils/file-heuristics.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -59,3 +60,16 @@ describe('file-heuristics', () => {
     });
   });
 });
+
+for (const code of ['EACCES', 'EPERM', 'EIO']) {
+  it(`propagates ${code} from binary detection rather than silently skipping`, () => {
+    const spy = vi.spyOn(fsDefault, 'openSync').mockImplementationOnce(() => {
+      throw Object.assign(new Error(code), { code });
+    });
+    try {
+      expect(() => isBinaryFile('unreadable.ts')).toThrow(code);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+}

@@ -90,7 +90,7 @@ export interface RetrievalResult {
   learnedLinks?: import('../knowledge/graph-store.js').VerifiedLink[];
   linkSuggestions?: import('../knowledge/import-learning.js').LinkSuggestion[];
   scope?: import('../workspace/registry.js').RetrievalScope;
-  unavailableSources?: Array<{ repoId: string; name: string; error: string }>;
+  unavailableSources?: import('../workspace/readiness.js').UnavailableSource[];
   partial?: boolean;
   chunks: ScoredChunk[];
   intent: DetectedIntent;

@@ -4,6 +4,9 @@ import { DB } from '../../core/storage/database.js';
 import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
 import { SessionStore } from '../../core/session/session-store.js';
 import { getErrorMessage } from '../../utils/errors.js';
+import path from 'node:path';
+import type { VerifiedLink } from '../../core/knowledge/graph-store.js';
+import { entityRef, parseRef } from '../../core/workspace/identity.js';
 import { KnowledgeInspector } from '../../core/knowledge/inspector.js';
 
 export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
@@ -128,7 +131,11 @@ export function registerWorkspaceKnowledgeTools(
     saveSession: (
       source: import('../../core/workspace/registry.js').RepositorySource,
       content: string
-    ) => void;
+    ) => string;
+    forgetSession?: (
+      id: string,
+      sources: import('../../core/workspace/registry.js').RepositorySource[]
+    ) => boolean;
     defaultGroup?: string;
     catalog?: () => unknown;
   }
@@ -143,6 +150,27 @@ export function registerWorkspaceKnowledgeTools(
     workspace: z.string().optional(),
     all_repos: z.boolean().optional()
   };
+  const verbose = { verbose: z.boolean().optional().default(false) };
+  const compactScope = (scope: ReturnType<typeof scopeFor>) => ({
+    groupId: scope.groupId ?? scope.workspaceId,
+    activeViewId: scope.activeRepoId,
+    views: scope.sources.map((s) => ({
+      viewId: s.repoId,
+      projectId: s.projectId,
+      name: s.name,
+      branch: s.branch,
+      state: s.state,
+      generation: s.generation
+    }))
+  });
+  const writeResult = (
+    args: Record<string, unknown>,
+    value: Record<string, unknown>,
+    scope: ReturnType<typeof scopeFor>
+  ) =>
+    args.verbose
+      ? { ...value, scope }
+      : { ok: true, warnings: [], generations: {}, endpoints: [], ...value };
   const scopeFor = (args: Record<string, unknown>) =>
     context.select({
       group: args.group,
@@ -154,8 +182,34 @@ export function registerWorkspaceKnowledgeTools(
       workspace: args.workspace,
       allRepos: args.all_repos
     } as import('../../core/workspace/registry.js').ScopeSelectors);
+  const endpoint = (ref: string) => {
+    const parsed = parseRef(ref)!;
+    const resolved = context.resolve?.(parsed.repoId);
+    const chunk = resolved?.db
+      .prepare('SELECT source_file,start_line,end_line FROM chunks WHERE id=?')
+      .get(parsed.localId) as
+      { source_file: string; start_line: number | null; end_line: number | null } | undefined;
+    return {
+      ref,
+      project: resolved?.source.name,
+      file:
+        chunk && resolved
+          ? path.relative(resolved.source.rootPath, chunk.source_file).split(path.sep).join('/')
+          : undefined,
+      lines: [chunk?.start_line ?? null, chunk?.end_line ?? null]
+    };
+  };
+  const compactLink = (link: VerifiedLink) => ({
+    id: link.id,
+    relationship: link.type,
+    source: endpoint(link.source),
+    target: endpoint(link.target),
+    rationale: link.rationale.slice(0, 240),
+    truncated: link.rationale.length > 240,
+    evidence: { count: link.evidence.length, refs: [...new Set(link.evidence.map((e) => e.ref))] }
+  });
   const result = (value: unknown) => ({
-    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
     ...(value && typeof value === 'object' && !Array.isArray(value)
       ? { structuredContent: value as Record<string, unknown> }
       : {})
@@ -165,12 +219,17 @@ export function registerWorkspaceKnowledgeTools(
       action: (
         args: Record<string, unknown>,
         graph: import('../../core/knowledge/graph-store.js').GraphStore
-      ) => unknown
+      ) => unknown,
+      compact = false
     ) =>
     async (args: Record<string, unknown>) => {
       const graph = context.graph();
       try {
-        return result(await action(args, graph));
+        const output = result(await action(args, graph));
+        // Send graph payloads once: repeating structuredContent as JSON text doubles
+        // the agent budget. Verbose retains the full text fallback for inspection.
+        if (compact && !args.verbose) output.content = [];
+        return output;
       } catch (error) {
         return { ...result({ error: getErrorMessage(error) }), isError: true };
       } finally {
@@ -180,10 +239,40 @@ export function registerWorkspaceKnowledgeTools(
   server.tool(
     'ctx_scope',
     'Discover the current group/project/worktree/branch views and their qualified IDs and indexing generations. Use generations for verified knowledge writes.',
-    selectors,
+    { ...selectors, ...verbose, include_worktrees: z.boolean().optional().default(false) },
     async (args) => {
       try {
-        return result({ ...scopeFor(args), catalog: context.catalog?.() });
+        const scope = scopeFor(args);
+        if (args.verbose) return result({ ...scope, catalog: context.catalog?.() });
+        const catalog = context.catalog?.() as
+          { views?: typeof scope.sources; groups?: unknown[] } | undefined;
+        const views = [
+          ...new Map((catalog?.views ?? scope.sources).map((s) => [s.repoId, s])).values()
+        ];
+        const projects = [...new Set(views.map((s) => s.projectId))].map((projectId) => {
+          const candidates = views.filter((s) => s.projectId === projectId);
+          const source =
+            candidates.find((s) => scope.repoIds.includes(s.repoId)) ??
+            candidates.find((s) => s.active) ??
+            candidates[0];
+          return {
+            projectId,
+            name: source.name,
+            defaultViewId: source.repoId,
+            branch: source.branch,
+            state: source.state,
+            generation: source.generation,
+            ...(args.include_worktrees
+              ? { views: compactScope({ ...scope, sources: candidates }).views }
+              : {})
+          };
+        });
+        return result({
+          group: scope.groupId ?? scope.workspaceId ?? context.defaultGroup,
+          activeViewId: scope.activeRepoId,
+          counts: { projects: projects.length, views: views.length },
+          projects
+        });
       } catch (error) {
         return { ...result({ error: getErrorMessage(error) }), isError: true };
       }
@@ -194,6 +283,7 @@ export function registerWorkspaceKnowledgeTools(
     'Save a verified relationship after inspecting both endpoints and necessary dependency/routing/contract evidence. Matching names alone are insufficient. Save no guesses or ambiguous candidates. Writes validate source freshness, not semantic correctness.',
     {
       ...selectors,
+      ...verbose,
       source: z.string(),
       target: z.string(),
       relationship: z.enum([
@@ -223,26 +313,62 @@ export function registerWorkspaceKnowledgeTools(
         scope.repoIds
       );
       context.clearCache();
-      return { link, scope };
+      return writeResult(
+        args,
+        {
+          link: args.verbose
+            ? link
+            : { id: link.id, type: link.type, source: link.source, target: link.target },
+          endpoints: [link.source, link.target].map((ref) => ({
+            ref,
+            name: scope.sources.find((s) => ref.startsWith(`contextos:${s.repoId}:`))?.name
+          })),
+          generations: Object.fromEntries(link.evidence.map((e) => [e.viewId, e.generation])),
+          warnings: []
+        },
+        scope
+      );
     })
   );
   server.tool(
     'ctx_links',
-    'Inspect existing verified connections and their supporting evidence within selected views.',
-    { ...selectors, refs: z.array(z.string()).optional() },
+    'Inspect verified connections within selected views. Defaults to 20 compact links with endpoint locations, 240-character rationales and evidence refs. Use verbose for full evidence metadata.',
+    {
+      ...selectors,
+      ...verbose,
+      refs: z.array(z.string()).optional(),
+      limit: z.number().int().min(1).max(500).default(20),
+      offset: z.number().int().nonnegative().default(0)
+    },
     wrap((args, graph) => {
       const scope = scopeFor(args);
+      const links = [
+        ...new Map(
+          graph
+            .listLinks({ viewIds: scope.repoIds, refs: args.refs as string[] | undefined })
+            .map((link) => [link.id, link])
+        ).values()
+      ].sort((a, b) => a.id.localeCompare(b.id));
+      const offset = (args.offset as number) ?? 0,
+        limit = (args.limit as number) ?? 20;
       return {
-        links: graph.listLinks({ viewIds: scope.repoIds, refs: args.refs as string[] | undefined }),
-        scope
+        links: links
+          .slice(offset, offset + limit)
+          .map((link) => (args.verbose ? link : compactLink(link))),
+        next_offset: offset + limit < links.length ? offset + limit : null,
+        total: links.length,
+        offset,
+        limit,
+        ...(args.verbose ? { scope } : {})
       };
-    })
+    }, true)
   );
   server.tool(
     'ctx_trace',
-    'Trace saved, evidence-backed relationships across selected projects and worktrees. Returns ordered shortest witness paths, citations and explicit gaps; does not discover or invent connections. Incoming/outgoing follow stored edge direction; both can traverse edges in reverse and labels those steps.',
+    'Defaults to compact nodes and evidence refs; use verbose for full metadata. Trace saved, evidence-backed relationships across selected projects and worktrees. Returns ordered shortest witness paths, citations and explicit gaps; does not discover or invent connections. Incoming/outgoing follow stored edge direction; both can traverse edges in reverse and labels those steps.',
     {
       ...selectors,
+      ...verbose,
       start: z.string(),
       target: z.string().optional(),
       direction: z.enum(['outgoing', 'incoming', 'both']).default('both'),
@@ -259,6 +385,13 @@ export function registerWorkspaceKnowledgeTools(
           ])
         )
         .optional(),
+      bridge_same_file: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+          'Opt in to explicitly inferred adjacency between chunks in the same file; never saves these steps as links.'
+        ),
       max_depth: z.number().int().min(1).max(12).default(6),
       max_nodes: z.number().int().min(1).max(500).default(50),
       max_edges: z.number().int().min(1).max(1000).default(100),
@@ -276,12 +409,27 @@ export function registerWorkspaceKnowledgeTools(
           maxDepth: args.max_depth as number,
           maxNodes: args.max_nodes as number,
           maxEdges: args.max_edges as number,
-          maxPaths: args.max_paths as number
+          maxPaths: args.max_paths as number,
+          bridgeSameFile: args.bridge_same_file as boolean
         },
         scope.repoIds
       );
-      return { ...trace, scope };
-    })
+      if (args.verbose) return trace;
+      return {
+        ...trace,
+        nodes: trace.nodes.map((node) => ({
+          ref: node.ref,
+          project: node.project,
+          file: node.relativePath,
+          lines: [node.startLine ?? null, node.endLine ?? null]
+        })),
+        links: trace.links.map((link) => ({
+          ...compactLink(link),
+          source: link.source,
+          target: link.target
+        }))
+      };
+    }, true)
   );
   server.tool(
     'ctx_resolve_import',
@@ -337,12 +485,32 @@ export function registerWorkspaceKnowledgeTools(
   server.tool(
     'ctx_unlink',
     'Remove one specific incorrect or obsolete verified connection.',
-    { ...selectors, id: z.string() },
+    { ...selectors, ...verbose, id: z.string() },
     wrap((args, graph) => {
       const scope = scopeFor(args);
+      const link = graph.getLink(args.id as string, scope.repoIds);
       const removed = graph.unlink(args.id as string, scope.repoIds);
       context.clearCache();
-      return { removed, scope };
+      return writeResult(
+        args,
+        {
+          removed,
+          id: args.id ?? args.content,
+          ...(link
+            ? {
+                type: link.type,
+                endpoints: [link.source, link.target].map((ref) => ({
+                  ref,
+                  name: scope.sources.find((source) =>
+                    ref.startsWith(`contextos:${source.repoId}:`)
+                  )?.name
+                }))
+              }
+            : {}),
+          ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
+        },
+        scope
+      );
     })
   );
   server.tool(
@@ -350,6 +518,7 @@ export function registerWorkspaceKnowledgeTools(
     'Save useful durable verified facts with explicit provenance. Code facts require indexed evidence and current generations. User provenance is only for an explicit user decision or preference. Defaults to the active view. Session notes remain temporary.',
     {
       ...selectors,
+      ...verbose,
       type: z
         .enum(['session_note', 'cross_session_fact', 'forget_fact'])
         .default('cross_session_fact'),
@@ -370,17 +539,37 @@ export function registerWorkspaceKnowledgeTools(
       const source = scope.sources.find((s) => s.repoId === scope.activeRepoId) ?? scope.sources[0];
       if (!source) throw new Error('No selected view.');
       if (args.type === 'session_note') {
-        context.saveSession(source, args.content as string);
+        const id = context.saveSession(source, args.content as string);
         context.clearCache();
-        return { saved: 'session_note', scope };
+        return writeResult(
+          args,
+          {
+            saved: 'session_note',
+            id,
+            ref: entityRef(source.repoId, 'memory', id),
+            type: 'session_note',
+            endpoints: [{ ref: entityRef(source.repoId, 'memory', id), name: source.name }]
+          },
+          scope
+        );
       }
       if (args.type === 'forget_fact') {
-        const removed = graph.forget(args.content as string, scope.repoIds, {
-          projectIds: scope.sources.map((source) => source.projectId),
-          groupId: scope.groupId ?? scope.workspaceId
-        });
+        const removed =
+          context.forgetSession?.(args.content as string, scope.sources) ||
+          graph.forget(args.content as string, scope.repoIds, {
+            projectIds: scope.sources.map((source) => source.projectId),
+            groupId: scope.groupId ?? scope.workspaceId
+          });
         context.clearCache();
-        return { removed, scope };
+        return writeResult(
+          args,
+          {
+            removed,
+            id: args.id ?? args.content,
+            ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
+          },
+          scope
+        );
       }
       const kind = args.scope as 'view' | 'project' | 'group';
       const projectId =
@@ -417,21 +606,43 @@ export function registerWorkspaceKnowledgeTools(
         }
       );
       context.clearCache();
-      return { fact, scope };
+      return writeResult(
+        args,
+        {
+          id: fact.id,
+          fact: args.verbose ? fact : { id: fact.id, scope: fact.scope, scopeId: fact.scopeId },
+          type: 'cross_session_fact',
+          endpoints: [{ ref: entityRef(source.repoId, 'fact', fact.id), name: source.name }],
+          generations: Object.fromEntries(fact.evidence.map((e) => [e.viewId, e.generation])),
+          warnings: []
+        },
+        scope
+      );
     })
   );
   server.tool(
     'ctx_forget',
     'Remove one specific saved durable fact.',
-    { ...selectors, id: z.string() },
+    { ...selectors, ...verbose, id: z.string() },
     wrap((args, graph) => {
       const scope = scopeFor(args);
-      const removed = graph.forget(args.id as string, scope.repoIds, {
-        projectIds: scope.sources.map((source) => source.projectId),
-        groupId: scope.groupId ?? scope.workspaceId
-      });
+      const removed =
+        context.forgetSession?.(args.id as string, scope.sources) ||
+        graph.forget(args.id as string, scope.repoIds, {
+          projectIds: scope.sources.map((source) => source.projectId),
+          groupId: scope.groupId ?? scope.workspaceId
+        });
       context.clearCache();
-      return { removed, scope };
+      return writeResult(
+        args,
+        {
+          removed,
+          type: 'memory',
+          id: args.id ?? args.content,
+          ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
+        },
+        scope
+      );
     })
   );
 }

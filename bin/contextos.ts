@@ -75,6 +75,7 @@ function skipsFirstUseAutoPatchNotice(args: string[]): boolean {
     'enable',
     'setup',
     'upgrade',
+    'update',
     'updates',
     'daemon',
     'help'
@@ -108,7 +109,7 @@ async function main(): Promise<void> {
 
   const manifest = findPackageManifest(path.dirname(fileURLToPath(import.meta.url)));
   const args = process.argv.slice(2);
-  if (args.includes('--version') && !args.includes('upgrade')) {
+  if (['--version', '-V', '--cli-version'].includes(args[0] ?? '')) {
     process.stdout.write(`${manifest.version}\n`);
     return;
   }

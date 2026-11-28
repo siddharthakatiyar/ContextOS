@@ -231,7 +231,7 @@ describe('agent knowledge MCP contract', () => {
       },
       graph: () => new GraphStore({ home: temp, resolve: (id) => sources.get(id)! }),
       clearCache: () => {},
-      saveSession: () => {},
+      saveSession: () => 'session:note:fixture:1',
       catalog: () => ({ projects: ['a', 'b'] })
     });
     const [aTransport, bTransport] = InMemoryTransport.createLinkedPair();
@@ -251,7 +251,8 @@ describe('agent knowledge MCP contract', () => {
       );
       const scope = await client.callTool({ name: 'ctx_scope', arguments: {} });
       expect(JSON.stringify(scope.content)).toContain('generation');
-      expect(JSON.stringify(scope.content)).toContain('catalog');
+      expect(JSON.stringify(scope.content)).toContain('defaultViewId');
+      expect(JSON.stringify(scope.content)).not.toContain('catalog');
       const ungrounded = await client.callTool({
         name: 'ctx_remember',
         arguments: { content: 'Payment status is shared', type: 'cross_session_fact' }
