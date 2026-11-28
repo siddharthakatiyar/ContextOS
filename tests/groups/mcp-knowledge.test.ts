@@ -589,12 +589,118 @@ it('bounds complete retrieval payloads, includes fact text and project attributi
       })
     ])
   );
-  const page = await client.callTool({
-    name: 'ctx_links',
-    arguments: { group: 'default', limit: 1, offset: 1 }
+  // Populate the group: empty pages cannot catch evidence/scope payload regressions.
+  const backend = registry.resolve('backend');
+  const frontend = registry.resolve('frontend');
+  fs.writeFileSync(
+    path.join(backend.rootPath, 'many.ts'),
+    Array.from({ length: 26 }, (_, i) => `export function item${i}() { return ${i}; }`).join('\n')
+  );
+  await runtime.get(backend).index(true);
+  const chunks = new ChunksRepo(runtime.get(backend).db.getInstance());
+  const targetChunk = new ChunksRepo(runtime.get(frontend).db.getInstance()).findBySymbolName(
+    'displayPaymentStatus'
+  )[0];
+  const target = entityRef(frontend.repoId, 'chunk', targetChunk.id);
+  const refs: string[] = [];
+  for (let i = 0; i < 26; i++) {
+    const source = entityRef(backend.repoId, 'chunk', chunks.findBySymbolName(`item${i}`)[0].id);
+    refs.push(source);
+    const saved = await client.callTool({
+      name: 'ctx_link',
+      arguments: {
+        group: 'default',
+        source,
+        target,
+        relationship: 'calls_api',
+        rationale:
+          i === 0 ? 'Verified fixture relationship. '.repeat(30) : 'Verified fixture relationship.',
+        expected_generations: {
+          [backend.repoId]: registry.resolve('backend').generation,
+          [frontend.repoId]: registry.resolve('frontend').generation
+        }
+      }
+    });
+    expect(saved.isError).not.toBe(true);
+  }
+  const page = await client.callTool({ name: 'ctx_links', arguments: { group: 'default' } });
+  expect(page.structuredContent).toMatchObject({
+    total: 26,
+    offset: 0,
+    limit: 20,
+    next_offset: 20
   });
-  expect(page.structuredContent).toMatchObject({ links: [], total: 0, offset: 1, limit: 1 });
   expect(page.structuredContent).not.toHaveProperty('scope');
+  const data = page.structuredContent as {
+    links: { id: string; rationale: string; evidence: { count: number; refs: string[] } }[];
+  };
+  expect(data.links).toHaveLength(20);
+  expect(page.content).toEqual([]);
+  expect(
+    responseTokens(page as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
+  ).toBeLessThan(6000);
+  const longPage = await client.callTool({
+    name: 'ctx_links',
+    arguments: { group: 'default', refs: [refs[0]] }
+  });
+  const truncatedLink = (longPage.structuredContent as typeof data).links[0];
+  expect(truncatedLink).toMatchObject({
+    relationship: 'calls_api',
+    truncated: true,
+    source: {
+      project: 'backend',
+      file: 'many.ts',
+      ref: expect.stringMatching(/^contextos:/),
+      lines: [expect.any(Number), expect.any(Number)]
+    },
+    target: { project: 'frontend', file: 'payment.ts' },
+    evidence: { count: 2 }
+  });
+  expect(truncatedLink.rationale).toHaveLength(240);
+  expect(data.links[0].evidence.refs).toHaveLength(2);
+  const second = await client.callTool({
+    name: 'ctx_links',
+    arguments: { group: 'default', offset: 20 }
+  });
+  expect(second.structuredContent).toMatchObject({ next_offset: null });
+  const remaining = (second.structuredContent as typeof data).links;
+  expect(remaining).toHaveLength(6);
+  expect(new Set([...data.links, ...remaining].map((link) => link.id)).size).toBe(26);
+  const detailed = await client.callTool({
+    name: 'ctx_links',
+    arguments: { group: 'default', verbose: true, refs: [refs[0]] }
+  });
+  expect(detailed.structuredContent).toHaveProperty('scope');
+  expect(
+    (
+      detailed.structuredContent as { links: { evidence: unknown[]; rationale: string }[] }
+    ).links.find((link) => link.rationale.length > 240)
+  ).toMatchObject({
+    rationale: 'Verified fixture relationship. '.repeat(30).trim(),
+    evidence: [
+      expect.objectContaining({ fileHash: expect.any(String), generation: expect.any(Number) }),
+      expect.any(Object)
+    ]
+  });
+  const trace = await client.callTool({
+    name: 'ctx_trace',
+    arguments: { group: 'default', start: target }
+  });
+  expect(
+    responseTokens(trace as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
+  ).toBeLessThan(18000);
+  expect(trace.structuredContent).toMatchObject({
+    nodes: expect.arrayContaining([expect.objectContaining({ ref: target })])
+  });
+  expect(trace.content).toEqual([]);
+  expect((trace.structuredContent as { nodes: unknown[] }).nodes).toHaveLength(27);
+  expect((trace.structuredContent as { paths: unknown[] }).paths.length).toBeLessThanOrEqual(20);
+  expect(JSON.stringify(trace.structuredContent)).not.toContain('fileHash');
+  const detailedTrace = await client.callTool({
+    name: 'ctx_trace',
+    arguments: { group: 'default', start: refs[0], verbose: true }
+  });
+  expect(JSON.stringify(detailedTrace.structuredContent)).toContain('fileHash');
   const scope = await client.callTool({ name: 'ctx_scope', arguments: {} });
   expect(scope.structuredContent).toMatchObject({ counts: { projects: 2, views: 2 } });
   expect(scope.structuredContent).not.toHaveProperty('catalog');

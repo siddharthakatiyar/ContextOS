@@ -34,6 +34,13 @@ it('builds both tool catalogs and instructions from the real daemon registration
   expect(catalog.instructions).toBe(MCP_SERVER_INSTRUCTIONS);
   expect(catalog.standard).toEqual(await workspaceToolCatalog());
   expect(catalog.legacy).toEqual(await workspaceToolCatalog(true));
+  for (const tools of [catalog.standard.tools, catalog.legacy.tools]) {
+    const links = tools.find((tool: { name: string }) => tool.name === 'ctx_links');
+    const trace = tools.find((tool: { name: string }) => tool.name === 'ctx_trace');
+    expect(links.inputSchema.properties.limit.default).toBe(20);
+    expect(links.inputSchema.properties.verbose.default).toBe(false);
+    expect(trace.inputSchema.properties.verbose.default).toBe(false);
+  }
 });
 it('answers discover, initialize, ping and tools/list locally while daemon startup is slow', async () => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-handshake-'));

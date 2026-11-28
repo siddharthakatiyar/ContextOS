@@ -4,7 +4,9 @@ import { DB } from '../../core/storage/database.js';
 import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
 import { SessionStore } from '../../core/session/session-store.js';
 import { getErrorMessage } from '../../utils/errors.js';
-import { entityRef } from '../../core/workspace/identity.js';
+import path from 'node:path';
+import type { VerifiedLink } from '../../core/knowledge/graph-store.js';
+import { entityRef, parseRef } from '../../core/workspace/identity.js';
 import { KnowledgeInspector } from '../../core/knowledge/inspector.js';
 
 export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
@@ -180,8 +182,34 @@ export function registerWorkspaceKnowledgeTools(
       workspace: args.workspace,
       allRepos: args.all_repos
     } as import('../../core/workspace/registry.js').ScopeSelectors);
+  const endpoint = (ref: string) => {
+    const parsed = parseRef(ref)!;
+    const resolved = context.resolve?.(parsed.repoId);
+    const chunk = resolved?.db
+      .prepare('SELECT source_file,start_line,end_line FROM chunks WHERE id=?')
+      .get(parsed.localId) as
+      { source_file: string; start_line: number | null; end_line: number | null } | undefined;
+    return {
+      ref,
+      project: resolved?.source.name,
+      file:
+        chunk && resolved
+          ? path.relative(resolved.source.rootPath, chunk.source_file).split(path.sep).join('/')
+          : undefined,
+      lines: [chunk?.start_line ?? null, chunk?.end_line ?? null]
+    };
+  };
+  const compactLink = (link: VerifiedLink) => ({
+    id: link.id,
+    relationship: link.type,
+    source: endpoint(link.source),
+    target: endpoint(link.target),
+    rationale: link.rationale.slice(0, 240),
+    truncated: link.rationale.length > 240,
+    evidence: { count: link.evidence.length, refs: [...new Set(link.evidence.map((e) => e.ref))] }
+  });
   const result = (value: unknown) => ({
-    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
     ...(value && typeof value === 'object' && !Array.isArray(value)
       ? { structuredContent: value as Record<string, unknown> }
       : {})
@@ -191,12 +219,17 @@ export function registerWorkspaceKnowledgeTools(
       action: (
         args: Record<string, unknown>,
         graph: import('../../core/knowledge/graph-store.js').GraphStore
-      ) => unknown
+      ) => unknown,
+      compact = false
     ) =>
     async (args: Record<string, unknown>) => {
       const graph = context.graph();
       try {
-        return result(await action(args, graph));
+        const output = result(await action(args, graph));
+        // Send graph payloads once: repeating structuredContent as JSON text doubles
+        // the agent budget. Verbose retains the full text fallback for inspection.
+        if (compact && !args.verbose) output.content = [];
+        return output;
       } catch (error) {
         return { ...result({ error: getErrorMessage(error) }), isError: true };
       } finally {
@@ -299,12 +332,12 @@ export function registerWorkspaceKnowledgeTools(
   );
   server.tool(
     'ctx_links',
-    'Inspect existing verified connections and their supporting evidence within selected views.',
+    'Inspect verified connections within selected views. Defaults to 20 compact links with endpoint locations, 240-character rationales and evidence refs. Use verbose for full evidence metadata.',
     {
       ...selectors,
       ...verbose,
       refs: z.array(z.string()).optional(),
-      limit: z.number().int().min(1).max(500).default(50),
+      limit: z.number().int().min(1).max(500).default(20),
       offset: z.number().int().nonnegative().default(0)
     },
     wrap((args, graph) => {
@@ -317,21 +350,25 @@ export function registerWorkspaceKnowledgeTools(
         ).values()
       ].sort((a, b) => a.id.localeCompare(b.id));
       const offset = (args.offset as number) ?? 0,
-        limit = (args.limit as number) ?? 50;
+        limit = (args.limit as number) ?? 20;
       return {
-        links: links.slice(offset, offset + limit),
+        links: links
+          .slice(offset, offset + limit)
+          .map((link) => (args.verbose ? link : compactLink(link))),
+        next_offset: offset + limit < links.length ? offset + limit : null,
         total: links.length,
         offset,
         limit,
         ...(args.verbose ? { scope } : {})
       };
-    })
+    }, true)
   );
   server.tool(
     'ctx_trace',
-    'Trace saved, evidence-backed relationships across selected projects and worktrees. Returns ordered shortest witness paths, citations and explicit gaps; does not discover or invent connections. Incoming/outgoing follow stored edge direction; both can traverse edges in reverse and labels those steps.',
+    'Defaults to compact nodes and evidence refs; use verbose for full metadata. Trace saved, evidence-backed relationships across selected projects and worktrees. Returns ordered shortest witness paths, citations and explicit gaps; does not discover or invent connections. Incoming/outgoing follow stored edge direction; both can traverse edges in reverse and labels those steps.',
     {
       ...selectors,
+      ...verbose,
       start: z.string(),
       target: z.string().optional(),
       direction: z.enum(['outgoing', 'incoming', 'both']).default('both'),
@@ -377,8 +414,22 @@ export function registerWorkspaceKnowledgeTools(
         },
         scope.repoIds
       );
-      return trace;
-    })
+      if (args.verbose) return trace;
+      return {
+        ...trace,
+        nodes: trace.nodes.map((node) => ({
+          ref: node.ref,
+          project: node.project,
+          file: node.relativePath,
+          lines: [node.startLine ?? null, node.endLine ?? null]
+        })),
+        links: trace.links.map((link) => ({
+          ...compactLink(link),
+          source: link.source,
+          target: link.target
+        }))
+      };
+    }, true)
   );
   server.tool(
     'ctx_resolve_import',

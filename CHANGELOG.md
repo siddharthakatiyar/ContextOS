@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Default `ctx_links` to 20 compact connections with endpoint locations, bounded rationales, evidence refs and pagination cursors; compact `ctx_trace` nodes and links, retaining full metadata through `verbose: true`.
+
 - Add opt-in, explicitly inferred same-file trace adjacency and gap hints; accept project root directory selectors and suggest known projects for unknown names.
 
 - Return IDs for session notes and support removing individual notes or session-event references, with reasons when nothing is removed.

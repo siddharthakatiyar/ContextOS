@@ -109,40 +109,46 @@ try {
     scope: 'group'
   });
   const links = await call('ctx_links', {});
-  const secondPage = !process.argv[2] ? await call('ctx_links', { offset: 50 }) : undefined;
+  const verboseLinks = await call('ctx_links', { verbose: true });
+  const trace = await call('ctx_trace', { start: fixtures[0].ref });
+  const verboseTrace = await call('ctx_trace', { start: fixtures[0].ref, verbose: true });
+  const secondPage = !process.argv[2] ? await call('ctx_links', { offset: 20 }) : undefined;
   const context = await call('get_context', {
     prompt: 'payment status',
     max_tokens: 1500,
     tier: 'full'
   });
   const sizes = Object.fromEntries(
-    Object.entries({ write, scope, links, context }).map(([key, result]) => [
-      key,
-      {
-        chars: JSON.stringify(result).length,
-        tokens: encode(JSON.stringify(result)).length,
-        reportedTokens: result.structuredContent?.tokens
-      }
-    ])
+    Object.entries({ write, scope, links, verboseLinks, trace, verboseTrace, context }).map(
+      ([key, result]) => [
+        key,
+        {
+          chars: JSON.stringify(result).length,
+          tokens: encode(JSON.stringify(result)).length,
+          reportedTokens: result.structuredContent?.tokens
+        }
+      ]
+    )
   );
+  console.log(JSON.stringify(sizes, null, 2));
   if (!process.argv[2]) {
     assert.ok(sizes.write.tokens < 4000);
     assert.ok(sizes.scope.tokens < 20000);
     assert.ok(sizes.context.tokens <= 1500);
     assert.equal(sizes.context.reportedTokens, sizes.context.tokens);
     assert.equal(links.structuredContent.total, 97);
-    assert.equal(links.structuredContent.links.length, 50);
-    assert.equal(secondPage.structuredContent.links.length, 47);
-    assert.equal(
-      new Set(
-        [...links.structuredContent.links, ...secondPage.structuredContent.links].map(
-          (link) => link.id
-        )
-      ).size,
-      97
-    );
+    assert.equal(links.structuredContent.links.length, 20);
+    assert.equal(secondPage.structuredContent.links.length, 20);
+    const pages = [...links.structuredContent.links, ...secondPage.structuredContent.links];
+    for (const offset of [40, 60, 80]) {
+      const page = await call('ctx_links', { offset });
+      pages.push(...page.structuredContent.links);
+      assert.equal(page.structuredContent.next_offset, offset === 80 ? null : offset + 20);
+    }
+    assert.equal(new Set(pages.map((link) => link.id)).size, 97);
+    assert.ok(sizes.links.tokens < 6000, `Default links: ${sizes.links.tokens}`);
+    assert.ok(sizes.trace.tokens < 10000, `Default trace: ${sizes.trace.tokens}`);
   }
-  console.log(JSON.stringify(sizes, null, 2));
 } finally {
   await client.close();
   await server.close();
