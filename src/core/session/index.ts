@@ -74,14 +74,9 @@ export class SessionManager {
     }
 
     // 2. Recent session events (only actionable ones, ignore prompt/retrieval echo)
-    const recentEvents = [
-      ...new Map(
-        [
-          ...this.sessionStore.getRecentEvents(this.sessionId, 10, taskId),
-          ...this.sessionStore.getKnowledgeNotes(10, taskId)
-        ].map((e) => [`${e.sessionId}:${e.id}`, e])
-      ).values()
-    ].sort((a, b) => a.createdAt - b.createdAt);
+    // Session notes stay private to their own session (client isolation); expiry and
+    // task visibility still apply. Promote a note to share it across sessions.
+    const recentEvents = this.sessionStore.getRecentEvents(this.sessionId, 10, taskId);
     if (recentEvents && recentEvents.length > 0) {
       const filteredEvents = recentEvents.filter(
         (e) => e.eventType === 'system_response' || e.eventType === 'error'
