@@ -10,6 +10,7 @@ import { startWatcher, type ContextOSWatcher } from '../watcher/index.js';
 import { Indexer } from '../indexer/index.js';
 import { backfillAllEmbeddings } from '../embeddings/index.js';
 import { GraphStore } from '../knowledge/graph-store.js';
+import { scheduleInfraImport } from '../infra/scheduler.js';
 import {
   WorkspaceRegistry,
   type RepositorySource,
@@ -392,6 +393,11 @@ export class RepositoryRuntime {
     if (prune) this.pruneKnowledge();
   }
   private pruneKnowledge(): void {
+    if (
+      this.config.indexing?.infra !== false &&
+      this.registry.resolve(this.source.repoId).state === 'ready'
+    )
+      scheduleInfraImport(this.registry.home, this.source.repoId);
     if (!fs.existsSync(path.join(this.registry.home, 'graph.db'))) return;
     if (this.registry.resolve(this.source.repoId).state !== 'ready') return;
     const graph = new GraphStore({
