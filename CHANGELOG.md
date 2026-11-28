@@ -10,6 +10,10 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-11-28
+
+### Fixed
+
 - Default `ctx_links` to 20 compact connections with endpoint locations, bounded rationales, evidence refs and pagination cursors; compact `ctx_trace` nodes and links, retaining full metadata through `verbose: true`.
 
 - Add opt-in, explicitly inferred same-file trace adjacency and gap hints; accept project root directory selectors and suggest known projects for unknown names.

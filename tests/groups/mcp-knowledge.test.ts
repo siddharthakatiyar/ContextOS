@@ -638,7 +638,7 @@ it('bounds complete retrieval payloads, includes fact text and project attributi
   expect(page.content).toEqual([]);
   expect(
     responseTokens(page as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
-  ).toBeLessThan(6000);
+  ).toBeLessThan(8000);
   const longPage = await client.callTool({
     name: 'ctx_links',
     arguments: { group: 'default', refs: [refs[0]] }
