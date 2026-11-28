@@ -3,6 +3,7 @@ import { ExpandedEntity } from '../graph/expander.js';
 
 import { loadConfig } from '../../config/index.js';
 import path from 'path';
+import { rawChunkMultiplier } from './ranking-signals.js';
 
 const PRIMARY_EXPORT_RE =
   /^(extract|parse|compile|expand|start|init|register|create|add|search|match|load|merge|detect|apply|stem)/i;
@@ -14,7 +15,11 @@ export interface ScoreAdjustContext {
 }
 
 /** Hard penalty for poison paths — returns -9999 when path is excluded. */
-export function applyPoisonPenalty(chunk: ScoredChunk, finalScore: number): number {
+export function applyPoisonPenalty(
+  chunk: ScoredChunk,
+  finalScore: number,
+  allowLockfile = false
+): number {
   const lowerPath = chunk.sourceFile.toLowerCase();
   // 1. Hard penalty for poison paths
   if (
@@ -24,7 +29,7 @@ export function applyPoisonPenalty(chunk: ScoredChunk, finalScore: number): numb
     lowerPath.includes('changes.md') ||
     lowerPath.includes('history.md') ||
     lowerPath.endsWith('.map') ||
-    lowerPath.endsWith('.lock') ||
+    (!allowLockfile && lowerPath.endsWith('.lock')) ||
     lowerPath.endsWith('.min.js') ||
     lowerPath.endsWith('.min.css')
   ) {
@@ -186,7 +191,12 @@ export function scoreChunks(
       const matchedGraphEntities: string[] | undefined = opts?.onSignals ? [] : undefined;
       let feedbackAdjustment: number | undefined;
 
-      finalScore = applyPoisonPenalty(chunk, finalScore);
+      const rawMultiplier = rawChunkMultiplier(
+        opts?.prompt ?? (opts?.matchTokens ?? []).join(' '),
+        chunk
+      );
+      finalScore = applyPoisonPenalty(chunk, finalScore, rawMultiplier === 1);
+      if (finalScore <= -9000) return { ...chunk, score: finalScore };
 
       // Graph expansion boost (capped absolute)
       if (chunk.keywords) {
@@ -323,6 +333,9 @@ export function scoreChunks(
 
       if (!opts?.selectedRepo) finalScore = applyWorkspacePenalty(chunk, finalScore, adjustCtx);
       finalScore = applyNoiseDemotion(chunk, finalScore);
+      // Apply before each repository's result cap, so group merging does not
+      // discard relevant source code behind repeated raw configuration hits.
+      finalScore *= rawMultiplier;
 
       // Prefer large schema/DDL variable symbols (template-literal consts)
       if (chunk.symbolKind === 'variable' && (chunk.tokenCount || 0) > 200) {

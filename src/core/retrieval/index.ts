@@ -355,6 +355,7 @@ export class RetrievalEngine {
     signal?.throwIfAborted();
     const scoreSignals = opts?.explain ? new Map<string, ScoringSignals>() : undefined;
     let scored = scoreChunks(allChunks, expandedEntities, adjustments || {}, {
+      prompt,
       repoRoot: opts?.repoRoot,
       config: this.config,
       selectedRepo: opts?.selectedRepo,

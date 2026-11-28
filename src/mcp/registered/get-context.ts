@@ -4,9 +4,11 @@ import { z } from 'zod';
 import type { RepositorySource } from '../../core/workspace/registry.js';
 import { retrieveWorkspace } from '../../core/workspace/retrieval.js';
 import { entityRef, parseRef } from '../../core/workspace/identity.js';
-import { compile } from '../../core/compiler/index.js';
+import { compileRankedContext } from '../../core/retrieval/knowledge-assembly.js';
 
 import { KnowledgeStore } from '../../core/memory/knowledge-store.js';
+import type { KnowledgeFact } from '../../core/memory/knowledge-store.js';
+import { rankSavedKnowledge } from '../../core/retrieval/knowledge-ranking.js';
 import { mergeMemoryPipeline } from '../../core/session/memory-merge.js';
 
 import { getErrorMessage } from '../../utils/errors.js';
@@ -92,6 +94,7 @@ export default function register(c: WorkspaceToolContext): void {
             });
           result.partial = true;
         };
+        const legacyFacts = new Map<string, KnowledgeFact[]>();
         for (const source of scope.sources) {
           if (result.unavailableSources?.some((s) => s.repoId === source.repoId)) continue;
           try {
@@ -101,10 +104,12 @@ export default function register(c: WorkspaceToolContext): void {
               ? await state.manager.getSessionContext()
               : [];
             repo.assertReadable();
-            const facts = args.layers.includes('repo')
-              ? new KnowledgeStore(repo.db).searchFacts(args.prompt, 2)
-              : [];
-            const memories = mergeMemoryPipeline([], sessionChunks, facts, result.intent).map(
+            const facts =
+              args.layers.includes('repo') && repo.config.memoryInjection !== 'off'
+                ? new KnowledgeStore(repo.db).getAllFacts(Number.MAX_SAFE_INTEGER)
+                : [];
+            legacyFacts.set(source.repoId, facts);
+            const memories = mergeMemoryPipeline([], sessionChunks, [], result.intent).map(
               (chunk) => ({
                 ...chunk,
                 id: entityRef(source.repoId, 'memory', chunk.id),
@@ -160,6 +165,14 @@ export default function register(c: WorkspaceToolContext): void {
             'All selected views changed or became unavailable during retrieval; refresh and retry.',
             result.unavailableSources ?? []
           );
+        if (args.layers.includes('repo')) {
+          const rankingGraph = graph();
+          try {
+            rankSavedKnowledge(result, runtime, rankingGraph, legacyFacts);
+          } finally {
+            rankingGraph.close();
+          }
+        }
         for (const chunk of result.chunks) {
           if (!chunk.repoId || !chunk.localId || !chunk.relativePath) continue;
           const fileKey = chunk.repoId + ':' + chunk.sourceFile;
@@ -174,11 +187,16 @@ export default function register(c: WorkspaceToolContext): void {
         const responseConfig = runtime.get(responseSource).config;
         const requestedBudget = args.max_tokens ?? Math.min(responseConfig.maxTokenBudget, 8000);
         const budget = args.tier === 'stub' ? Math.min(requestedBudget, 250) : requestedBudget;
-        const compiled = compile(result, {
-          maxTokens: budget,
+        // Leave room for the structured citations when an explicit envelope bound applies.
+        const compilationBudget =
+          args.max_tokens !== undefined && result.chunks.some((c) => c.sourceFile === 'memory.fact')
+            ? Math.min(budget, Math.max(1, Math.floor(args.max_tokens * 0.45)))
+            : budget;
+        const compiled = compileRankedContext(result, {
+          maxTokens: compilationBudget,
           maxExactTokens:
             args.max_tokens !== undefined || args.tier === 'stub'
-              ? budget
+              ? compilationBudget
               : Math.min(responseConfig.maxExactTokenBudget, 8000),
           framingReserve: responseConfig.framingReserve,
           sentRegistry: sent,
