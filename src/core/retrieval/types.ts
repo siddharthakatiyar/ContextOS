@@ -104,6 +104,8 @@ export interface RetrievalResult {
 }
 
 export interface ScoreChunksOptions {
+  /** Original query for explicit config/filename intent in noise scoring. */
+  prompt?: string;
   config?: import('../../config/types.js').ContextOSConfig;
   selectedRepo?: boolean;
   repoRoot?: string;

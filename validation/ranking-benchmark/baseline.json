@@ -1,0 +1,150 @@
+{
+  "questions": 20,
+  "recallAt5": 0.75,
+  "surfaced": 15,
+  "meanFirstExpectedRank": 9.7,
+  "meanTokens": 1399.35,
+  "maxTokens": 1965,
+  "rows": [
+    {
+      "category": "infra",
+      "prompt": "Where is the ledger database hosted?",
+      "firstExpectedRank": 4,
+      "recallAt5": 1,
+      "tokens": 1692
+    },
+    {
+      "category": "infra",
+      "prompt": "Which cache stores checkout sessions?",
+      "firstExpectedRank": 1,
+      "recallAt5": 1,
+      "tokens": 732
+    },
+    {
+      "category": "infra",
+      "prompt": "Where are invoice snapshots archived?",
+      "firstExpectedRank": 3,
+      "recallAt5": 1,
+      "tokens": 1695
+    },
+    {
+      "category": "infra",
+      "prompt": "What protects payment secrets?",
+      "firstExpectedRank": 2,
+      "recallAt5": 1,
+      "tokens": 991
+    },
+    {
+      "category": "config",
+      "prompt": "What is the retry limit for settlement?",
+      "firstExpectedRank": 5,
+      "recallAt5": 1,
+      "tokens": 1667
+    },
+    {
+      "category": "config",
+      "prompt": "What config rule controls connection pooling?",
+      "firstExpectedRank": 1,
+      "recallAt5": 1,
+      "tokens": 732
+    },
+    {
+      "category": "config",
+      "prompt": "When should receipt processing time out?",
+      "firstExpectedRank": 4,
+      "recallAt5": 1,
+      "tokens": 1740
+    },
+    {
+      "category": "config",
+      "prompt": "How is currency rounding configured?",
+      "firstExpectedRank": 1,
+      "recallAt5": 1,
+      "tokens": 740
+    },
+    {
+      "category": "billing",
+      "prompt": "How does billing handle refunds?",
+      "firstExpectedRank": 3,
+      "recallAt5": 1,
+      "tokens": 1908
+    },
+    {
+      "category": "billing",
+      "prompt": "Who owns subscription proration?",
+      "firstExpectedRank": 1,
+      "recallAt5": 1,
+      "tokens": 1001
+    },
+    {
+      "category": "billing",
+      "prompt": "What happens to failed charges?",
+      "firstExpectedRank": 2,
+      "recallAt5": 1,
+      "tokens": 1829
+    },
+    {
+      "category": "billing",
+      "prompt": "How are billing taxes calculated?",
+      "firstExpectedRank": 1,
+      "recallAt5": 1,
+      "tokens": 1357
+    },
+    {
+      "category": "role",
+      "prompt": "What does service-a do?",
+      "firstExpectedRank": 4,
+      "recallAt5": 1,
+      "tokens": 1965
+    },
+    {
+      "category": "overview",
+      "prompt": "What does service-b do?",
+      "firstExpectedRank": 5,
+      "recallAt5": 1,
+      "tokens": 1822
+    },
+    {
+      "category": "role",
+      "prompt": "What does shared do?",
+      "firstExpectedRank": 2,
+      "recallAt5": 1,
+      "tokens": 1636
+    },
+    {
+      "category": "link",
+      "prompt": "Which repos call the fraud gateway?",
+      "firstExpectedRank": null,
+      "recallAt5": 0,
+      "tokens": 1422
+    },
+    {
+      "category": "link",
+      "prompt": "Who produces the fulfillment queue?",
+      "firstExpectedRank": null,
+      "recallAt5": 0,
+      "tokens": 1223
+    },
+    {
+      "category": "link",
+      "prompt": "Who consumes the receipt queue?",
+      "firstExpectedRank": null,
+      "recallAt5": 0,
+      "tokens": 1213
+    },
+    {
+      "category": "link",
+      "prompt": "Which repos call the exchange adapter?",
+      "firstExpectedRank": null,
+      "recallAt5": 0,
+      "tokens": 1422
+    },
+    {
+      "category": "link",
+      "prompt": "Which repos read the inventory resource?",
+      "firstExpectedRank": null,
+      "recallAt5": 0,
+      "tokens": 1200
+    }
+  ]
+}
