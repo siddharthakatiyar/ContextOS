@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Fail pending tool calls promptly when a daemon connection closes, and reconnect through a fresh MCP session on retry.
+
 - Return file ranges, expansion windows and command output in structured tool results; accept selected repository paths for import and contract inspection.
 
 - Bound MCP retrieval payloads, compact knowledge writes and scope summaries, and paginate unique saved links; include fact text and project attribution.

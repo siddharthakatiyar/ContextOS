@@ -176,6 +176,14 @@ export async function runDaemonClient(
       process.stdin.unpipe(socket);
       socket.unpipe(process.stdout);
       if (stopping) return;
+      // The local handshake proxy owns MCP session recovery. Continuing this raw
+      // byte stream would lose in-flight requests and reconnect without initialize.
+      // Closing stdio lets the SDK reject every pending request immediately.
+      if (process.env.CONTEXTOS_DAEMON_PROXY_BACKEND === '1') {
+        process.stderr.write('ContextOS daemon unavailable; retry the tool call.\n');
+        process.exit(1);
+        return;
+      }
 
       // The daemon died or dropped us. Reconnect with exponential backoff —
       // previously this looped spawn→crash→respawn every ~600ms forever when

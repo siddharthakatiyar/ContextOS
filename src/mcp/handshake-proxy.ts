@@ -24,13 +24,18 @@ export async function runHandshakeProxy(): Promise<void> {
   let backend: Promise<Client> | undefined;
   let transport: StdioClientTransport | undefined;
   let closed = false;
+  let activeClient: Client | undefined;
   const connect = async () => {
     const client = new Client({ name: 'contextos-proxy', version: getPackageVersion() });
+    activeClient = client;
     client.onclose = () => {
-      backend = undefined;
+      if (activeClient === client) {
+        backend = undefined;
+        activeClient = undefined;
+      }
     };
     client.fallbackNotificationHandler = (notification) => server.notification(notification);
-    transport = new StdioClientTransport({
+    const connection = new StdioClientTransport({
       command: process.execPath,
       args: [
         fileURLToPath(new URL('../../bin/contextos.js', import.meta.url)),
@@ -43,13 +48,14 @@ export async function runHandshakeProxy(): Promise<void> {
       ),
       stderr: 'pipe'
     });
+    transport = connection;
     let diagnostic = '';
-    transport.stderr?.on('data', (data: Buffer) => {
+    connection.stderr?.on('data', (data: Buffer) => {
       diagnostic = (diagnostic + data.toString('utf8')).slice(-4096);
       process.stderr.write(data);
     });
     try {
-      await client.connect(transport, {
+      await client.connect(connection, {
         timeout: Number(process.env.CONTEXTOS_DAEMON_CONNECT_TIMEOUT_MS) || 30_000
       });
       if (closed) {
@@ -58,8 +64,8 @@ export async function runHandshakeProxy(): Promise<void> {
       }
       return client;
     } catch (error) {
-      await transport.close();
-      backend = undefined;
+      await connection.close();
+      if (activeClient === client) backend = undefined;
       throw new Error(
         `${error instanceof Error ? error.message : String(error)}${diagnostic.trim() ? `: ${diagnostic.trim()}` : ''}`
       );
