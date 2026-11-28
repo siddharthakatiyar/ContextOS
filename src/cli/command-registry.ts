@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 /** Add a command module and one loader; keep startup imports lazy. */
 export const commandRegistry: readonly (() => Promise<Command>)[] = [
+  () => import('./commands/infra.js').then((m) => m.infraCommand),
   () => import('./commands/backup.js').then((m) => m.backupCommand),
   () => import('./commands/init.js').then((m) => m.initCommand),
   () => import('./commands/setup.js').then((m) => m.setupCommand),

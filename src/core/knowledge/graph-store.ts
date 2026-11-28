@@ -19,6 +19,7 @@ import { resolveWithinWorkspace } from '../../utils/fs-guard.js';
 import { preparePrivateStateFile, tightenPrivateStateFile } from '../../utils/secure-state.js';
 import { traceVerifiedGraph, type TraceOptions, type TraceResult } from './trace.js';
 import { readGitCommit } from '../../utils/git-head.js';
+import { infraKind, INFRA_PARSER_VERSION } from '../parser/infra-parser.js';
 
 export const LINK_TYPES = [
   'imports',
@@ -40,6 +41,7 @@ export interface Evidence {
   generation: number;
 }
 export interface VerifiedLink extends KnowledgeMetadata {
+  identityKey?: string;
   id: string;
   source: string;
   target: string;
@@ -47,11 +49,12 @@ export interface VerifiedLink extends KnowledgeMetadata {
   rationale: string;
   evidence: Evidence[];
   /** Missing on historical records, which were agent verified. */
-  provenance?: { kind: 'agent' | 'deterministic'; resolver?: string };
+  provenance?: { kind: 'agent' | 'deterministic' | 'code'; resolver?: string };
   createdAt: number;
   updatedAt: number;
 }
 export interface VerifiedFact extends KnowledgeMetadata {
+  identityKey?: string;
   id: string;
   content: string;
   scope: 'view' | 'project' | 'group';
@@ -72,6 +75,8 @@ export interface GraphOptions {
   resolve: (viewId: string) => GraphSource;
 }
 export interface LinkInput extends KnowledgeMetadata {
+  provenance?: VerifiedLink['provenance'];
+  identityKey?: string;
   source: string;
   target: string;
   type: LinkType;
@@ -84,6 +89,7 @@ export interface FactAccess {
   groupId?: string;
 }
 export interface FactInput extends KnowledgeMetadata {
+  identityKey?: string;
   content: string;
   scope: VerifiedFact['scope'];
   scopeId: string;
@@ -94,6 +100,20 @@ export interface FactInput extends KnowledgeMetadata {
   expectedGenerations?: Record<string, number>;
 }
 type StoredRow = { id: string; payload: string };
+
+export function linkIdentity(
+  input: Pick<LinkInput, 'source' | 'target' | 'type' | 'author' | 'identityKey'>
+): string {
+  return input.identityKey
+    ? JSON.stringify([
+        'named-link',
+        input.author,
+        [...new Set([parseRef(input.source)?.repoId, parseRef(input.target)?.repoId])].sort(),
+        input.type,
+        input.identityKey
+      ])
+    : JSON.stringify([input.source, input.target, input.type]);
+}
 
 /** Persistent knowledge metadata; existing evidence freshness checks still govern reads. */
 export class GraphStore {
@@ -151,7 +171,11 @@ export class GraphStore {
     const stamp = [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(':');
     const cached = this.fileHashes.get(file);
     if (cached?.stamp === stamp) return cached.hash;
-    const hash = hashContent(fs.readFileSync(file, 'utf8'));
+    const content = fs.readFileSync(file, 'utf8');
+    // D1 versions infra file hashes; evidence freshness must use the same input.
+    const hash = hashContent(
+      infraKind(file, content) ? `infra:${INFRA_PARSER_VERSION}:true:${content}` : content
+    );
     if (this.fileHashes.size >= 512) this.fileHashes.clear();
     this.fileHashes.set(file, { stamp, hash });
     return hash;
@@ -370,7 +394,9 @@ export class GraphStore {
     return count;
   }
   link(input: LinkInput, permittedViewIds: string[]): VerifiedLink {
-    return this.saveLink(input, permittedViewIds, { kind: 'agent' }).link;
+    return this.saveLink(input, permittedViewIds, {
+      kind: input.provenance?.kind === 'code' ? 'code' : 'agent'
+    }).link;
   }
   /** Internal resolver entrypoint: never overwrite a live verified agent-authored connection. */
   linkResolvedImport(
@@ -396,7 +422,7 @@ export class GraphStore {
   ): { link: VerifiedLink; created: boolean } {
     if (!LINK_TYPES.includes(input.type)) throw new Error('Unsupported relationship type.');
     if (!input.rationale.trim()) throw new Error('A verified connection requires a rationale.');
-    const identity = JSON.stringify([input.source, input.target, input.type]);
+    const identity = linkIdentity(input);
     const old = this.db.prepare('SELECT * FROM verified_links WHERE identity=?').get(identity) as
       { payload: string } | undefined;
     const previous = old ? this.decode<VerifiedLink>(old) : undefined;
@@ -420,6 +446,7 @@ export class GraphStore {
     );
     const now = Date.now();
     const result: VerifiedLink = {
+      ...(input.identityKey ? { identityKey: input.identityKey } : {}),
       ...this.metadata(input),
       id: previous?.id ?? crypto.randomUUID(),
       source: input.source,
@@ -626,13 +653,16 @@ export class GraphStore {
     const identity = JSON.stringify([
       input.scope,
       input.scopeId,
-      input.content.trim().toLocaleLowerCase()
+      ...(input.identityKey
+        ? ['named-fact', input.author, input.identityKey]
+        : [input.content.trim().toLocaleLowerCase()])
     ]);
     const old = this.db.prepare('SELECT * FROM verified_facts WHERE identity=?').get(identity) as
       { payload: string } | undefined;
     const previous = old ? this.decode<VerifiedFact>(old) : undefined;
     const now = Date.now();
     const result: VerifiedFact = {
+      ...(input.identityKey ? { identityKey: input.identityKey } : {}),
       ...this.metadata(input.provenance === 'user' ? { ...input, status: 'verified' } : input),
       id: previous?.id ?? crypto.randomUUID(),
       content: input.content.trim(),
@@ -781,7 +811,9 @@ export class GraphStore {
           link.provenance.resolver === 'literal-local-import-v1' &&
           link.type === 'imports'
             ? link.provenance
-            : { kind: 'agent' as const };
+            : link.provenance?.kind === 'code'
+              ? { kind: 'code' as const }
+              : { kind: 'agent' as const };
         const saved = this.saveLink(
           { ...link, evidenceRefs: link.evidence.map((e) => e.ref), expectedGenerations },
           viewIds,

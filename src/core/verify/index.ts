@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   GraphStore,
+  linkIdentity,
   type Evidence,
   type VerifiedFact,
   type VerifiedLink
@@ -269,10 +270,7 @@ export async function verifyKnowledge(options: VerifyOptions = {}): Promise<Veri
             }
           }
           db.transaction(() => {
-            const identity =
-              'source' in updated
-                ? JSON.stringify([updated.source, updated.target, updated.type])
-                : undefined;
+            const identity = 'source' in updated ? linkIdentity(updated) : undefined;
             if (
               identity &&
               db.prepare(`SELECT id FROM ${table} WHERE identity=? AND id<>?`).get(identity, row.id)
