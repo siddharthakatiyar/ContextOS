@@ -24,6 +24,7 @@ import { registerUpdateStatusTool } from './tools/update-status.js';
 import { resolveWithinWorkspace } from '../utils/fs-guard.js';
 import { getErrorMessage } from '../utils/errors.js';
 import crypto from 'node:crypto';
+import { boundResponse } from './response-budget.js';
 import { registerLegacyReadTopicTool } from './tools/read-topic.js';
 import { registerSaveContextTool } from './tools/save-context.js';
 import { ChunksRepo } from '../core/storage/chunks-repo.js';
@@ -332,19 +333,36 @@ export function registerWorkspaceTools(
             unavailableSources: result.unavailableSources,
             omittedRepositories: omitted,
             tokens: compiled.tokenCount,
-            chunks: result.chunks.map((chunk) => ({
-              ref: chunk.id,
-              viewId: chunk.repoId,
-              projectId: chunk.projectId,
-              worktreeId: chunk.worktreeId,
-              branch: chunk.branch,
-              head: chunk.head,
-              relativePath: chunk.relativePath,
-              sourceFile: chunk.sourceFile,
-              startLine: chunk.startLine,
-              endLine: chunk.endLine
+            chunks: result.chunks
+              .filter(
+                (chunk) =>
+                  compiled.output.includes(chunk.id) ||
+                  compiled.output.includes(chunk.sourceFile) ||
+                  (chunk.sourceFile === 'memory.fact' && compiled.output.includes(chunk.content))
+              )
+              .map((chunk) => ({
+                ref: chunk.id,
+                viewId: chunk.repoId,
+                projectId:
+                  chunk.projectId ??
+                  scope.sources.find((s) => s.repoId === chunk.repoId)?.projectId,
+                projectName:
+                  chunk.repoName ?? scope.sources.find((s) => s.repoId === chunk.repoId)?.name,
+                ...(chunk.sourceFile === 'memory.fact' ? { text: chunk.content } : {}),
+                worktreeId: chunk.worktreeId,
+                branch: chunk.branch,
+                head: chunk.head,
+                relativePath: chunk.relativePath,
+                sourceFile: chunk.sourceFile,
+                startLine: chunk.startLine,
+                endLine: chunk.endLine
+              })),
+            sources: scope.sources.map((s) => ({
+              viewId: s.repoId,
+              projectId: s.projectId,
+              name: s.name,
+              generation: s.generation
             })),
-            sources: scope.sources,
             knowledgeLinks: result.knowledgeLinks,
             learnedLinks: result.learnedLinks,
             linkSuggestions: result.linkSuggestions,
@@ -353,6 +371,7 @@ export function registerWorkspaceTools(
               : {})
           }
         };
+        if (args.max_tokens !== undefined) boundResponse(output, args.max_tokens);
         cache.set(key, { at: Date.now(), result: output });
         while (cache.size > 8) cache.delete(cache.keys().next().value!);
         return output;

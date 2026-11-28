@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Bound MCP retrieval payloads, compact knowledge writes and scope summaries, and paginate unique saved links; include fact text and project attribution.
+
 ## [1.2.4] - 2026-11-26
 
 Version 1.2.3 was tagged but never published to npm because its release validation caught the race fixed below; 1.2.4 contains everything in 1.2.3.

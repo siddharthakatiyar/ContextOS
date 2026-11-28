@@ -143,6 +143,24 @@ export function registerWorkspaceKnowledgeTools(
     workspace: z.string().optional(),
     all_repos: z.boolean().optional()
   };
+  const verbose = { verbose: z.boolean().optional().default(false) };
+  const compactScope = (scope: ReturnType<typeof scopeFor>) => ({
+    groupId: scope.groupId ?? scope.workspaceId,
+    activeViewId: scope.activeRepoId,
+    views: scope.sources.map((s) => ({
+      viewId: s.repoId,
+      projectId: s.projectId,
+      name: s.name,
+      branch: s.branch,
+      state: s.state,
+      generation: s.generation
+    }))
+  });
+  const writeResult = (
+    args: Record<string, unknown>,
+    value: Record<string, unknown>,
+    scope: ReturnType<typeof scopeFor>
+  ) => (args.verbose ? { ...value, scope } : { ok: true, ...value });
   const scopeFor = (args: Record<string, unknown>) =>
     context.select({
       group: args.group,
@@ -180,10 +198,40 @@ export function registerWorkspaceKnowledgeTools(
   server.tool(
     'ctx_scope',
     'Discover the current group/project/worktree/branch views and their qualified IDs and indexing generations. Use generations for verified knowledge writes.',
-    selectors,
+    { ...selectors, ...verbose, include_worktrees: z.boolean().optional().default(false) },
     async (args) => {
       try {
-        return result({ ...scopeFor(args), catalog: context.catalog?.() });
+        const scope = scopeFor(args);
+        if (args.verbose) return result({ ...scope, catalog: context.catalog?.() });
+        const catalog = context.catalog?.() as
+          { views?: typeof scope.sources; groups?: unknown[] } | undefined;
+        const views = [
+          ...new Map((catalog?.views ?? scope.sources).map((s) => [s.repoId, s])).values()
+        ];
+        const projects = [...new Set(views.map((s) => s.projectId))].map((projectId) => {
+          const candidates = views.filter((s) => s.projectId === projectId);
+          const source =
+            candidates.find((s) => scope.repoIds.includes(s.repoId)) ??
+            candidates.find((s) => s.active) ??
+            candidates[0];
+          return {
+            projectId,
+            name: source.name,
+            defaultViewId: source.repoId,
+            branch: source.branch,
+            state: source.state,
+            generation: source.generation,
+            ...(args.include_worktrees
+              ? { views: compactScope({ ...scope, sources: candidates }).views }
+              : {})
+          };
+        });
+        return result({
+          group: scope.groupId ?? scope.workspaceId ?? context.defaultGroup,
+          activeViewId: scope.activeRepoId,
+          counts: { projects: projects.length, views: views.length },
+          projects
+        });
       } catch (error) {
         return { ...result({ error: getErrorMessage(error) }), isError: true };
       }
@@ -194,6 +242,7 @@ export function registerWorkspaceKnowledgeTools(
     'Save a verified relationship after inspecting both endpoints and necessary dependency/routing/contract evidence. Matching names alone are insufficient. Save no guesses or ambiguous candidates. Writes validate source freshness, not semantic correctness.',
     {
       ...selectors,
+      ...verbose,
       source: z.string(),
       target: z.string(),
       relationship: z.enum([
@@ -223,18 +272,50 @@ export function registerWorkspaceKnowledgeTools(
         scope.repoIds
       );
       context.clearCache();
-      return { link, scope };
+      return writeResult(
+        args,
+        {
+          link: args.verbose
+            ? link
+            : { id: link.id, type: link.type, source: link.source, target: link.target },
+          endpoints: [link.source, link.target].map((ref) => ({
+            ref,
+            name: scope.sources.find((s) => ref.startsWith(`contextos:${s.repoId}:`))?.name
+          })),
+          generations: Object.fromEntries(link.evidence.map((e) => [e.viewId, e.generation])),
+          warnings: []
+        },
+        scope
+      );
     })
   );
   server.tool(
     'ctx_links',
     'Inspect existing verified connections and their supporting evidence within selected views.',
-    { ...selectors, refs: z.array(z.string()).optional() },
+    {
+      ...selectors,
+      ...verbose,
+      refs: z.array(z.string()).optional(),
+      limit: z.number().int().min(1).max(500).default(50),
+      offset: z.number().int().nonnegative().default(0)
+    },
     wrap((args, graph) => {
       const scope = scopeFor(args);
+      const links = [
+        ...new Map(
+          graph
+            .listLinks({ viewIds: scope.repoIds, refs: args.refs as string[] | undefined })
+            .map((link) => [link.id, link])
+        ).values()
+      ].sort((a, b) => a.id.localeCompare(b.id));
+      const offset = (args.offset as number) ?? 0,
+        limit = (args.limit as number) ?? 50;
       return {
-        links: graph.listLinks({ viewIds: scope.repoIds, refs: args.refs as string[] | undefined }),
-        scope
+        links: links.slice(offset, offset + limit),
+        total: links.length,
+        offset,
+        limit,
+        ...(args.verbose ? { scope } : {})
       };
     })
   );
@@ -280,7 +361,7 @@ export function registerWorkspaceKnowledgeTools(
         },
         scope.repoIds
       );
-      return { ...trace, scope };
+      return trace;
     })
   );
   server.tool(
@@ -337,12 +418,20 @@ export function registerWorkspaceKnowledgeTools(
   server.tool(
     'ctx_unlink',
     'Remove one specific incorrect or obsolete verified connection.',
-    { ...selectors, id: z.string() },
+    { ...selectors, ...verbose, id: z.string() },
     wrap((args, graph) => {
       const scope = scopeFor(args);
       const removed = graph.unlink(args.id as string, scope.repoIds);
       context.clearCache();
-      return { removed, scope };
+      return writeResult(
+        args,
+        {
+          removed,
+          id: args.id ?? args.content,
+          ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
+        },
+        scope
+      );
     })
   );
   server.tool(
@@ -350,6 +439,7 @@ export function registerWorkspaceKnowledgeTools(
     'Save useful durable verified facts with explicit provenance. Code facts require indexed evidence and current generations. User provenance is only for an explicit user decision or preference. Defaults to the active view. Session notes remain temporary.',
     {
       ...selectors,
+      ...verbose,
       type: z
         .enum(['session_note', 'cross_session_fact', 'forget_fact'])
         .default('cross_session_fact'),
@@ -372,7 +462,7 @@ export function registerWorkspaceKnowledgeTools(
       if (args.type === 'session_note') {
         context.saveSession(source, args.content as string);
         context.clearCache();
-        return { saved: 'session_note', scope };
+        return writeResult(args, { saved: 'session_note' }, scope);
       }
       if (args.type === 'forget_fact') {
         const removed = graph.forget(args.content as string, scope.repoIds, {
@@ -380,7 +470,15 @@ export function registerWorkspaceKnowledgeTools(
           groupId: scope.groupId ?? scope.workspaceId
         });
         context.clearCache();
-        return { removed, scope };
+        return writeResult(
+          args,
+          {
+            removed,
+            id: args.id ?? args.content,
+            ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
+          },
+          scope
+        );
       }
       const kind = args.scope as 'view' | 'project' | 'group';
       const projectId =
@@ -417,13 +515,22 @@ export function registerWorkspaceKnowledgeTools(
         }
       );
       context.clearCache();
-      return { fact, scope };
+      return writeResult(
+        args,
+        {
+          fact: args.verbose ? fact : { id: fact.id, scope: fact.scope, scopeId: fact.scopeId },
+          type: 'cross_session_fact',
+          generations: Object.fromEntries(fact.evidence.map((e) => [e.viewId, e.generation])),
+          warnings: []
+        },
+        scope
+      );
     })
   );
   server.tool(
     'ctx_forget',
     'Remove one specific saved durable fact.',
-    { ...selectors, id: z.string() },
+    { ...selectors, ...verbose, id: z.string() },
     wrap((args, graph) => {
       const scope = scopeFor(args);
       const removed = graph.forget(args.id as string, scope.repoIds, {
@@ -431,7 +538,15 @@ export function registerWorkspaceKnowledgeTools(
         groupId: scope.groupId ?? scope.workspaceId
       });
       context.clearCache();
-      return { removed, scope };
+      return writeResult(
+        args,
+        {
+          removed,
+          id: args.id ?? args.content,
+          ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
+        },
+        scope
+      );
     })
   );
 }

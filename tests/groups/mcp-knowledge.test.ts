@@ -558,3 +558,46 @@ it('adds scoped legacy aliases only when configured and preserves verified knowl
     await otherServer.close();
   }
 });
+
+it('bounds complete retrieval payloads, includes fact text and project attribution, and paginates unique links', async () => {
+  await client.callTool({
+    name: 'ctx_remember',
+    arguments: { content: 'Payment marker durable fact', provenance: 'user' }
+  });
+  const result = await client.callTool({
+    name: 'get_context',
+    arguments: { prompt: 'Payment marker durable fact', tier: 'full', max_tokens: 1500 }
+  });
+  const { responseTokens } = await import('../../src/mcp/response-budget.js');
+  expect(result.isError).not.toBe(true);
+  expect(
+    responseTokens(result as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
+  ).toBeLessThanOrEqual(1500);
+  expect((result.structuredContent as { tokens: number })?.tokens).toBe(
+    responseTokens(result as import('@modelcontextprotocol/sdk/types.js').CallToolResult)
+  );
+  const full = await client.callTool({
+    name: 'get_context',
+    arguments: { prompt: 'Payment marker durable fact', tier: 'full', max_tokens: 8000 }
+  });
+  expect((full.structuredContent as { chunks: unknown[] })?.chunks).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        sourceFile: 'memory.fact',
+        text: expect.stringContaining('Payment marker durable fact'),
+        projectName: 'backend'
+      })
+    ])
+  );
+  const page = await client.callTool({
+    name: 'ctx_links',
+    arguments: { group: 'default', limit: 1, offset: 1 }
+  });
+  expect(page.structuredContent).toMatchObject({ links: [], total: 0, offset: 1, limit: 1 });
+  expect(page.structuredContent).not.toHaveProperty('scope');
+  const scope = await client.callTool({ name: 'ctx_scope', arguments: {} });
+  expect(scope.structuredContent).toMatchObject({ counts: { projects: 2, views: 2 } });
+  expect(scope.structuredContent).not.toHaveProperty('catalog');
+  const verbose = await client.callTool({ name: 'ctx_scope', arguments: { verbose: true } });
+  expect(verbose.structuredContent).toHaveProperty('catalog');
+});
