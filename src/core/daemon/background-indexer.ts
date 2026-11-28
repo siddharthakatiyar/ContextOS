@@ -14,7 +14,7 @@ interface IndexConfig {
   indexablePatterns: string[];
 }
 
-export const INDEXER_VERSION = 2;
+export const INDEXER_VERSION = 3;
 export const MAX_INDEX_FAILURE_DETAILS = 100;
 
 interface FileFailure {

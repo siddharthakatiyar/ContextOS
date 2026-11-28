@@ -7,6 +7,18 @@ type IgnoreManager = ReturnType<typeof ignore>;
 
 /** Safety exclusions are unconditional; user negation rules cannot re-enable them. */
 export const SAFETY_IGNORE_PATTERNS = [
+  '**/.env',
+  '**/.env.*',
+  '!**/.env.example',
+  '**/*.pem',
+  '**/*.key',
+  '**/*.tfstate',
+  '**/*.tfstate.*',
+  '**/*.tfvars',
+  '**/*.tfvars.json',
+  '**/token',
+  '**/tokens',
+  '**/tokens.json',
   '**/node_modules/**',
   '**/.git/**',
   '**/dist/**',
@@ -159,7 +171,9 @@ export function createIndexIgnore(
 
   // Only unconditional rules are used to prune glob traversal. User rules are
   // applied after discovery so a negation can re-include a path correctly.
-  const globIgnore = [...SAFETY_IGNORE_PATTERNS];
+  const globIgnore = SAFETY_IGNORE_PATTERNS.filter(
+    (pattern) => !pattern.includes('.env') && !pattern.startsWith('!')
+  );
 
   return {
     root,

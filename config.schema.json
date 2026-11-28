@@ -9,6 +9,11 @@
       "properties": { "review": { "type": "boolean", "default": false } },
       "additionalProperties": false
     },
+    "indexing": {
+      "type": "object",
+      "properties": { "infra": { "type": "boolean", "default": true } },
+      "additionalProperties": false
+    },
     "dbPath": {
       "type": "string",
       "description": "Selected project/worktree view database, managed by the registry under ~/.contextos/projects/<project-id>/views/<view-id>/index.db. Legacy project .contextos/index.db is a migration source."

@@ -1,4 +1,6 @@
 import fs from 'fs';
+import { parseInfra, infraKind, INFRA_PARSER_VERSION } from '../parser/infra-parser.js';
+import { chunkInfra } from '../chunker/infra-chunker.js';
 import path from 'path';
 import { DB } from '../storage/database.js';
 import { ChunksRepo } from '../storage/chunks-repo.js';
@@ -131,6 +133,7 @@ export class Indexer {
     // Apply the same built-in and repository/configured ignore policy used by
     // bulk and watch traversal. Explicit reindex requests must not bypass it.
     if (this.indexIgnore.ignores(canonicalPath)) {
+      await this.removeFileNow(filePath, layer);
       return {
         filesProcessed: 0,
         chunksCreated: 0,
@@ -152,7 +155,8 @@ export class Indexer {
     }
 
     // Cap file size before read (B25)
-    if (stat.size > MAX_FILE_BYTES) {
+    if (stat.size > (infraKind(filePath) === 'shell-script' ? 256 * 1024 : MAX_FILE_BYTES)) {
+      await this.removeFileNow(filePath, layer);
       return {
         filesProcessed: 0,
         chunksCreated: 0,
@@ -184,7 +188,14 @@ export class Indexer {
       };
     }
 
-    const hash = hashContent(content);
+    const config = loadConfig({ cwd: this.rootDir });
+    const infra = parseInfra(filePath, content);
+    // Infra-only hashes invalidate old partial/raw chunks without changing code/doc hashes.
+    const hash = hashContent(
+      infra
+        ? `infra:${INFRA_PARSER_VERSION}:${config.indexing?.infra !== false}:${content}`
+        : content
+    );
 
     // Check if changed
     if (!this.filesRepo.isChanged(filePath, hash)) {
@@ -196,7 +207,6 @@ export class Indexer {
       };
     }
 
-    const config = loadConfig({ cwd: this.rootDir });
     const chunkOptions = {
       layer,
       workspaceName,
@@ -214,7 +224,9 @@ export class Indexer {
 
     // Parse and chunk based on file type
     signal?.throwIfAborted();
-    if (ext === '.proto') {
+    if (infra) {
+      chunks = config.indexing?.infra === false ? [] : chunkInfra(filePath, infra, chunkOptions);
+    } else if (ext === '.proto') {
       chunks = chunkCode(parseProtobuf(filePath, content), chunkOptions);
     } else if (isCode) {
       const parsed = await parseCode(filePath, content);
