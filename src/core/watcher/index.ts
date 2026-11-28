@@ -11,7 +11,7 @@ import { canonicalPathForComparison, createIndexIgnore } from '../indexer/ignore
 import { canonicalDirectory } from '../../utils/secure-state.js';
 
 /** Dotfile/dir paths that should still be watched (B8). */
-const ALLOWED_DOT_SEGMENTS = new Set(['.cursor']);
+const ALLOWED_DOT_SEGMENTS = new Set(['.cursor', '.env.example']);
 
 /**
  * Ignore most dotfiles/dirs, but allow `.cursor/rules` and similar indexable paths.
@@ -162,7 +162,13 @@ export function startWatcher(
   const handleEvent = (filePath: string, type: 'add' | 'change' | 'unlink') => {
     const comparisonPath = canonicalPathForComparison(filePath);
     const ext = path.extname(comparisonPath);
-    if (type !== 'unlink' && !ext && !filePath.includes('.cursor/rules')) return;
+    if (
+      type !== 'unlink' &&
+      !ext &&
+      !/^dockerfile/i.test(path.basename(filePath)) &&
+      !filePath.includes('.cursor/rules')
+    )
+      return;
 
     if (
       type !== 'unlink' &&

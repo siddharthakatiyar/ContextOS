@@ -12,7 +12,13 @@ export const defaultConfig: ContextOSConfig = {
     return path.join(os.homedir(), '.contextos', 'global');
   },
 
+  indexing: { infra: true },
   indexablePatterns: [
+    '**/Dockerfile*',
+    '**/dockerfile*',
+    '**/*.sh',
+    '**/*.tf',
+    '**/.env.example',
     '**/*.md',
     '**/*.txt',
     '**/AGENTS.md',

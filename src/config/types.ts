@@ -20,6 +20,7 @@ export interface ContextOSConfig {
   dbPath: string;
   globalContextDir: string;
 
+  indexing?: { infra?: boolean };
   indexablePatterns: string[];
   ignorePatterns: string[];
   maxChunkTokens: number;
@@ -68,6 +69,7 @@ export interface ContextOSConfig {
 /** Partial zod schema for config.json — validates known keys; unknown keys are stripped with a warning. */
 export const configJsonSchema = z
   .object({
+    indexing: z.object({ infra: z.boolean().optional() }).optional(),
     dbPath: z.string().optional(),
     globalContextDir: z.string().optional(),
     indexablePatterns: z.array(z.string()).optional(),

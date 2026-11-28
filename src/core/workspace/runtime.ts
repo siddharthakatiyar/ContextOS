@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { infraFingerprint, INFRA_PATTERNS } from '../indexer/infra-fingerprint.js';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -107,18 +108,25 @@ function checkoutIdentityReader(
     return `${gitDir}\n${head}\n${commit}`;
   };
 }
-export function configFingerprint(root: string): string {
+export function configFingerprint(root: string, includeInfrastructure = true): string {
   const config = loadConfig({ cwd: root, forceReload: true });
+  const infrastructure = includeInfrastructure
+    ? infraFingerprint(root, config)
+    : {
+        patterns: config.indexablePatterns.filter((p) => !INFRA_PATTERNS.includes(p)),
+        infra: undefined
+      };
   return crypto
     .createHash('sha256')
     .update(
       JSON.stringify({
-        patterns: config.indexablePatterns,
+        patterns: infrastructure.patterns,
         ignore: config.ignorePatterns,
         chunk: config.maxChunkTokens,
         symbol: config.maxSymbolChunkTokens,
         embeddings: config.embeddingsEnabled,
-        indexer: INDEXER_VERSION
+        indexer: INDEXER_VERSION === 3 ? 2 : INDEXER_VERSION, // Keep v3 upgrades scoped to infra views.
+        infra: infrastructure.infra
       })
     )
     .digest('hex');
@@ -422,7 +430,10 @@ export class RepositoryRuntime {
       );
     this.scan = (async () => {
       this.registry.update(this.source.repoId, { state: 'indexing', lastError: null });
-      if (current.configFingerprint !== this.fingerprint)
+      if (
+        current.configFingerprint !== this.fingerprint &&
+        current.configFingerprint !== configFingerprint(this.source.rootPath, false)
+      )
         this.db.getInstance().prepare("UPDATE files SET hash='' WHERE layer='repo'").run();
       const indexer = new BackgroundIndexer(
         this.db,
