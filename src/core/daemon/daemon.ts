@@ -1,3 +1,4 @@
+import { startVerificationScheduler } from '../verify/scheduler.js';
 import net from 'net';
 import fs from 'fs';
 import path from 'path';
@@ -56,6 +57,7 @@ export class ContextOSDaemon {
   private connections = 0;
   private clientSockets = new Set<net.Socket>();
   private gcTimer?: NodeJS.Timeout;
+  private verificationScheduler?: { stop: () => Promise<void> };
   private stopping = false;
   private startupReady = false;
   private stopPromise?: Promise<void>;
@@ -282,6 +284,10 @@ export class ContextOSDaemon {
           console.error(`Failed to start background index: ${getErrorMessage(error)}`);
         }
 
+        this.verificationScheduler = startVerificationScheduler(
+          home,
+          this.activeRepoId ? [this.activeRepoId] : undefined
+        );
         this.startupReady = true;
         resolve();
       });
@@ -347,6 +353,7 @@ export class ContextOSDaemon {
     if (this.server.listening) this.server.close();
 
     this.upgradeDrain = (async () => {
+      await this.verificationScheduler?.stop();
       if (this.watcher) {
         await this.watcher.close();
         await this.watcher.waitForIdle?.();

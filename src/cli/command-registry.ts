@@ -13,6 +13,7 @@ export const commandRegistry: readonly (() => Promise<Command>)[] = [
   () => import('./commands/import.js').then((m) => m.importCommand),
   () => import('./commands/analytics.js').then((m) => m.analyticsCommand),
   () => import('./commands/status.js').then((m) => m.statusCommand),
+  () => import('./commands/verify.js').then((m) => m.verifyCommand),
   () => import('./commands/doctor.js').then((m) => m.doctorCommand),
   () => import('./commands/reindex.js').then((m) => m.reindexCommand),
   () => import('./commands/clean.js').then((m) => m.cleanCommand),

@@ -264,7 +264,7 @@ describe('global runtime', () => {
     }
   });
 
-  it('eagerly removes only graph links invalidated by a watched file update', async () => {
+  it('eagerly stales only graph links invalidated by a watched file update', async () => {
     const stableFile = path.join(root, 'stable.ts');
     const changingFile = path.join(root, 'payment.ts');
     fs.writeFileSync(stableFile, 'export const stable = 1;\n');
@@ -308,21 +308,30 @@ describe('global runtime', () => {
     // Wait for chokidar's initial traversal to finish before mutating the file.
     await new Promise((resolve) => setTimeout(resolve, 300));
     fs.writeFileSync(changingFile, 'export const payment = 3;\n');
-    const readLinkIds = () => {
+    const readLinks = () => {
       const graphDb = new Database(path.join(registry.home, 'graph.db'), { readonly: true });
       try {
-        return (graphDb.prepare('SELECT id FROM verified_links').all() as { id: string }[]).map(
-          (row) => row.id
-        );
+        return graphDb
+          .prepare('SELECT id,status,stale_reason FROM verified_links ORDER BY id')
+          .all();
       } finally {
         graphDb.close();
       }
     };
-    await vi.waitFor(() => expect(readLinkIds()).not.toContain(changed.id), { timeout: 5000 });
-    expect(readLinkIds()).toContain(retained.id);
+    await vi.waitFor(
+      () =>
+        expect(readLinks()).toContainEqual({
+          id: changed.id,
+          status: 'stale',
+          stale_reason: expect.any(String)
+        }),
+      { timeout: 5000 }
+    );
+    expect(readLinks()).toContainEqual({ id: retained.id, status: 'verified', stale_reason: null });
+    expect(readLinks()).toHaveLength(2);
   });
 
-  it('prunes invalid evidence after a full scan while preserving unchanged links', async () => {
+  it('stales invalid evidence after a full scan while preserving unchanged links', async () => {
     const stableFile = path.join(root, 'stable.ts');
     const changingFile = path.join(root, 'payment.ts');
     fs.writeFileSync(stableFile, 'export const stable = 1;\n');
@@ -366,11 +375,14 @@ describe('global runtime', () => {
     await runtime.request({ action: 'index', force: true });
     const graphDb = new Database(path.join(registry.home, 'graph.db'), { readonly: true });
     try {
-      const ids = (graphDb.prepare('SELECT id FROM verified_links').all() as { id: string }[]).map(
-        (row) => row.id
-      );
-      expect(ids).not.toContain(changed.id);
-      expect(ids).toContain(retained.id);
+      const rows = graphDb.prepare('SELECT id,status,stale_reason FROM verified_links').all();
+      expect(rows).toContainEqual({
+        id: changed.id,
+        status: 'stale',
+        stale_reason: expect.any(String)
+      });
+      expect(rows).toContainEqual({ id: retained.id, status: 'verified', stale_reason: null });
+      expect(rows).toHaveLength(2);
     } finally {
       graphDb.close();
     }
