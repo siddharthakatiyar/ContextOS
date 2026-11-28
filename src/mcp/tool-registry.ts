@@ -17,6 +17,7 @@ import get_status from './registered/get-status.js';
 import ctx_scope from './registered/ctx-scope.js';
 import ctx_link from './registered/ctx-link.js';
 import ctx_links from './registered/ctx-links.js';
+import ctx_impact from './registered/ctx-impact.js';
 import ctx_trace from './registered/ctx-trace.js';
 import ctx_resolve_import from './registered/ctx-resolve-import.js';
 import ctx_contract from './registered/ctx-contract.js';
@@ -50,6 +51,7 @@ export const workspaceToolRegistry: readonly Entry[] = [
   { name: 'ctx_scope', kind: 'knowledge', register: ctx_scope },
   { name: 'ctx_link', kind: 'knowledge', register: ctx_link },
   { name: 'ctx_links', kind: 'knowledge', register: ctx_links },
+  { name: 'ctx_impact', kind: 'workspace', register: ctx_impact },
   { name: 'ctx_trace', kind: 'knowledge', register: ctx_trace },
   { name: 'ctx_resolve_import', kind: 'knowledge', register: ctx_resolve_import },
   { name: 'ctx_contract', kind: 'knowledge', register: ctx_contract },

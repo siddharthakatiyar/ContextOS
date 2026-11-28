@@ -5,7 +5,10 @@ import { MCP_SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 export const AGENT_BLOCK_START = '<!-- contextos:managed:start -->';
 export const AGENT_BLOCK_END = '<!-- contextos:managed:end -->';
 export function agentInstructionsBlock(): string {
-  return `${AGENT_BLOCK_START}\n## ContextOS (managed instructions v1.2.5)\n\n${MCP_SERVER_INSTRUCTIONS}\n${AGENT_BLOCK_END}`;
+  const instructions = MCP_SERVER_INSTRUCTIONS.includes('ctx_impact')
+    ? MCP_SERVER_INSTRUCTIONS
+    : `${MCP_SERVER_INSTRUCTIONS}\nBefore changing exported symbols, API contracts or queue names, call ctx_impact and review its coverage caveat.`;
+  return `${AGENT_BLOCK_START}\n## ContextOS (managed instructions v1.2.5)\n\n${instructions}\n${AGENT_BLOCK_END}`;
 }
 /** Rewrites only recognizable generated sections, preserving user-authored guidance. */
 export function rewriteManagedInstructions(previous: string, replacement: string): string {
