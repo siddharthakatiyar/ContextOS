@@ -34,7 +34,7 @@ function repository(name: string): string {
 }
 beforeEach(() => {
   temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-reconcile-')));
-  registry = new WorkspaceRegistry(path.join(temp, 'state'));
+  registry = new WorkspaceRegistry(path.join(temp, 'home', '.contextos'));
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -176,6 +176,41 @@ describe('repository identity reconciliation', () => {
     expect(failed.lastError).toContain(path.join(root, '.git'));
     expect(failed.lastError).toContain(path.join(other, '.git'));
     expect(failed.lastError).toContain(`root=${JSON.stringify(root)}`);
+    for (const json of [true, false]) {
+      const output = execFileSync(
+        process.execPath,
+        [
+          '--import',
+          import.meta.resolve('tsx'),
+          path.resolve('bin/contextos.ts'),
+          'project',
+          'status',
+          ...(json ? ['--json'] : [])
+        ],
+        {
+          cwd: temp,
+          env: {
+            ...process.env,
+            HOME: path.dirname(registry.home),
+            USERPROFILE: path.dirname(registry.home),
+            CONTEXTOS_SKIP_SETUP: '1',
+            CONTEXTOS_AUTO_PATCH: 'off'
+          },
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: 30000
+        }
+      );
+      const message = json
+        ? JSON.parse(output).repositories.find(
+            (r: { repoId: string }) => r.repoId === source.repoId
+          ).lastError
+        : output;
+      expect(message).toContain('expected commonDir=');
+      expect(message).toContain('actual commonDir=');
+      expect(message).toContain(`root=${JSON.stringify(root)}`);
+    }
+
     fs.unlinkSync(path.join(root, '.git'));
     fs.renameSync(saved, path.join(root, '.git'));
     registry.reconcile();
@@ -329,7 +364,7 @@ describe('cold discovery caching and asynchronous refresh', () => {
     const source = registry.register(root);
     await registry.reconcileAsync();
     registry.close();
-    registry = new WorkspaceRegistry(path.join(temp, 'state'));
+    registry = new WorkspaceRegistry(path.join(temp, 'home', '.contextos'));
     const discover = vi.spyOn(discovery, 'discoverProjectAsync');
     await registry.reconcileAsync();
     expect(discover).not.toHaveBeenCalled();

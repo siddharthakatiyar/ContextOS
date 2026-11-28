@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Preserve reconciled Git identity mismatch details in project status text and JSON.
+
 - Refuse implicit initialization of non-Git parent folders containing registered projects, with explicit path and existing-registration exceptions.
 
 - Route update/upgrade version options to the subcommand while preserving top-level CLI version flags.
