@@ -9,6 +9,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
     {
       ...selectors,
       ...verbose,
+      task_id: z.string().optional(),
       include_proposed: z.boolean().optional(),
       start: z.string(),
       target: z.string().optional(),

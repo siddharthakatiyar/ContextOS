@@ -1,3 +1,4 @@
+import { loadConfig } from '../../config/index.js';
 import type Database from 'better-sqlite3';
 
 export const KNOWLEDGE_STATUSES = ['proposed', 'verified', 'stale'] as const;
@@ -30,14 +31,27 @@ export function resolveKnowledgeWriteContext(
   params: KnowledgeWriteContext & { task_id?: string; expires_at?: number | null } = {},
   env: NodeJS.ProcessEnv = process.env
 ): KnowledgeWriteContext {
+  const namespace = params.namespace ?? 'project';
+  if (namespace === 'task:') throw new Error('Task namespaces require a non-empty task ID.');
   const result = {
     author: params.author ?? env.CONTEXTOS_AUTHOR,
     taskId: params.taskId ?? params.task_id ?? env.CONTEXTOS_TASK_ID,
     model: params.model ?? env.CONTEXTOS_MODEL,
     status: params.status ?? 'verified',
-    namespace: params.namespace ?? 'project',
+    namespace,
     expiresAt: params.expiresAt !== undefined ? params.expiresAt : params.expires_at
   };
+  if (
+    result.expiresAt === undefined &&
+    (namespace === 'session' || namespace.startsWith('task:'))
+  ) {
+    const ttl = Number(
+      env.CONTEXTOS_SESSION_TTL_HOURS ?? loadConfig().knowledge?.sessionTtlHours ?? 24
+    );
+    if (!Number.isFinite(ttl) || ttl <= 0)
+      throw new Error('knowledge.sessionTtlHours must be positive.');
+    result.expiresAt = Date.now() + ttl * 3_600_000;
+  }
   if (!KNOWLEDGE_STATUSES.includes(result.status)) throw new Error('Invalid knowledge status.');
   if (result.expiresAt != null && !Number.isSafeInteger(result.expiresAt))
     throw new Error('expiresAt must be an integer timestamp in milliseconds.');
@@ -47,10 +61,20 @@ export function resolveKnowledgeWriteContext(
 /** Review policy applies only to MCP agent writes. Explicit metadata still wins over env. */
 export function resolveMcpKnowledgeWriteContext(
   params: KnowledgeWriteContext & { task_id?: string; provenance?: unknown } = {},
-  options: { clientName?: string; review?: boolean; env?: NodeJS.ProcessEnv } = {}
+  options: {
+    clientName?: string;
+    review?: boolean;
+    sessionTtlHours?: number;
+    env?: NodeJS.ProcessEnv;
+  } = {}
 ): KnowledgeWriteContext {
   const env = options.env ?? process.env;
-  const context = resolveKnowledgeWriteContext(params, env);
+  const context = resolveKnowledgeWriteContext(params, {
+    ...env,
+    CONTEXTOS_SESSION_TTL_HOURS:
+      env.CONTEXTOS_SESSION_TTL_HOURS ??
+      (options.sessionTtlHours === undefined ? undefined : String(options.sessionTtlHours))
+  });
   context.author ??= options.clientName;
   context.status =
     params.provenance === 'user'
@@ -63,6 +87,8 @@ export function resolveMcpKnowledgeWriteContext(
 /** Default metadata costs no tokens; non-default lifecycle state is always explicit. */
 export function compactKnowledgeMetadata(input: KnowledgeWriteContext = {}) {
   return {
+    ...(input.namespace && input.namespace !== 'project' ? { namespace: input.namespace } : {}),
+    ...(input.expiresAt != null ? { expiresAt: input.expiresAt } : {}),
     ...(input.author ? { author: input.author } : {}),
     ...(input.taskId ? { taskId: input.taskId } : {}),
     ...(input.status && input.status !== 'verified' ? { status: input.status } : {})
@@ -131,4 +157,16 @@ export function migrateKnowledgeColumns(db: Database.Database, tables: readonly 
     for (const name of ['task_id', 'status'])
       db.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_${name} ON ${table}(${name})`);
   }
+}
+
+/** Expiry and task isolation apply before ranking, limits, graph traversal or caching. */
+export function knowledgeIsVisible(
+  input: KnowledgeWriteContext,
+  taskId = process.env.CONTEXTOS_TASK_ID,
+  now = Date.now()
+): boolean {
+  return (
+    (input.expiresAt == null || input.expiresAt > now) &&
+    (!input.namespace?.startsWith('task:') || (!!taskId && input.namespace === `task:${taskId}`))
+  );
 }

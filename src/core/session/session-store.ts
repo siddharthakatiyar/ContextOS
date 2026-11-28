@@ -1,3 +1,5 @@
+import { sessionKnowledgeMetadata } from '../knowledge/audit.js';
+import { knowledgeIsVisible } from '../knowledge/write-context.js';
 import crypto from 'crypto';
 import { Database } from 'better-sqlite3';
 import { DB } from '../storage/database.js';
@@ -17,6 +19,8 @@ export interface SessionEvent {
   content: string;
   relatedFiles: string | null;
   createdAt: number;
+  namespace?: string;
+  expiresAt?: number | null;
 }
 
 interface SessionRow {
@@ -60,7 +64,10 @@ export function shouldRotateSession(
 export class SessionStore {
   private db: Database;
 
-  constructor(dbInstance: DB) {
+  constructor(
+    dbInstance: DB,
+    private taskId?: string
+  ) {
     this.db = dbInstance.getInstance();
   }
 
@@ -116,22 +123,64 @@ export class SessionStore {
     return { ...newEvent, id: info.lastInsertRowid as number };
   }
 
-  public getRecentEvents(sessionId: string, limit: number = 10): SessionEvent[] {
+  private visibleEvents(rows: SessionEventRow[], limit: number, taskId = this.taskId) {
+    const metadata = sessionKnowledgeMetadata();
+    return rows
+      .filter((row) => {
+        const context = metadata.get(`session:note:${row.session_id}:${row.id}`);
+        return !context || knowledgeIsVisible(context, taskId);
+      })
+      .slice(0, limit)
+      .map((row) => ({
+        ...row,
+        lifecycle: metadata.get(`session:note:${row.session_id}:${row.id}`)
+      }));
+  }
+
+  /** Temporary knowledge notes are visible across MCP sessions in this view. */
+  public getKnowledgeNotes(limit = 10, taskId?: string): SessionEvent[] {
+    const metadata = sessionKnowledgeMetadata();
+    const rows = (
+      this.db
+        .prepare(
+          "SELECT * FROM session_events WHERE event_type='system_response' ORDER BY created_at DESC, id DESC"
+        )
+        .all() as SessionEventRow[]
+    ).filter((r) => metadata.has(`session:note:${r.session_id}:${r.id}`));
+    return this.visibleEvents(rows, limit, taskId)
+      .reverse()
+      .map((row) => ({
+        id: row.id,
+        sessionId: row.session_id,
+        eventType: row.event_type,
+        content: row.content,
+        relatedFiles: row.related_files,
+        createdAt: row.created_at,
+        namespace: row.lifecycle?.namespace,
+        expiresAt: row.lifecycle?.expiresAt
+      }));
+  }
+
+  public getRecentEvents(sessionId: string, limit: number = 10, taskId?: string): SessionEvent[] {
     const stmt = this.db.prepare(`
       SELECT * FROM session_events
       WHERE session_id = ?
       ORDER BY created_at DESC
-      LIMIT ?
+
     `);
-    const rows = stmt.all(sessionId, limit) as SessionEventRow[];
-    return rows.reverse().map((row) => ({
-      id: row.id,
-      sessionId: row.session_id,
-      eventType: row.event_type,
-      content: row.content,
-      relatedFiles: row.related_files,
-      createdAt: row.created_at
-    }));
+    const rows = stmt.all(sessionId) as SessionEventRow[];
+    return this.visibleEvents(rows, limit, taskId)
+      .reverse()
+      .map((row) => ({
+        id: row.id,
+        sessionId: row.session_id,
+        eventType: row.event_type,
+        content: row.content,
+        relatedFiles: row.related_files,
+        createdAt: row.created_at,
+        namespace: row.lifecycle?.namespace,
+        expiresAt: row.lifecycle?.expiresAt
+      }));
   }
 
   public searchSessionEvents(
@@ -153,18 +202,19 @@ export class SessionStore {
       params.push(sessionId);
     }
 
-    sql += ' ORDER BY score LIMIT ?';
-    params.push(limit);
+    sql += ' ORDER BY score';
 
     const stmt = this.db.prepare(sql);
     const rows = stmt.all(...params) as SessionEventRow[];
-    return rows.map((row) => ({
+    return this.visibleEvents(rows, limit).map((row) => ({
       id: row.id,
       sessionId: row.session_id,
       eventType: row.event_type,
       content: row.content,
       relatedFiles: row.related_files,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      namespace: row.lifecycle?.namespace,
+      expiresAt: row.lifecycle?.expiresAt
     }));
   }
 

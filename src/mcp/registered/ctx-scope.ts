@@ -1,5 +1,8 @@
 import { listKnowledge } from '../../core/knowledge/review.js';
-import { compactKnowledgeMetadata } from '../../core/knowledge/write-context.js';
+import {
+  compactKnowledgeMetadata,
+  knowledgeIsVisible
+} from '../../core/knowledge/write-context.js';
 import { z } from 'zod';
 
 import { getErrorMessage } from '../../utils/errors.js';
@@ -14,10 +17,12 @@ export default function register(c: WorkspaceKnowledgeContext): void {
     async (args) => {
       try {
         const scope = scopeFor(args);
-        const metadata = listKnowledge({ scope }).flatMap((record) => {
-          const fields = compactKnowledgeMetadata(record);
-          return Object.keys(fields).length ? [{ id: record.id, ...fields }] : [];
-        });
+        const metadata = listKnowledge({ scope })
+          .filter((r) => knowledgeIsVisible(r))
+          .flatMap((record) => {
+            const fields = compactKnowledgeMetadata(record);
+            return Object.keys(fields).length ? [{ id: record.id, ...fields }] : [];
+          });
         const knowledge = metadata.length ? { knowledge: metadata } : {};
         if (args.verbose) return result({ ...scope, ...knowledge, catalog: context.catalog?.() });
         const catalog = context.catalog?.() as

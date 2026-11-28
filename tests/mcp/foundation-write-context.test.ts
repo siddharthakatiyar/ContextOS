@@ -61,6 +61,7 @@ it('persists MCP/environment and deterministic contexts, then round-trips the CL
         .get(path.join(a.rootPath, 'src', file)) as { id: string };
       return entityRef(a.repoId, 'chunk', row.id);
     };
+    const expiresAt = Date.now() + 60_000;
     const linked = await client.callTool({
       name: 'ctx_link',
       arguments: {
@@ -74,7 +75,7 @@ it('persists MCP/environment and deterministic contexts, then round-trips the CL
         model: 'explicit-model',
         status: 'proposed',
         namespace: 'task',
-        expires_at: 999
+        expires_at: expiresAt
       }
     });
     expect(linked.isError).not.toBe(true);
@@ -85,7 +86,7 @@ it('persists MCP/environment and deterministic contexts, then round-trips the CL
         model: 'explicit-model',
         status: 'proposed',
         namespace: 'task',
-        expiresAt: 999
+        expiresAt
       })
     ]);
     const chunks = new ChunksRepo(resolve(b.repoId).db);

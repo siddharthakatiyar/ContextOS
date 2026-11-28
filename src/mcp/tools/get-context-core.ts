@@ -15,6 +15,8 @@ import { globalSentRegistry } from '../../core/session/sent-registry.js';
 
 export interface GetContextOpts {
   maxTokens?: number;
+  taskId?: string;
+  includeProposed?: boolean;
   layers?: string[];
   outputFormat?: 'markdown' | 'xml';
   repoRoot?: string;
@@ -63,8 +65,13 @@ export async function executeGetContext(
     repoRoot
   });
 
-  const sessionChunks = await sessionManager.getSessionContext();
-  const knowledgeFacts = knowledgeStore.searchFacts(prompt, 2).map(prepareFactForContext);
+  const sessionChunks = await sessionManager.getSessionContext(opts.taskId);
+  knowledgeStore.setTaskContext(opts.taskId);
+  const knowledgeFacts = knowledgeStore
+    .searchFacts(prompt, Number.MAX_SAFE_INTEGER)
+    .filter((f) => f.status !== 'stale' && (opts.includeProposed || f.status !== 'proposed'))
+    .slice(0, 2)
+    .map(prepareFactForContext);
   result.chunks = mergeMemoryPipeline(result.chunks, sessionChunks, knowledgeFacts, result.intent)
     .map((chunk) => applyFactMetadata(chunk, knowledgeFacts))
     .sort((a, b) => b.score - a.score);

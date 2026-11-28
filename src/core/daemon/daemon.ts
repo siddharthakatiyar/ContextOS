@@ -1,3 +1,4 @@
+import { startExpiryScheduler } from '../knowledge/expiry-scheduler.js';
 import { startVerificationScheduler } from '../verify/scheduler.js';
 import net from 'net';
 import fs from 'fs';
@@ -57,6 +58,7 @@ export class ContextOSDaemon {
   private connections = 0;
   private clientSockets = new Set<net.Socket>();
   private gcTimer?: NodeJS.Timeout;
+  private expiryScheduler?: { stop: () => Promise<void> };
   private verificationScheduler?: { stop: () => Promise<void> };
   private stopping = false;
   private startupReady = false;
@@ -284,6 +286,10 @@ export class ContextOSDaemon {
           console.error(`Failed to start background index: ${getErrorMessage(error)}`);
         }
 
+        this.expiryScheduler = startExpiryScheduler(
+          home,
+          this.activeRepoId ? [this.activeRepoId] : undefined
+        );
         this.verificationScheduler = startVerificationScheduler(
           home,
           this.activeRepoId ? [this.activeRepoId] : undefined
@@ -353,6 +359,7 @@ export class ContextOSDaemon {
     if (this.server.listening) this.server.close();
 
     this.upgradeDrain = (async () => {
+      await this.expiryScheduler?.stop();
       await this.verificationScheduler?.stop();
       if (this.watcher) {
         await this.watcher.close();

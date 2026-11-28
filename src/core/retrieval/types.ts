@@ -11,6 +11,7 @@ export interface DetectedIntent {
 
 export interface RetrievalOptions {
   includeProposed?: boolean;
+  taskId?: string;
   selectedRepo?: boolean;
   limit?: number;
   maxChunks?: number;

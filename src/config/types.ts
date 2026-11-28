@@ -17,7 +17,7 @@ export interface PipelineConfig {
 }
 
 export interface ContextOSConfig {
-  knowledge?: { review?: boolean };
+  knowledge?: { review?: boolean; sessionTtlHours?: number };
   dbPath: string;
   globalContextDir: string;
 
@@ -70,7 +70,9 @@ export interface ContextOSConfig {
 /** Partial zod schema for config.json — validates known keys; unknown keys are stripped with a warning. */
 export const configJsonSchema = z
   .object({
-    knowledge: z.object({ review: z.boolean().optional() }).optional(),
+    knowledge: z
+      .object({ review: z.boolean().optional(), sessionTtlHours: z.number().positive().optional() })
+      .optional(),
     indexing: z.object({ infra: z.boolean().optional() }).optional(),
     dbPath: z.string().optional(),
     globalContextDir: z.string().optional(),

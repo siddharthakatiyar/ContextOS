@@ -46,7 +46,11 @@ export default function register(c: WorkspaceKnowledgeContext): void {
       if (!source) throw new Error('No selected view.');
       if (args.type === 'session_note') {
         const id = context.saveSession(source, args.content as string);
-        recordKnowledgeOperation('remember_session', id, resolveWriteContext(args));
+        recordKnowledgeOperation(
+          'remember_session',
+          id,
+          resolveWriteContext({ ...args, namespace: args.namespace ?? 'session' })
+        );
         context.clearCache();
         return writeResult(
           args,

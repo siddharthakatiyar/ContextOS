@@ -16,12 +16,12 @@ import { getErrorMessage } from '../../utils/errors.js';
 const PROMPT_CACHE_TTL_MS = 30_000;
 const PROMPT_CACHE_SIZE = 8;
 
-type CacheEntry = { at: number; text: string };
+type CacheEntry = { at: number; text: string; expiresAt: number };
 
 function cacheGet(promptCache: Map<string, CacheEntry>, key: string): string | null {
   const e = promptCache.get(key);
   if (!e) return null;
-  if (Date.now() - e.at > PROMPT_CACHE_TTL_MS) {
+  if (Date.now() - e.at > PROMPT_CACHE_TTL_MS || Date.now() >= e.expiresAt) {
     promptCache.delete(key);
     return null;
   }
@@ -31,9 +31,14 @@ function cacheGet(promptCache: Map<string, CacheEntry>, key: string): string | n
   return e.text;
 }
 
-function cacheSet(promptCache: Map<string, CacheEntry>, key: string, text: string): void {
+function cacheSet(
+  promptCache: Map<string, CacheEntry>,
+  key: string,
+  text: string,
+  expiresAt: number
+): void {
   if (promptCache.has(key)) promptCache.delete(key);
-  promptCache.set(key, { at: Date.now(), text });
+  promptCache.set(key, { at: Date.now(), text, expiresAt });
   while (promptCache.size > PROMPT_CACHE_SIZE) {
     const oldest = promptCache.keys().next().value;
     if (oldest === undefined) break;
@@ -70,6 +75,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
       "unindexed discovery (e.g. renaming across files, running commands). When output includes '### Also' " +
       'stubs with path:line ranges, expand with ctx_expand, ctx_symbol, or read_file.',
     {
+      task_id: z.string().optional(),
       include_proposed: z.boolean().optional(),
       prompt: z.string().describe("The user's coding question or task description"),
       max_tokens: z
@@ -101,9 +107,9 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           'Output format. Markdown is the default; XML is useful for clients that parse tags.'
         )
     },
-    async ({ prompt, max_tokens, layers, tier, output_format }) => {
+    async ({ prompt, max_tokens, layers, tier, output_format, task_id, include_proposed }) => {
       try {
-        const cacheKey = `${output_format}|${max_tokens}|${(layers || []).join(',')}|${prompt}`;
+        const cacheKey = `${task_id ?? process.env.CONTEXTOS_TASK_ID}|${include_proposed}|${output_format}|${max_tokens}|${(layers || []).join(',')}|${prompt}`;
         const cached = cacheGet(promptCache, cacheKey);
         if (cached) {
           return {
@@ -115,6 +121,8 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           prompt,
           {
             maxTokens: max_tokens,
+            taskId: task_id,
+            includeProposed: include_proposed,
             layers: layers as string[],
             outputFormat: output_format === 'xml' ? 'xml' : 'markdown',
             repoRoot,
@@ -123,7 +131,13 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           deps
         );
 
-        cacheSet(promptCache, cacheKey, text);
+        const expiries = [
+          ...knowledgeStore.getAllFacts(Number.MAX_SAFE_INTEGER).map((r) => r.expires_at),
+          ...sessionStore
+            .getRecentEvents(sessionManager.getSessionId(), Number.MAX_SAFE_INTEGER, task_id)
+            .map((r) => r.expiresAt)
+        ].filter((v): v is number => v != null);
+        cacheSet(promptCache, cacheKey, text, Math.min(Infinity, ...expiries));
 
         return {
           content: [

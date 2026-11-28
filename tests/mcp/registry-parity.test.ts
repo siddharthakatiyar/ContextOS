@@ -14,8 +14,12 @@ it.each([false, true])(
   'preserves ordered tool names and catalog bytes (legacy=%s)',
   async (legacy) => {
     const catalog = await workspaceToolCatalog(legacy);
-    const tools = JSON.parse(JSON.stringify(catalog.tools)) as typeof catalog.tools;
+    const tools = (JSON.parse(JSON.stringify(catalog.tools)) as typeof catalog.tools).filter(
+      (t) => t.name !== 'ctx_review'
+    );
     for (const tool of tools) {
+      if (['get_context', 'ctx_links', 'ctx_trace'].includes(tool.name))
+        delete tool.inputSchema.properties?.task_id;
       if (tool.name === 'ctx_links') delete tool.inputSchema.properties?.include_stale;
       if (
         [

@@ -49,7 +49,8 @@ export function rankSavedKnowledge(
   result: RetrievalResult,
   runtime: WorkspaceRuntime,
   graph: GraphStore,
-  legacyFacts: Map<string, KnowledgeFact[]> = new Map()
+  legacyFacts: Map<string, KnowledgeFact[]> = new Map(),
+  options: { includeProposed?: boolean } = { includeProposed: true }
 ): void {
   const scope = result.scope;
   if (!scope) return;
@@ -130,6 +131,7 @@ export function rankSavedKnowledge(
     }
   }
   for (const fact of facts) {
+    if (!options.includeProposed && fact.status === 'proposed') continue;
     const source =
       fact.scope === 'project' && fact.provenance === 'user'
         ? sources.find((s) => s.projectId === fact.scopeId)
@@ -152,6 +154,8 @@ export function rankSavedKnowledge(
       fact.evidence,
       `${status} knowledge`,
       compactKnowledgeMetadata({
+        namespace: fact.namespace,
+        expiresAt: fact.expiresAt,
         author: fact.author ?? undefined,
         taskId: fact.taskId ?? undefined,
         status
@@ -160,6 +164,7 @@ export function rankSavedKnowledge(
   }
   for (const source of sources) {
     for (const fact of legacyFacts.get(source.repoId) ?? []) {
+      if (!options.includeProposed && fact.status === 'proposed') continue;
       const role = fact.category === 'role' || fact.category === 'overview';
       if (fact.confidence < 0.6 && runtime.get(source).config.memoryInjection !== 'always')
         continue;
@@ -175,6 +180,8 @@ export function rankSavedKnowledge(
         [],
         `${fact.status} knowledge`,
         compactKnowledgeMetadata({
+          namespace: fact.namespace,
+          expiresAt: fact.expires_at,
           author: fact.author ?? undefined,
           taskId: fact.task_id ?? undefined,
           status: fact.status
@@ -200,6 +207,7 @@ export function rankSavedKnowledge(
     return label;
   };
   for (const link of links) {
+    if (!options.includeProposed && link.status === 'proposed') continue;
     const owner = parseRef(link.source)?.repoId;
     if (!owner) continue;
     const relevance = knowledgeRelevance(
@@ -216,7 +224,8 @@ export function rankSavedKnowledge(
       status,
       relevance,
       link.evidence,
-      `${status} relationship`
+      `${status} relationship`,
+      compactKnowledgeMetadata(link)
     );
   }
   const state = (s: string) => (s === 'verified' ? 0 : s === 'proposed' ? 1 : 2);

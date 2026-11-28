@@ -24,7 +24,21 @@ const DECAY_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 export class KnowledgeStore {
   private lastDecayAt = 0;
 
-  constructor(private db: DB) {}
+  constructor(
+    private db: DB,
+    private taskId?: string
+  ) {}
+  public setTaskContext(taskId?: string): void {
+    this.taskId = taskId;
+  }
+  private visibilityParams() {
+    return [
+      Date.now(),
+      (this.taskId ?? process.env.CONTEXTOS_TASK_ID)
+        ? `task:${this.taskId ?? process.env.CONTEXTOS_TASK_ID}`
+        : ''
+    ];
+  }
 
   public learnFact(
     fact: string,
@@ -39,8 +53,8 @@ export class KnowledgeStore {
       // Check if a similar fact exists (simple duplicate check for now, can be improved with embeddings)
       const existing = this.db
         .getInstance()
-        .prepare('SELECT id, fact FROM knowledge_facts WHERE fact = ?')
-        .get(fact) as { id: string; fact: string } | undefined;
+        .prepare('SELECT id, fact FROM knowledge_facts WHERE fact = ? AND namespace = ?')
+        .get(fact, metadata.namespace) as { id: string; fact: string } | undefined;
 
       if (existing) {
         // Reinforce existing fact
@@ -119,17 +133,18 @@ export class KnowledgeStore {
       SELECT k.*, f.rank
       FROM knowledge_facts_fts f
       JOIN knowledge_facts k ON f.rowid = k.rowid
-      WHERE knowledge_facts_fts MATCH ?
+      WHERE knowledge_facts_fts MATCH ? AND (k.expires_at IS NULL OR k.expires_at > ?) AND (substr(k.namespace,1,5) != 'task:' OR k.namespace = ?)
       ORDER BY CASE k.status WHEN 'verified' THEN 0 WHEN 'proposed' THEN 1 ELSE 2 END, f.rank ASC, k.confidence DESC, k.updated_at DESC
       LIMIT ?
     `
       )
-      .all(safeQuery, limit) as KnowledgeFact[];
+      .all(safeQuery, ...this.visibilityParams(), limit) as KnowledgeFact[];
+    const visibleFacts = facts;
 
-    if (facts.length > 0) {
+    if (visibleFacts.length > 0) {
       // Parameterized ID updates — no string interpolation (B3)
-      const placeholders = facts.map(() => '?').join(',');
-      const ids = facts.map((f) => f.id);
+      const placeholders = visibleFacts.map(() => '?').join(',');
+      const ids = visibleFacts.map((f) => f.id);
       this.db
         .getInstance()
         .prepare(
@@ -142,7 +157,7 @@ export class KnowledgeStore {
         .run(now, ...ids);
     }
 
-    return facts;
+    return visibleFacts;
   }
 
   public getRelevantFactsByCategory(category: string, limit: number = 5): KnowledgeFact[] {
@@ -153,12 +168,12 @@ export class KnowledgeStore {
       .prepare(
         `
       SELECT * FROM knowledge_facts
-      WHERE category = ? AND confidence > 0.3
+      WHERE category = ? AND confidence > 0.3 AND (expires_at IS NULL OR expires_at > ?) AND (substr(namespace,1,5) != 'task:' OR namespace = ?)
       ORDER BY confidence DESC, updated_at DESC
       LIMIT ?
     `
       )
-      .all(category, limit) as KnowledgeFact[];
+      .all(category, ...this.visibilityParams(), limit) as KnowledgeFact[];
   }
 
   public getAllFacts(limit: number = loadConfig().ftsLimit): KnowledgeFact[] {
@@ -167,11 +182,12 @@ export class KnowledgeStore {
       .prepare(
         `
       SELECT * FROM knowledge_facts
+      WHERE (expires_at IS NULL OR expires_at > ?) AND (substr(namespace,1,5) != 'task:' OR namespace = ?)
       ORDER BY confidence DESC
       LIMIT ?
     `
       )
-      .all(limit) as KnowledgeFact[];
+      .all(...this.visibilityParams(), limit) as KnowledgeFact[];
   }
 
   /**

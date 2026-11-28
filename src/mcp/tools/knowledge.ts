@@ -67,9 +67,12 @@ export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
           recordKnowledgeOperation(
             'remember_session',
             `session:note:${event.sessionId}:${event.id}`,
-            resolveMcpKnowledgeWriteContext(writeContext, {
-              clientName: server.server?.getClientVersion()?.name
-            })
+            resolveMcpKnowledgeWriteContext(
+              { ...writeContext, namespace: writeContext.namespace ?? 'session' },
+              {
+                clientName: server.server?.getClientVersion()?.name
+              }
+            )
           );
           return {
             content: [{ type: 'text', text: `Successfully saved context note to session memory.` }]
@@ -266,6 +269,7 @@ export function createWorkspaceKnowledgeContext(
     ) =>
     async (args: Record<string, unknown>) => {
       const graph = context.graph();
+      graph.setTaskContext(args.task_id as string | undefined);
       try {
         const output = result(await action(args, graph));
         // Send graph payloads once: repeating structuredContent as JSON text doubles
@@ -284,6 +288,7 @@ export function createWorkspaceKnowledgeContext(
     const source = scope.sources.find((s) => s.repoId === scope.activeRepoId) ?? scope.sources[0];
     return resolveMcpKnowledgeWriteContext(args, {
       clientName: server.server?.getClientVersion()?.name,
+      sessionTtlHours: loadConfig({ cwd: source?.rootPath }).knowledge?.sessionTtlHours,
       review: loadConfig({ cwd: source?.rootPath }).knowledge?.review
     });
   };

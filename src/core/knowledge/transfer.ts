@@ -3,7 +3,9 @@ import { knowledgeColumns } from './write-context.js';
 import type { KnowledgeFact } from '../memory/knowledge-store.js';
 
 export function exportKnowledgeFacts(db: Database.Database): KnowledgeFact[] {
-  return db.prepare('SELECT * FROM knowledge_facts ORDER BY id').all() as KnowledgeFact[];
+  return db
+    .prepare('SELECT * FROM knowledge_facts WHERE expires_at IS NULL OR expires_at > ? ORDER BY id')
+    .all(Date.now()) as KnowledgeFact[];
 }
 /** Old exports omitted facts entirely. Missing metadata retains verified/project defaults. */
 export function importKnowledgeFacts(
