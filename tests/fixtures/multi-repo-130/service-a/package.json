@@ -1,0 +1,10 @@
+{
+  "name": "@fixture/service-a",
+  "type": "module",
+  "exports": {
+    "./client": "./src/client.ts"
+  },
+  "dependencies": {
+    "@fixture/shared": "file:../shared"
+  }
+}

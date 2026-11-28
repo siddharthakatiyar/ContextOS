@@ -4,7 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { registerWorkspaceTools } from './workspace-tools.js';
 import type { WorkspaceRuntime } from '../core/workspace/runtime.js';
 
-/** Run the real registrations, without a repository or any handler execution. */
+/** Serialize the canonical tool-registry registrations without executing handlers or accessing storage. */
 export async function workspaceToolCatalog(legacyTools = false) {
   const unavailable = () => {
     throw new Error('Catalog generation must not access storage');

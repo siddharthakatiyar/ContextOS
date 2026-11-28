@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { migrateKnowledgeColumns } from '../knowledge/write-context.js';
 import { getErrorMessage } from '../../utils/errors.js';
 
 export const SCHEMA_SQL = `
@@ -503,6 +504,11 @@ function migrateToV7(db: Database.Database): void {
   setSchemaVersion(db, 7);
 }
 
+function migrateToV8(db: Database.Database): void {
+  migrateKnowledgeColumns(db, ['knowledge_facts']);
+  setSchemaVersion(db, 8);
+}
+
 export function applyMigrations(db: Database.Database) {
   // First ensure schema_version table exists
   db.exec(`
@@ -630,6 +636,7 @@ export function applyMigrations(db: Database.Database) {
       }
     }
     if (getSchemaVersion(db) === 6) migrateToV7(db);
+    if (getSchemaVersion(db) === 7) migrateToV8(db);
   });
 
   runMigrations();

@@ -1,36 +1,34 @@
+import { workspaceToolRegistry } from './tool-registry.js';
 import path from 'node:path';
-import fs from 'node:fs';
-import { DB, getContextOSHome } from '../core/storage/database.js';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { WorkspaceRuntime } from '../core/workspace/runtime.js';
 import type { RepositorySource, ScopeSelectors } from '../core/workspace/registry.js';
-import { retrieveWorkspace } from '../core/workspace/retrieval.js';
+
 import { entityRef, parseRef } from '../core/workspace/identity.js';
-import { compile } from '../core/compiler/index.js';
+
 import { SentRegistry } from '../core/session/sent-registry.js';
 import { SessionManager, SessionStore } from '../core/session/index.js';
 import { PromptsRepo } from '../core/storage/prompts-repo.js';
-import { KnowledgeStore } from '../core/memory/knowledge-store.js';
-import { mergeMemoryPipeline } from '../core/session/memory-merge.js';
+
 import { FeedbackTracker } from '../core/feedback/tracker.js';
 import { registerReadFileTool } from './tools/read-file.js';
 import { registerExpandTool } from './tools/expand.js';
 import { registerExecuteTool } from './tools/execute.js';
 import { registerGetGraphTools, registerLegacyGetGraphTools } from './tools/get-graph.js';
 import { registerListTopicsTool, registerLegacyListTopicsTool } from './tools/list-topics.js';
-import { registerUpdateStatusTool } from './tools/update-status.js';
+
 import { resolveWithinWorkspace } from '../utils/fs-guard.js';
 import { getErrorMessage } from '../utils/errors.js';
-import crypto from 'node:crypto';
-import { boundResponse } from './response-budget.js';
+
 import { registerLegacyReadTopicTool } from './tools/read-topic.js';
 import { registerSaveContextTool } from './tools/save-context.js';
 import { ChunksRepo } from '../core/storage/chunks-repo.js';
 import { GraphStore } from '../core/knowledge/graph-store.js';
-import { registerWorkspaceKnowledgeTools } from './tools/knowledge.js';
-import { ReadinessChangedError, unavailableError } from '../core/workspace/readiness.js';
+import { createWorkspaceKnowledgeContext } from './tools/knowledge.js';
+import { ReadinessChangedError } from '../core/workspace/readiness.js';
 
 type Handler = (args: Record<string, unknown>) => Promise<CallToolResult>;
 type Definition = { name: string; description: string; schema: z.ZodRawShape; handler: Handler };
@@ -49,11 +47,11 @@ const failure = (error: unknown): CallToolResult => ({
 });
 
 /** All mutable conversation state belongs to this MCP connection. */
-export function registerWorkspaceTools(
+export function createWorkspaceToolContext(
   server: McpServer,
   runtime: WorkspaceRuntime,
   options: { cwd: string; activeRepoId?: string; workspace?: string }
-): void {
+) {
   const originalServer = server;
   server = {
     tool: (name: string, description: string, schema: z.ZodRawShape, handler: Handler) =>
@@ -126,263 +124,7 @@ export function registerWorkspaceTools(
     }
     return select().sources[0];
   };
-  server.tool(
-    'get_context',
-    'Retrieve engineering context from the active repository, explicit repositories, or the entire workspace. Use repo/workspace/all_repos to select scope.',
-    {
-      prompt: z.string(),
-      group: z.string().optional(),
-      project: z.union([z.string(), z.array(z.string())]).optional(),
-      worktree: z.string().optional(),
-      branch: z.string().optional(),
-      all_worktrees: z.boolean().optional(),
-      repo: z.union([z.string(), z.array(z.string())]).optional(),
-      workspace: z.string().optional(),
-      all_repos: z.boolean().optional(),
-      max_tokens: z.number().int().positive().max(8000).optional(),
-      layers: z
-        .array(z.enum(['global', 'workspace', 'repo', 'session']))
-        .optional()
-        .default(['session', 'workspace', 'repo']),
-      tier: z.enum(['stub', 'full']).optional().default('stub'),
-      output_format: z.enum(['markdown', 'xml']).optional().default('markdown'),
-      explain: z.boolean().optional()
-    },
-    async (args) => {
-      try {
-        const scope = select({
-          repo: typeof args.repo === 'string' ? [args.repo] : args.repo,
-          workspace: args.workspace,
-          allRepos: args.all_repos,
-          group: args.group,
-          project: typeof args.project === 'string' ? [args.project] : args.project,
-          worktree: args.worktree,
-          branch: args.branch,
-          allWorktrees: args.all_worktrees
-        });
-        const knowledgeGraph = graph();
-        let graphRevision: number;
-        try {
-          knowledgeGraph.pruneInvalid({ viewIds: scope.repoIds });
-          graphRevision = knowledgeGraph.revision();
-        } finally {
-          knowledgeGraph.close();
-        }
-        const key = JSON.stringify([
-          graphRevision,
-          args,
-          scope.repoIds,
-          scope.activeRepoId,
-          runtime.registry.revision(),
-          scope.sources.map((s) => s.generation)
-        ]);
-        const cached = cache.get(key);
-        if (cached && Date.now() - cached.at < 30_000) {
-          try {
-            for (const source of scope.sources) runtime.get(source).assertReadable();
-            if (!cached.result.structuredContent?.partial) return cached.result;
-          } catch {
-            /* Recompute to isolate unavailable sources instead of returning stale cached content. */
-          }
-          cache.delete(key);
-        }
-        const result = await retrieveWorkspace(runtime, scope, args.prompt, {
-          layers: args.layers,
-          explain: args.explain
-        });
-        const markUnavailable = (source: RepositorySource, error: unknown) => {
-          result.unavailableSources ??= [];
-          if (!result.unavailableSources.some((item) => item.repoId === source.repoId))
-            result.unavailableSources.push({
-              repoId: source.repoId,
-              name: source.name,
-              error: getErrorMessage(error),
-              retryable: error instanceof ReadinessChangedError
-            });
-          result.partial = true;
-        };
-        for (const source of scope.sources) {
-          if (result.unavailableSources?.some((s) => s.repoId === source.repoId)) continue;
-          try {
-            const repo = runtime.get(source);
-            const state = session(source);
-            const sessionChunks = args.layers.includes('session')
-              ? await state.manager.getSessionContext()
-              : [];
-            repo.assertReadable();
-            const facts = args.layers.includes('repo')
-              ? new KnowledgeStore(repo.db).searchFacts(args.prompt, 2)
-              : [];
-            const memories = mergeMemoryPipeline([], sessionChunks, facts, result.intent).map(
-              (chunk) => ({
-                ...chunk,
-                id: entityRef(source.repoId, 'memory', chunk.id),
-                localId: chunk.id,
-                repoId: source.repoId,
-                repoName: source.name,
-                relativePath: chunk.sourceFile,
-                layer: chunk.sourceFile === 'memory.fact' ? ('repo' as const) : chunk.layer
-              })
-            );
-            result.chunks.push(...memories);
-            state.store.addEvent({
-              sessionId: state.manager.getSessionId(),
-              eventType: 'user_prompt',
-              content: args.prompt.slice(0, 2000),
-              relatedFiles: null
-            });
-          } catch (error) {
-            markUnavailable(source, error);
-          }
-        }
-        // Session retrieval is asynchronous: a checkout can change after the core search.
-        for (const source of scope.sources) {
-          if (result.unavailableSources?.some((item) => item.repoId === source.repoId)) continue;
-          try {
-            runtime.get(source).assertReadable();
-          } catch (error) {
-            markUnavailable(source, error);
-          }
-        }
-        const failed = new Set(result.unavailableSources?.map((source) => source.repoId));
-        result.chunks = result.chunks.filter((chunk) => !chunk.repoId || !failed.has(chunk.repoId));
-        result.expandedEntities = result.expandedEntities.filter(
-          (entity) => !entity.repoId || !failed.has(entity.repoId)
-        );
-        result.knowledgeLinks = result.knowledgeLinks?.filter((link) =>
-          link.evidence.every((item) => !failed.has(item.viewId))
-        );
-        result.learnedLinks = result.learnedLinks?.filter((link) =>
-          link.evidence.every((item) => !failed.has(item.viewId))
-        );
-        result.linkSuggestions = result.linkSuggestions?.filter(
-          (item) => !failed.has(parseRef(item.source)?.repoId ?? '')
-        );
-        if (result.explanation) {
-          for (const ref of Object.keys(result.explanation.chunks)) {
-            const owner = /^contextos:([^:]+):/.exec(ref)?.[1];
-            if (owner && failed.has(owner)) delete result.explanation.chunks[ref];
-          }
-        }
-        if (scope.sources.every((source) => failed.has(source.repoId)))
-          throw unavailableError(
-            'All selected views changed or became unavailable during retrieval; refresh and retry.',
-            result.unavailableSources ?? []
-          );
-        for (const chunk of result.chunks) {
-          if (!chunk.repoId || !chunk.localId || !chunk.relativePath) continue;
-          const fileKey = chunk.repoId + ':' + chunk.sourceFile;
-          const entry = recent.get(fileKey);
-          if (entry) entry.ids.push(chunk.localId);
-          else recent.set(fileKey, { ids: [chunk.localId], at: Date.now() });
-        }
-        if (recent.size > 200) recent.clear();
-        const responseSource =
-          scope.sources.find((s) => s.repoId === scope.activeRepoId && !failed.has(s.repoId)) ??
-          scope.sources.find((s) => !failed.has(s.repoId))!;
-        const responseConfig = runtime.get(responseSource).config;
-        const requestedBudget = args.max_tokens ?? Math.min(responseConfig.maxTokenBudget, 8000);
-        const budget = args.tier === 'stub' ? Math.min(requestedBudget, 250) : requestedBudget;
-        const compiled = compile(result, {
-          maxTokens: budget,
-          maxExactTokens:
-            args.max_tokens !== undefined || args.tier === 'stub'
-              ? budget
-              : Math.min(responseConfig.maxExactTokenBudget, 8000),
-          framingReserve: responseConfig.framingReserve,
-          sentRegistry: sent,
-          outputFormat: args.output_format,
-          // The included IDs also drive the compact hit list, even without inspector output.
-          explain: true
-        });
-        for (const source of scope.sources) {
-          if (result.unavailableSources?.some((s) => s.repoId === source.repoId)) continue;
-          const state = session(source);
-          state.prompts.insert({
-            id: crypto.randomUUID(),
-            prompt: args.prompt.slice(0, 2000),
-            extractedConcepts: JSON.stringify(result.intent.concepts),
-            retrievedChunkIds: JSON.stringify(
-              result.chunks.filter((c) => c.repoId === source.repoId).map((c) => c.id)
-            ),
-            compiledTokenCount: compiled.tokenCount,
-            latencyMs: result.latencyMs,
-            createdAt: Date.now()
-          });
-        }
-        const omitted = scope.sources
-          .filter((s) => !compiled.output.includes(s.name + '/'))
-          .map((s) => s.name);
-        const warning = result.partial
-          ? `Partial results: ${result.unavailableSources?.map((s) => `${s.name}: ${s.error}`).join('; ')}`
-          : '';
-        const text =
-          (warning
-            ? args.output_format === 'xml'
-              ? `<!-- ${warning.replace(/--/g, '—')} -->\n`
-              : warning + '\n\n'
-            : '') + compiled.output;
-        const output: CallToolResult = {
-          ...response(text),
-          structuredContent: {
-            scope: {
-              workspaceId: scope.workspaceId,
-              repoIds: scope.repoIds,
-              activeRepoId: scope.activeRepoId
-            },
-            partial: result.partial,
-            unavailableSources: result.unavailableSources,
-            omittedRepositories: omitted,
-            tokens: compiled.tokenCount,
-            chunks: result.chunks
-              .filter((chunk) =>
-                compiled.diagnostics?.includedChunks.some((item) => item.id === chunk.id)
-              )
-              .map((chunk) => ({
-                ref: chunk.id,
-                viewId: chunk.repoId,
-                projectId:
-                  chunk.projectId ??
-                  scope.sources.find((s) => s.repoId === chunk.repoId)?.projectId,
-                projectName:
-                  chunk.repoName ?? scope.sources.find((s) => s.repoId === chunk.repoId)?.name,
-                ...(chunk.sourceFile === 'memory.fact' ? { text: chunk.content } : {}),
-                worktreeId: chunk.worktreeId,
-                branch: chunk.branch,
-                head: chunk.head,
-                relativePath: chunk.relativePath,
-                sourceFile: chunk.sourceFile,
-                startLine: chunk.startLine,
-                endLine: chunk.endLine
-              })),
-            sources: scope.sources.map((s) => ({
-              viewId: s.repoId,
-              projectId: s.projectId,
-              name: s.name,
-              generation: s.generation,
-              checkoutGeneration: s.checkoutGeneration,
-              worktreeId: s.worktreeId,
-              branch: s.branch,
-              state: s.state
-            })),
-            knowledgeLinks: result.knowledgeLinks,
-            learnedLinks: result.learnedLinks,
-            linkSuggestions: result.linkSuggestions,
-            ...(args.explain
-              ? { explanation: result.explanation, compilation: compiled.diagnostics }
-              : {})
-          }
-        };
-        if (args.max_tokens !== undefined) boundResponse(output, args.max_tokens);
-        cache.set(key, { at: Date.now(), result: output });
-        while (cache.size > 8) cache.delete(cache.keys().next().value!);
-        return output;
-      } catch (error) {
-        if (error instanceof ReadinessChangedError) throw error;
-        return failure(error);
-      }
-    }
-  );
+
   const viewSchema = {
     repo: z.string().optional(),
     project: z.string().optional(),
@@ -454,7 +196,10 @@ export function registerWorkspaceTools(
   // use a selected repository, which serve validates before accepting connections.
   const initial = choose();
   legacyEnabled = runtime.get(initial).config.legacyTools;
-  for (const definition of definitions(initial)) {
+  const registerViewTool = (name: string) => {
+    const definition = definitions(initial).find((d) => d.name === name);
+    if (!definition) return;
+
     server.tool(
       definition.name,
       definition.description,
@@ -542,231 +287,107 @@ export function registerWorkspaceTools(
         }
       }
     );
-  }
-  server.tool(
-    'reindex_context',
-    'Index a file in the selected repository through its indexing owner.',
-    {
-      path: z.string(),
-      ...viewSchema,
-      layer: z.enum(['global', 'workspace', 'repo', 'session']).optional().default('repo'),
-      workspaceName: z.string().optional()
+  };
+
+  const knowledgeContext = createWorkspaceKnowledgeContext(server, {
+    select,
+    graph,
+    resolve: (viewId) => {
+      const source = runtime.registry.resolve(viewId);
+      return { source, db: runtime.get(source).db.getInstance() };
     },
-    async (args) => {
-      try {
-        const source = chooseView(args, args.path);
-        const result = await runtime.get(source).request({
-          action: 'file',
-          file: args.path,
-          layer: args.layer,
-          workspaceName: args.workspaceName
-        });
-        cache.clear();
-        sent.invalidate();
-        return response(JSON.stringify(result));
-      } catch (error) {
-        return failure(error);
+    clearCache: () => cache.clear(),
+    defaultGroup: options.workspace,
+    catalog: () => {
+      const views = options.workspace
+        ? runtime.registry.list(options.workspace, true)
+        : runtime.registry.listAll().filter((source) => source.active);
+      const projects = new Set(views.map((source) => source.projectId));
+      return {
+        groups: options.workspace
+          ? [runtime.registry.workspace(options.workspace)]
+          : runtime.registry.workspaces(),
+        projects: runtime.registry.projects().filter((project) => projects.has(project.id)),
+        worktrees: runtime.registry
+          .worktrees()
+          .filter((worktree) => projects.has(worktree.projectId)),
+        views
+      };
+    },
+    saveSession: (source, content) => {
+      const state = session(source);
+      const event = state.store.addEvent({
+        sessionId: state.manager.getSessionId(),
+        eventType: 'system_response',
+        content,
+        relatedFiles: null
+      });
+      return `session:note:${event.sessionId}:${event.id}`;
+    },
+    forgetSession: (id, sources) => {
+      const ref = parseRef(id);
+      const local = ref?.kind === 'memory' ? ref.localId : id.replace(/^memory:/, '');
+      const note = /^session:note:([^:]+):(\d+)$/.exec(local);
+      const events = /^session:events:([^:]+)$/.exec(local);
+      if (!note && !events) return false;
+      const candidates = ref ? sources.filter((s) => s.repoId === ref.repoId) : sources;
+      let removed = false;
+      for (const source of candidates) {
+        const db = runtime.get(source).db.getInstance();
+        const change = note
+          ? db
+              .prepare(
+                "DELETE FROM session_events WHERE session_id=? AND id=? AND event_type='system_response'"
+              )
+              .run(note[1], Number(note[2]))
+          : db
+              .prepare(
+                "DELETE FROM session_events WHERE session_id=? AND event_type='system_response'"
+              )
+              .run(events![1]);
+        removed ||= change.changes > 0;
       }
+      return removed;
     }
-  );
-  for (const toolName of ['contextos_status', 'get_status'])
-    server.tool(
-      toolName,
-      'Show selected repository or workspace indexing status.',
-      {
-        ...viewSchema,
-        group: z.string().optional(),
-        workspace: z.string().optional(),
-        all_worktrees: z.boolean().optional(),
-        all_repos: z.boolean().optional()
-      },
-      async (args) => {
-        try {
-          const scope = select({
-            repo: args.repo ? [args.repo] : undefined,
-            workspace: args.workspace,
-            allRepos: args.all_repos,
-            group: args.group,
-            project: args.project ? [args.project] : undefined,
-            worktree: args.worktree,
-            branch: args.branch,
-            allWorktrees: args.all_worktrees
-          });
-          const rows = scope.sources.map((source) => {
-            try {
-              return runtime.get(source).status();
-            } catch (error) {
-              return { ...source, state: 'unavailable', lastError: getErrorMessage(error) };
-            }
-          });
-          return response(
-            JSON.stringify(
-              { repositories: rows, ready: rows.every((row) => row.state === 'ready') },
-              null,
-              2
-            )
-          );
-        } catch (error) {
-          return failure(error);
-        }
-      }
-    );
-  const knowledgeDefinitions = capture((mock) =>
-    registerWorkspaceKnowledgeTools(mock, {
-      select,
-      graph,
-      resolve: (viewId) => {
-        const source = runtime.registry.resolve(viewId);
-        return { source, db: runtime.get(source).db.getInstance() };
-      },
-      clearCache: () => cache.clear(),
-      defaultGroup: options.workspace,
-      catalog: () => {
-        const views = options.workspace
-          ? runtime.registry.list(options.workspace, true)
-          : runtime.registry.listAll().filter((source) => source.active);
-        const projects = new Set(views.map((source) => source.projectId));
-        return {
-          groups: options.workspace
-            ? [runtime.registry.workspace(options.workspace)]
-            : runtime.registry.workspaces(),
-          projects: runtime.registry.projects().filter((project) => projects.has(project.id)),
-          worktrees: runtime.registry
-            .worktrees()
-            .filter((worktree) => projects.has(worktree.projectId)),
-          views
-        };
-      },
-      saveSession: (source, content) => {
-        const state = session(source);
-        const event = state.store.addEvent({
-          sessionId: state.manager.getSessionId(),
-          eventType: 'system_response',
-          content,
-          relatedFiles: null
-        });
-        return `session:note:${event.sessionId}:${event.id}`;
-      },
-      forgetSession: (id, sources) => {
-        const ref = parseRef(id);
-        const local = ref?.kind === 'memory' ? ref.localId : id.replace(/^memory:/, '');
-        const note = /^session:note:([^:]+):(\d+)$/.exec(local);
-        const events = /^session:events:([^:]+)$/.exec(local);
-        if (!note && !events) return false;
-        const candidates = ref ? sources.filter((s) => s.repoId === ref.repoId) : sources;
-        let removed = false;
-        for (const source of candidates) {
-          const db = runtime.get(source).db.getInstance();
-          const change = note
-            ? db
-                .prepare(
-                  "DELETE FROM session_events WHERE session_id=? AND id=? AND event_type='system_response'"
-                )
-                .run(note[1], Number(note[2]))
-            : db
-                .prepare(
-                  "DELETE FROM session_events WHERE session_id=? AND event_type='system_response'"
-                )
-                .run(events![1]);
-          removed ||= change.changes > 0;
-        }
-        return removed;
-      }
-    })
-  );
-  for (const definition of knowledgeDefinitions)
-    server.tool(definition.name, definition.description, definition.schema, definition.handler);
-  if (legacyEnabled) {
-    const remember = knowledgeDefinitions.find((definition) => definition.name === 'ctx_remember')!;
-    server.tool(
-      'learn_fact',
-      'Deprecated alias for verified ctx_remember. Code facts require evidence and expected_generations. Use provenance=user only for an explicit user decision or preference.',
-      {
-        ...Object.fromEntries(
-          Object.entries(remember.schema).filter(([key]) => !['content', 'type'].includes(key))
-        ),
-        fact: z.string()
-      },
-      (args) => remember.handler({ ...args, content: args.fact, type: 'cross_session_fact' })
-    );
-    const forget = knowledgeDefinitions.find((definition) => definition.name === 'ctx_forget')!;
-    server.tool(
-      'forget_fact',
-      'Deprecated alias for ctx_forget; removes one fact within the selected scope.',
-      forget.schema,
-      forget.handler
-    );
-    server.tool(
-      'rate_chunk',
-      'Rate a chunk in its owning project/worktree. Qualified chunk references are preferred; historical bare IDs resolve against the active or selected view.',
-      {
-        ...viewSchema,
-        chunk_id: z.string(),
-        adjustment: z.number().min(-5).max(5),
-        reason: z.string().optional()
-      },
-      async (args) => {
-        try {
-          const ref = parseRef(args.chunk_id);
-          if (ref && ref.kind !== 'chunk')
-            throw new Error('Feedback requires a qualified chunk reference.');
-          const explicit = args.repo || args.project || args.worktree || args.branch;
-          if (ref?.repoId === 'global') {
-            if (explicit)
-              throw new Error('Global chunks cannot be rated with a project/worktree selector.');
-            const globalPath = path.join(getContextOSHome(), 'index.db');
-            if (!fs.existsSync(globalPath)) throw new Error('Global index is unavailable.');
-            const globalDb = new DB(globalPath);
-            try {
-              const chunk = new ChunksRepo(globalDb.getInstance()).getByIds([ref.localId])[0];
-              if (!chunk || chunk.layer !== 'global')
-                throw new Error('Global chunk does not exist in the shared global index.');
-              const id = new FeedbackTracker(globalDb).recordFeedback(
-                ref.localId,
-                args.adjustment,
-                args.reason
-              );
-              cache.clear();
-              return {
-                ...response('Recorded feedback.'),
-                structuredContent: {
-                  source: { repoId: 'global' },
-                  ref: entityRef('global', 'feedback', id),
-                  chunk: args.chunk_id
-                }
-              };
-            } finally {
-              globalDb.close();
-            }
-          }
-          const source = ref && !explicit ? choose(ref.repoId) : chooseView(args);
-          if (ref && ref.repoId !== source.repoId)
-            throw new Error('Chunk belongs to another selected project/worktree.');
-          const owner = runtime.get(source);
-          await owner.prepareRead();
-          const localId = ref?.localId ?? args.chunk_id;
-          if (!new ChunksRepo(owner.db.getInstance()).getByIds([localId]).length)
-            throw new Error('Chunk does not exist in the selected view.');
-          owner.assertReadable();
-          const id = new FeedbackTracker(owner.db).recordFeedback(
-            localId,
-            args.adjustment,
-            args.reason
-          );
-          cache.clear();
-          return {
-            ...response('Recorded feedback.'),
-            structuredContent: {
-              source,
-              ref: entityRef(source.repoId, 'feedback', id),
-              chunk: entityRef(source.repoId, 'chunk', localId)
-            }
-          };
-        } catch (error) {
-          return failure(error);
-        }
-      }
-    );
+  });
+  const knowledgeDefinitions = capture((mock) => {
+    const c = { ...knowledgeContext, server: mock };
+    for (const entry of workspaceToolRegistry) if (entry.kind === 'knowledge') entry.register(c);
+  });
+
+  return {
+    response,
+    failure,
+    server,
+    originalServer,
+    runtime,
+    options,
+    sent,
+    sessions,
+    recent,
+    cache,
+    session,
+    select,
+    graph,
+    choose,
+    viewSchema,
+    chooseView,
+    provenance,
+    legacyEnabled,
+    definitions,
+    initial,
+    knowledgeDefinitions,
+    registerViewTool,
+    knowledgeContext
+  };
+}
+export type WorkspaceToolContext = ReturnType<typeof createWorkspaceToolContext>;
+export function registerWorkspaceTools(
+  ...args: Parameters<typeof createWorkspaceToolContext>
+): void {
+  const c = createWorkspaceToolContext(...args);
+  for (const entry of workspaceToolRegistry) {
+    if (entry.kind === 'workspace') entry.register(c);
+    else entry.register(c.knowledgeContext);
   }
-  registerUpdateStatusTool(originalServer);
 }

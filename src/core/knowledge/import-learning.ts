@@ -1,3 +1,4 @@
+import type { KnowledgeWriteContext } from './write-context.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { isBuiltin } from 'node:module';
@@ -33,7 +34,8 @@ export async function learnRetrievedImports(
   views: RepositorySource[],
   resolve: (id: string) => GraphSource,
   chunks: ScoredChunk[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  writeContext: KnowledgeWriteContext = {}
 ): Promise<ImportLearningResult> {
   const result: ImportLearningResult = { learnedLinks: [], linkSuggestions: [], sourceRefs: [] };
   if (views.length < 2) return result;
@@ -83,6 +85,7 @@ export async function learnRetrievedImports(
         if (!target || target.repoId === view.repoId) continue;
         const saved = graph.linkResolvedImport(
           {
+            ...writeContext,
             source,
             target: inspected.target,
             type: 'imports',

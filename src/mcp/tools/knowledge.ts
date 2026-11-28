@@ -1,3 +1,6 @@
+import { knowledgeWriteSchema } from '../knowledge-write-schema.js';
+import { resolveKnowledgeWriteContext } from '../../core/knowledge/write-context.js';
+import { workspaceToolRegistry } from '../tool-registry.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { DB } from '../../core/storage/database.js';
@@ -6,8 +9,7 @@ import { SessionStore } from '../../core/session/session-store.js';
 import { getErrorMessage } from '../../utils/errors.js';
 import path from 'node:path';
 import type { VerifiedLink } from '../../core/knowledge/graph-store.js';
-import { entityRef, parseRef } from '../../core/workspace/identity.js';
-import { KnowledgeInspector } from '../../core/knowledge/inspector.js';
+import { parseRef } from '../../core/workspace/identity.js';
 
 export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
   const primaryDb = dbs[0];
@@ -18,13 +20,14 @@ export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
     'ctx_remember',
     'Save important notes or context to memory. Can be session-specific (type=session_note) or cross-session (type=cross_session_fact). Use type=forget_fact to remove a fact.',
     {
+      ...knowledgeWriteSchema,
       type: z
         .enum(['session_note', 'cross_session_fact', 'forget_fact'])
         .describe('Type of memory operation'),
       content: z.string().describe('The note, fact, or fact ID to operate on'),
       category: z.string().optional().describe('Optional category for cross_session_fact')
     },
-    async ({ type, content, category }) => {
+    async ({ type, content, category, ...writeContext }) => {
       try {
         if (type === 'forget_fact') {
           const success = store.forgetFact(content);
@@ -33,7 +36,11 @@ export function registerKnowledgeTools(server: McpServer, dbs: DB[]) {
           }
           return { content: [{ type: 'text', text: `Fact ${content} not found.` }], isError: true };
         } else if (type === 'cross_session_fact') {
-          const id = store.learnFact(content, category || 'general');
+          const id = store.learnFact(
+            content,
+            category || 'general',
+            resolveKnowledgeWriteContext(writeContext)
+          );
           return { content: [{ type: 'text', text: `Successfully learned fact. ID: ${id}` }] };
         } else {
           let session = sessionStore.getLatestSession();
@@ -66,6 +73,7 @@ export function registerLegacyKnowledgeTools(server: McpServer, dbs: DB[]) {
     'learn_fact',
     'Store a cross-session memory fact. Use this to remember user preferences, architectural decisions, or recurring bugs across different chat sessions.',
     {
+      ...knowledgeWriteSchema,
       fact: z.string().describe('The fact to remember'),
       category: z
         .string()
@@ -73,9 +81,9 @@ export function registerLegacyKnowledgeTools(server: McpServer, dbs: DB[]) {
         .default('general')
         .describe('An optional category for the fact')
     },
-    async ({ fact, category }) => {
+    async ({ fact, category, ...writeContext }) => {
       try {
-        const id = store.learnFact(fact, category);
+        const id = store.learnFact(fact, category, resolveKnowledgeWriteContext(writeContext));
         return {
           content: [{ type: 'text', text: `Successfully learned fact. ID: ${id}` }]
         };
@@ -119,7 +127,7 @@ export function registerLegacyKnowledgeTools(server: McpServer, dbs: DB[]) {
 
 // Workspace tools deliberately open the small graph connection per operation. No connection
 // lifetime or mutable selection is shared with another MCP client.
-export function registerWorkspaceKnowledgeTools(
+export function createWorkspaceKnowledgeContext(
   server: McpServer,
   context: {
     select: (
@@ -139,7 +147,7 @@ export function registerWorkspaceKnowledgeTools(
     defaultGroup?: string;
     catalog?: () => unknown;
   }
-): void {
+) {
   const selectors = {
     group: z.string().optional(),
     project: z.union([z.string(), z.array(z.string())]).optional(),
@@ -236,413 +244,25 @@ export function registerWorkspaceKnowledgeTools(
         graph.close();
       }
     };
-  server.tool(
-    'ctx_scope',
-    'Discover the current group/project/worktree/branch views and their qualified IDs and indexing generations. Use generations for verified knowledge writes.',
-    { ...selectors, ...verbose, include_worktrees: z.boolean().optional().default(false) },
-    async (args) => {
-      try {
-        const scope = scopeFor(args);
-        if (args.verbose) return result({ ...scope, catalog: context.catalog?.() });
-        const catalog = context.catalog?.() as
-          { views?: typeof scope.sources; groups?: unknown[] } | undefined;
-        const views = [
-          ...new Map((catalog?.views ?? scope.sources).map((s) => [s.repoId, s])).values()
-        ];
-        const projects = [...new Set(views.map((s) => s.projectId))].map((projectId) => {
-          const candidates = views.filter((s) => s.projectId === projectId);
-          const source =
-            candidates.find((s) => scope.repoIds.includes(s.repoId)) ??
-            candidates.find((s) => s.active) ??
-            candidates[0];
-          return {
-            projectId,
-            name: source.name,
-            defaultViewId: source.repoId,
-            branch: source.branch,
-            state: source.state,
-            generation: source.generation,
-            ...(args.include_worktrees
-              ? { views: compactScope({ ...scope, sources: candidates }).views }
-              : {})
-          };
-        });
-        return result({
-          group: scope.groupId ?? scope.workspaceId ?? context.defaultGroup,
-          activeViewId: scope.activeRepoId,
-          counts: { projects: projects.length, views: views.length },
-          projects
-        });
-      } catch (error) {
-        return { ...result({ error: getErrorMessage(error) }), isError: true };
-      }
-    }
-  );
-  server.tool(
-    'ctx_link',
-    'Save a verified relationship after inspecting both endpoints and necessary dependency/routing/contract evidence. Matching names alone are insufficient. Save no guesses or ambiguous candidates. Writes validate source freshness, not semantic correctness.',
-    {
-      ...selectors,
-      ...verbose,
-      source: z.string(),
-      target: z.string(),
-      relationship: z.enum([
-        'imports',
-        'implements_contract',
-        'calls_api',
-        'publishes_event',
-        'consumes_event',
-        'reads_resource',
-        'writes_resource'
-      ]),
-      rationale: z.string().min(1),
-      evidence: z.array(z.string()).optional(),
-      expected_generations: z.record(z.string(), z.number().int().nonnegative())
-    },
-    wrap((args, graph) => {
-      const scope = scopeFor(args);
-      const link = graph.link(
-        {
-          source: args.source as string,
-          target: args.target as string,
-          type: args.relationship as import('../../core/knowledge/graph-store.js').LinkType,
-          rationale: args.rationale as string,
-          evidenceRefs: args.evidence as string[] | undefined,
-          expectedGenerations: args.expected_generations as Record<string, number>
-        },
-        scope.repoIds
-      );
-      context.clearCache();
-      return writeResult(
-        args,
-        {
-          link: args.verbose
-            ? link
-            : { id: link.id, type: link.type, source: link.source, target: link.target },
-          endpoints: [link.source, link.target].map((ref) => ({
-            ref,
-            name: scope.sources.find((s) => ref.startsWith(`contextos:${s.repoId}:`))?.name
-          })),
-          generations: Object.fromEntries(link.evidence.map((e) => [e.viewId, e.generation])),
-          warnings: []
-        },
-        scope
-      );
-    })
-  );
-  server.tool(
-    'ctx_links',
-    'Inspect verified connections within selected views. Defaults to 20 compact links with endpoint locations, 240-character rationales and evidence refs. Use verbose for full evidence metadata.',
-    {
-      ...selectors,
-      ...verbose,
-      refs: z.array(z.string()).optional(),
-      limit: z.number().int().min(1).max(500).default(20),
-      offset: z.number().int().nonnegative().default(0)
-    },
-    wrap((args, graph) => {
-      const scope = scopeFor(args);
-      const links = [
-        ...new Map(
-          graph
-            .listLinks({ viewIds: scope.repoIds, refs: args.refs as string[] | undefined })
-            .map((link) => [link.id, link])
-        ).values()
-      ].sort((a, b) => a.id.localeCompare(b.id));
-      const offset = (args.offset as number) ?? 0,
-        limit = (args.limit as number) ?? 20;
-      return {
-        links: links
-          .slice(offset, offset + limit)
-          .map((link) => (args.verbose ? link : compactLink(link))),
-        next_offset: offset + limit < links.length ? offset + limit : null,
-        total: links.length,
-        offset,
-        limit,
-        ...(args.verbose ? { scope } : {})
-      };
-    }, true)
-  );
-  server.tool(
-    'ctx_trace',
-    'Defaults to compact nodes and evidence refs; use verbose for full metadata. Trace saved, evidence-backed relationships across selected projects and worktrees. Returns ordered shortest witness paths, citations and explicit gaps; does not discover or invent connections. Incoming/outgoing follow stored edge direction; both can traverse edges in reverse and labels those steps.',
-    {
-      ...selectors,
-      ...verbose,
-      start: z.string(),
-      target: z.string().optional(),
-      direction: z.enum(['outgoing', 'incoming', 'both']).default('both'),
-      relationships: z
-        .array(
-          z.enum([
-            'imports',
-            'implements_contract',
-            'calls_api',
-            'publishes_event',
-            'consumes_event',
-            'reads_resource',
-            'writes_resource'
-          ])
-        )
-        .optional(),
-      bridge_same_file: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe(
-          'Opt in to explicitly inferred adjacency between chunks in the same file; never saves these steps as links.'
-        ),
-      max_depth: z.number().int().min(1).max(12).default(6),
-      max_nodes: z.number().int().min(1).max(500).default(50),
-      max_edges: z.number().int().min(1).max(1000).default(100),
-      max_paths: z.number().int().min(1).max(100).default(20)
-    },
-    wrap((args, graph) => {
-      const scope = scopeFor(args);
-      const trace = graph.trace(
-        {
-          start: args.start as string,
-          target: args.target as string | undefined,
-          direction: args.direction as 'outgoing' | 'incoming' | 'both',
-          relationships: args.relationships as
-            import('../../core/knowledge/graph-store.js').LinkType[] | undefined,
-          maxDepth: args.max_depth as number,
-          maxNodes: args.max_nodes as number,
-          maxEdges: args.max_edges as number,
-          maxPaths: args.max_paths as number,
-          bridgeSameFile: args.bridge_same_file as boolean
-        },
-        scope.repoIds
-      );
-      if (args.verbose) return trace;
-      return {
-        ...trace,
-        nodes: trace.nodes.map((node) => ({
-          ref: node.ref,
-          project: node.project,
-          file: node.relativePath,
-          lines: [node.startLine ?? null, node.endLine ?? null]
-        })),
-        links: trace.links.map((link) => ({
-          ...compactLink(link),
-          source: link.source,
-          target: link.target
-        }))
-      };
-    }, true)
-  );
-  server.tool(
-    'ctx_resolve_import',
-    'Inspect one exact local import on demand. Supports relative JS/TS imports, explicit file:/link: package dependencies and local Go module replacements. Returns indexed export locations and manifest evidence without saving edges. Inspect source binding/call-site use before asserting a symbol is consumed; unsupported or ambiguous mappings fail closed.',
-    {
-      ...selectors,
-      source: z.string(),
-      specifier: z.string().min(1),
-      symbol: z.string().min(1).optional(),
-      mode: z.enum(['import', 'require', 'types']).default('import')
-    },
-    wrap(async (args, graph) => {
-      const scope = scopeFor(args);
-      if (!context.resolve) throw new Error('Import inspection requires a workspace runtime.');
-      const inspector = new KnowledgeInspector(graph, scope.sources, context.resolve);
-      return {
-        ...(await inspector.resolveImport({
-          source: args.source as string,
-          specifier: args.specifier as string,
-          symbol: args.symbol as string | undefined,
-          mode: args.mode as 'import' | 'require' | 'types'
-        })),
-        scope
-      };
-    })
-  );
-  server.tool(
-    'ctx_contract',
-    'Inspect an indexed OpenAPI JSON/YAML or protobuf contract on demand. Returns HTTP methods, paths, schemas, or fully qualified gRPC operations and streaming signatures with fresh source evidence. Does not infer client/server connections, fetch external references or save edges; use ctx_link after establishing the connection.',
-    {
-      ...selectors,
-      ref: z.string(),
-      operation: z.string().min(1).optional(),
-      limit: z.number().int().min(1).max(100).default(20),
-      include_schemas: z.boolean().default(false)
-    },
-    wrap((args, graph) => {
-      const scope = scopeFor(args);
-      if (!context.resolve) throw new Error('Contract inspection requires a workspace runtime.');
-      return {
-        ...new KnowledgeInspector(graph, scope.sources, context.resolve).contract(
-          args.ref as string,
-          {
-            operation: args.operation as string | undefined,
-            limit: args.limit as number,
-            includeSchemas: args.include_schemas as boolean
-          }
-        ),
-        scope
-      };
-    })
-  );
-  server.tool(
-    'ctx_unlink',
-    'Remove one specific incorrect or obsolete verified connection.',
-    { ...selectors, ...verbose, id: z.string() },
-    wrap((args, graph) => {
-      const scope = scopeFor(args);
-      const link = graph.getLink(args.id as string, scope.repoIds);
-      const removed = graph.unlink(args.id as string, scope.repoIds);
-      context.clearCache();
-      return writeResult(
-        args,
-        {
-          removed,
-          id: args.id ?? args.content,
-          ...(link
-            ? {
-                type: link.type,
-                endpoints: [link.source, link.target].map((ref) => ({
-                  ref,
-                  name: scope.sources.find((source) =>
-                    ref.startsWith(`contextos:${source.repoId}:`)
-                  )?.name
-                }))
-              }
-            : {}),
-          ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
-        },
-        scope
-      );
-    })
-  );
-  server.tool(
-    'ctx_remember',
-    'Save useful durable verified facts with explicit provenance. Code facts require indexed evidence and current generations. User provenance is only for an explicit user decision or preference. Defaults to the active view. Session notes remain temporary.',
-    {
-      ...selectors,
-      ...verbose,
-      type: z
-        .enum(['session_note', 'cross_session_fact', 'forget_fact'])
-        .default('cross_session_fact'),
-      content: z.string(),
-      category: z.string().optional(),
-      scope: z
-        .enum(['view', 'project', 'group'])
-        .default('view')
-        .describe(
-          'View isolates branch/worktree facts. Explicit user decisions with project/group scope apply across branches; code evidence remains bound to its selected views.'
-        ),
-      provenance: z.enum(['code', 'user']).default('code'),
-      evidence: z.array(z.string()).optional(),
-      expected_generations: z.record(z.string(), z.number().int().nonnegative()).optional()
-    },
-    wrap((args, graph) => {
-      const scope = scopeFor(args);
-      const source = scope.sources.find((s) => s.repoId === scope.activeRepoId) ?? scope.sources[0];
-      if (!source) throw new Error('No selected view.');
-      if (args.type === 'session_note') {
-        const id = context.saveSession(source, args.content as string);
-        context.clearCache();
-        return writeResult(
-          args,
-          {
-            saved: 'session_note',
-            id,
-            ref: entityRef(source.repoId, 'memory', id),
-            type: 'session_note',
-            endpoints: [{ ref: entityRef(source.repoId, 'memory', id), name: source.name }]
-          },
-          scope
-        );
-      }
-      if (args.type === 'forget_fact') {
-        const removed =
-          context.forgetSession?.(args.content as string, scope.sources) ||
-          graph.forget(args.content as string, scope.repoIds, {
-            projectIds: scope.sources.map((source) => source.projectId),
-            groupId: scope.groupId ?? scope.workspaceId
-          });
-        context.clearCache();
-        return writeResult(
-          args,
-          {
-            removed,
-            id: args.id ?? args.content,
-            ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
-          },
-          scope
-        );
-      }
-      const kind = args.scope as 'view' | 'project' | 'group';
-      const projectId =
-        (source as typeof source & { projectId?: string }).projectId ?? source.repoId;
-      const groupId = scope.workspaceId;
-      if (kind === 'group' && !groupId)
-        throw new Error('Group facts require an explicitly selected group.');
-      const viewIds =
-        kind === 'view'
-          ? [source.repoId]
-          : kind === 'project'
-            ? scope.sources
-                .filter(
-                  (s) =>
-                    ((s as typeof s & { projectId?: string }).projectId ?? s.repoId) === projectId
-                )
-                .map((s) => s.repoId)
-            : scope.repoIds;
-      const fact = graph.remember(
-        {
-          content: args.content as string,
-          scope: kind,
-          scopeId: kind === 'view' ? source.repoId : kind === 'project' ? projectId : groupId!,
-          viewIds,
-          provenance: args.provenance as 'code' | 'user',
-          category: args.category as string | undefined,
-          evidenceRefs: args.evidence as string[] | undefined,
-          expectedGenerations: args.expected_generations as Record<string, number> | undefined
-        },
-        scope.repoIds,
-        {
-          projectIds: scope.sources.map((source) => source.projectId),
-          groupId: scope.groupId ?? scope.workspaceId
-        }
-      );
-      context.clearCache();
-      return writeResult(
-        args,
-        {
-          id: fact.id,
-          fact: args.verbose ? fact : { id: fact.id, scope: fact.scope, scopeId: fact.scopeId },
-          type: 'cross_session_fact',
-          endpoints: [{ ref: entityRef(source.repoId, 'fact', fact.id), name: source.name }],
-          generations: Object.fromEntries(fact.evidence.map((e) => [e.viewId, e.generation])),
-          warnings: []
-        },
-        scope
-      );
-    })
-  );
-  server.tool(
-    'ctx_forget',
-    'Remove one specific saved durable fact.',
-    { ...selectors, ...verbose, id: z.string() },
-    wrap((args, graph) => {
-      const scope = scopeFor(args);
-      const removed =
-        context.forgetSession?.(args.id as string, scope.sources) ||
-        graph.forget(args.id as string, scope.repoIds, {
-          projectIds: scope.sources.map((source) => source.projectId),
-          groupId: scope.groupId ?? scope.workspaceId
-        });
-      context.clearCache();
-      return writeResult(
-        args,
-        {
-          removed,
-          type: 'memory',
-          id: args.id ?? args.content,
-          ...(!removed ? { reason: 'No matching record in the selected scope.' } : {})
-        },
-        scope
-      );
-    })
-  );
+
+  return {
+    server,
+    context,
+    selectors,
+    verbose,
+    compactScope,
+    writeResult,
+    scopeFor,
+    endpoint,
+    compactLink,
+    result,
+    wrap
+  };
+}
+export type WorkspaceKnowledgeContext = ReturnType<typeof createWorkspaceKnowledgeContext>;
+export function registerWorkspaceKnowledgeTools(
+  ...args: Parameters<typeof createWorkspaceKnowledgeContext>
+): void {
+  const c = createWorkspaceKnowledgeContext(...args);
+  for (const entry of workspaceToolRegistry) if (entry.kind === 'knowledge') entry.register(c);
 }

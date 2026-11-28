@@ -1,0 +1,19 @@
+services:
+  service-a:
+    build: .
+    environment:
+      DATABASE_URL: postgres://orders:orders@postgres:5432/orders
+      REDIS_URL: redis://redis:6379
+      QUEUE_URL: amqp://queue:5672
+      ORDER_TOPIC: orders.created
+    depends_on: [postgres, redis, queue]
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: orders
+      POSTGRES_DB: orders
+  redis:
+    image: redis:7
+  queue:
+    image: rabbitmq:3

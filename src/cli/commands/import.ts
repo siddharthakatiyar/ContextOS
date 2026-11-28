@@ -1,3 +1,5 @@
+import { importKnowledgeFacts } from '../../core/knowledge/transfer.js';
+import { withTransferGraph } from '../utils/knowledge-transfer.js';
 import { Command } from 'commander';
 import { DB } from '../../core/storage/database.js';
 import fs from 'fs';
@@ -63,8 +65,8 @@ export const importCommand = new Command('import')
       const incomingIds = new Set<string>(
         [
           importData.repository?.repo_id,
-          ...['files', 'chunks', 'relationships'].flatMap((table) =>
-            importData.data[table].map((row: { repo_id?: string }) => row.repo_id)
+          ...['files', 'chunks', 'relationships', 'knowledge_facts'].flatMap((table) =>
+            (importData.data[table] ?? []).map((row: { repo_id?: string }) => row.repo_id)
           )
         ].filter(Boolean)
       );
@@ -95,6 +97,12 @@ export const importCommand = new Command('import')
         if (chunk.layer !== 'global') chunk.source_file = validatePath(chunk.source_file);
 
       dbInstance.transaction(() => {
+        if (
+          importData.data.knowledge_facts !== undefined &&
+          !Array.isArray(importData.data.knowledge_facts)
+        )
+          throw new Error('Invalid exported knowledge facts.');
+        importKnowledgeFacts(dbInstance, importData.data.knowledge_facts);
         // Insert Files
         const insertFile = dbInstance.prepare(`
           INSERT INTO files (repo_id,
@@ -170,6 +178,17 @@ export const importCommand = new Command('import')
         for (const rel of importData.data.relationships) {
           insertRel.run(rel);
         }
+        if (importData.data.knowledge)
+          withTransferGraph(
+            local.value,
+            (graph, registry) => {
+              const source = registry.resolve(local.value);
+              graph.importKnowledge(importData.data.knowledge, [local.value], {
+                projectIds: [source.projectId]
+              });
+            },
+            dbInstance
+          );
       })();
 
       spinner.succeed(

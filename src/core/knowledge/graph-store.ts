@@ -1,4 +1,10 @@
 import Database from 'better-sqlite3';
+import {
+  migrateKnowledgeColumns,
+  knowledgeColumns,
+  type KnowledgeMetadata,
+  type KnowledgeColumns
+} from './write-context.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,7 +36,7 @@ export interface Evidence {
   chunkHash: string;
   generation: number;
 }
-export interface VerifiedLink {
+export interface VerifiedLink extends KnowledgeMetadata {
   id: string;
   source: string;
   target: string;
@@ -42,7 +48,7 @@ export interface VerifiedLink {
   createdAt: number;
   updatedAt: number;
 }
-export interface VerifiedFact {
+export interface VerifiedFact extends KnowledgeMetadata {
   id: string;
   content: string;
   scope: 'view' | 'project' | 'group';
@@ -62,7 +68,7 @@ export interface GraphOptions {
   home?: string;
   resolve: (viewId: string) => GraphSource;
 }
-export interface LinkInput {
+export interface LinkInput extends KnowledgeMetadata {
   source: string;
   target: string;
   type: LinkType;
@@ -74,7 +80,7 @@ export interface FactAccess {
   projectIds?: string[];
   groupId?: string;
 }
-export interface FactInput {
+export interface FactInput extends KnowledgeMetadata {
   content: string;
   scope: VerifiedFact['scope'];
   scopeId: string;
@@ -86,7 +92,7 @@ export interface FactInput {
 }
 type StoredRow = { id: string; payload: string };
 
-/** Only established knowledge is stored. Freshness checks remove unsupported records on reads. */
+/** Persistent knowledge metadata; existing evidence freshness checks still govern reads. */
 export class GraphStore {
   private db: Database.Database;
   private fileHashes = new Map<string, { stamp: string; hash: string }>();
@@ -101,6 +107,15 @@ export class GraphStore {
       CREATE TABLE IF NOT EXISTS verified_facts (id TEXT PRIMARY KEY, identity TEXT NOT NULL UNIQUE, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS graph_metadata (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
       INSERT OR IGNORE INTO graph_metadata VALUES ('revision', 0);`);
+    this.db.transaction(() => {
+      const version = this.db
+        .prepare("SELECT value FROM graph_metadata WHERE key='schema_version'")
+        .get() as { value: number } | undefined;
+      if (!version || version.value < 1) {
+        migrateKnowledgeColumns(this.db, ['verified_links', 'verified_facts']);
+        this.db.prepare("INSERT OR REPLACE INTO graph_metadata VALUES ('schema_version', 1)").run();
+      }
+    })();
     this.db
       .exec(`CREATE INDEX IF NOT EXISTS verified_links_source ON verified_links(json_extract(payload,'$.source'));
       CREATE INDEX IF NOT EXISTS verified_links_target ON verified_links(json_extract(payload,'$.target'));`);
@@ -250,9 +265,49 @@ export class GraphStore {
     return status === 'valid';
   }
   private records<T>(table: 'verified_links' | 'verified_facts'): T[] {
-    return (
-      this.db.prepare(`SELECT id,payload FROM ${table} ORDER BY id`).all() as StoredRow[]
-    ).map((row) => JSON.parse(row.payload) as T);
+    return (this.db.prepare(`SELECT * FROM ${table} ORDER BY id`).all() as StoredRow[]).map((row) =>
+      this.decode<T>(row)
+    );
+  }
+  private decode<T>(row: { payload: string } & Partial<KnowledgeColumns>): T {
+    return {
+      ...JSON.parse(row.payload),
+      author: row.author ?? undefined,
+      taskId: row.task_id ?? undefined,
+      model: row.model ?? undefined,
+      status: row.status ?? 'verified',
+      namespace: row.namespace ?? 'project',
+      expiresAt: row.expires_at ?? null,
+      verifiedAt: row.verified_at ?? null,
+      staleReason: row.stale_reason ?? null
+    } as T;
+  }
+  private metadata(input: KnowledgeMetadata): KnowledgeMetadata {
+    const c = knowledgeColumns(input);
+    return {
+      author: c.author ?? undefined,
+      taskId: c.task_id ?? undefined,
+      model: c.model ?? undefined,
+      status: c.status,
+      namespace: c.namespace,
+      expiresAt: c.expires_at,
+      verifiedAt: c.verified_at,
+      staleReason: c.stale_reason
+    };
+  }
+  private saveMetadata(
+    table: 'verified_links' | 'verified_facts',
+    id: string,
+    input: KnowledgeMetadata
+  ): void {
+    const columns = knowledgeColumns(input);
+    this.db
+      .prepare(
+        `UPDATE ${table} SET ${Object.keys(columns)
+          .map((key) => `${key}=@${key}`)
+          .join(',')} WHERE id=@id`
+      )
+      .run({ id, ...columns });
   }
   private remove(table: 'verified_links' | 'verified_facts', id: string): boolean {
     const changed = this.db.prepare(`DELETE FROM ${table} WHERE id=?`).run(id).changes > 0;
@@ -303,10 +358,9 @@ export class GraphStore {
     if (!LINK_TYPES.includes(input.type)) throw new Error('Unsupported relationship type.');
     if (!input.rationale.trim()) throw new Error('A verified connection requires a rationale.');
     const identity = JSON.stringify([input.source, input.target, input.type]);
-    const old = this.db
-      .prepare('SELECT payload FROM verified_links WHERE identity=?')
-      .get(identity) as { payload: string } | undefined;
-    const previous = old ? (JSON.parse(old.payload) as VerifiedLink) : undefined;
+    const old = this.db.prepare('SELECT * FROM verified_links WHERE identity=?').get(identity) as
+      { payload: string } | undefined;
+    const previous = old ? this.decode<VerifiedLink>(old) : undefined;
     const refs = [...new Set([input.source, input.target, ...(input.evidenceRefs ?? [])])];
     for (const ref of refs) {
       const viewId = this.assertScope(ref, permittedViewIds);
@@ -326,6 +380,7 @@ export class GraphStore {
     );
     const now = Date.now();
     const result: VerifiedLink = {
+      ...this.metadata(input),
       id: previous?.id ?? crypto.randomUUID(),
       source: input.source,
       target: input.target,
@@ -340,16 +395,17 @@ export class GraphStore {
       const change = this.db
         .prepare(
           insertOnly
-            ? 'INSERT INTO verified_links VALUES (?,?,?) ON CONFLICT(identity) DO NOTHING'
-            : 'INSERT INTO verified_links VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload'
+            ? 'INSERT INTO verified_links (id,identity,payload) VALUES (?,?,?) ON CONFLICT(identity) DO NOTHING'
+            : 'INSERT INTO verified_links (id,identity,payload) VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload'
         )
         .run(result.id, identity, JSON.stringify(result));
       if (!change.changes) {
         const winner = this.db
-          .prepare('SELECT payload FROM verified_links WHERE identity=?')
+          .prepare('SELECT * FROM verified_links WHERE identity=?')
           .get(identity) as { payload: string };
-        return { link: JSON.parse(winner.payload) as VerifiedLink, created: false };
+        return { link: this.decode<VerifiedLink>(winner), created: false };
       }
+      this.saveMetadata('verified_links', result.id, result);
       this.touch();
       return { link: result, created: true };
     })();
@@ -432,11 +488,11 @@ export class GraphStore {
               ? "json_extract(payload,'$.target')=@ref"
               : "(json_extract(payload,'$.source')=@ref OR json_extract(payload,'$.target')=@ref)";
         const rows = this.db
-          .prepare(`SELECT payload FROM verified_links WHERE ${clause} ORDER BY id`)
+          .prepare(`SELECT * FROM verified_links WHERE ${clause} ORDER BY id`)
           .iterate({ ref });
         const links: VerifiedLink[] = [];
         for (const row of rows) {
-          const link = JSON.parse((row as StoredRow).payload) as VerifiedLink;
+          const link = this.decode<VerifiedLink>(row as StoredRow);
           if (!link.evidence.every((item) => permittedViewIds.includes(item.viewId))) continue;
           if (options.relationships && !options.relationships.includes(link.type)) continue;
           links.push(link);
@@ -515,12 +571,12 @@ export class GraphStore {
       input.scopeId,
       input.content.trim().toLocaleLowerCase()
     ]);
-    const old = this.db
-      .prepare('SELECT payload FROM verified_facts WHERE identity=?')
-      .get(identity) as { payload: string } | undefined;
-    const previous = old ? (JSON.parse(old.payload) as VerifiedFact) : undefined;
+    const old = this.db.prepare('SELECT * FROM verified_facts WHERE identity=?').get(identity) as
+      { payload: string } | undefined;
+    const previous = old ? this.decode<VerifiedFact>(old) : undefined;
     const now = Date.now();
     const result: VerifiedFact = {
+      ...this.metadata(input),
       id: previous?.id ?? crypto.randomUUID(),
       content: input.content.trim(),
       scope: input.scope,
@@ -535,9 +591,10 @@ export class GraphStore {
     this.db.transaction(() => {
       this.db
         .prepare(
-          'INSERT INTO verified_facts VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload'
+          'INSERT INTO verified_facts (id,identity,payload) VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload'
         )
         .run(result.id, identity, JSON.stringify(result));
+      this.saveMetadata('verified_facts', result.id, result);
       this.touch();
     })();
     return result;
@@ -588,6 +645,89 @@ export class GraphStore {
     } else if (fact.viewIds.some((view) => !permittedViewIds.includes(view)))
       throw new Error('Fact belongs to views outside the selected scope.');
     return this.remove('verified_facts', id);
+  }
+  /** Export only knowledge wholly owned by the selected views, preserving provenance. */
+  exportKnowledge(viewIds: string[]): { links: VerifiedLink[]; facts: VerifiedFact[] } {
+    return {
+      links: this.listLinks({ viewIds }),
+      facts: this.records<VerifiedFact>('verified_facts')
+        .filter((fact) => fact.viewIds.every((id) => viewIds.includes(id)))
+        .filter((fact) => this.visible('verified_facts', fact))
+    };
+  }
+  private restoreImportedIdentity(
+    table: 'verified_links' | 'verified_facts',
+    imported: VerifiedLink | VerifiedFact,
+    saved: VerifiedLink | VerifiedFact
+  ): void {
+    if (
+      typeof imported.id !== 'string' ||
+      !imported.id ||
+      !Number.isSafeInteger(imported.createdAt) ||
+      !Number.isSafeInteger(imported.updatedAt)
+    )
+      throw new Error('Invalid imported knowledge identity or timestamps.');
+    const record = {
+      ...saved,
+      id: imported.id,
+      createdAt: imported.createdAt,
+      updatedAt: imported.updatedAt
+    };
+    this.db
+      .prepare(`UPDATE ${table} SET id=?, payload=? WHERE id=?`)
+      .run(record.id, JSON.stringify(record), saved.id);
+  }
+  /** Import through normal scope/freshness validation; never trust archived evidence blindly. */
+  importKnowledge(
+    data: { links?: VerifiedLink[]; facts?: VerifiedFact[] },
+    viewIds: string[],
+    access: FactAccess = {}
+  ): void {
+    this.db.transaction(() => {
+      const validate = (record: VerifiedLink | VerifiedFact) => {
+        const expected: Record<string, number> = {};
+        for (const evidence of record.evidence) {
+          this.assertScope(evidence.ref, viewIds);
+          const current = this.captureEvidence(evidence.ref);
+          if (
+            current.fileHash !== evidence.fileHash ||
+            current.chunkHash !== evidence.chunkHash ||
+            current.file !== evidence.file
+          )
+            throw new Error('Imported evidence changed; inspect it before saving knowledge.');
+          expected[current.viewId] = current.generation;
+        }
+        return expected;
+      };
+      for (const link of data.links ?? []) {
+        const expectedGenerations = validate(link);
+        // Keep deterministic provenance only for the exact supported resolver.
+        const provenance =
+          link.provenance?.kind === 'deterministic' &&
+          link.provenance.resolver === 'literal-local-import-v1' &&
+          link.type === 'imports'
+            ? link.provenance
+            : { kind: 'agent' as const };
+        const saved = this.saveLink(
+          { ...link, evidenceRefs: link.evidence.map((e) => e.ref), expectedGenerations },
+          viewIds,
+          provenance
+        ).link;
+        this.restoreImportedIdentity('verified_links', link, saved);
+      }
+      for (const fact of data.facts ?? []) {
+        const saved = this.remember(
+          {
+            ...fact,
+            evidenceRefs: fact.evidence.map((e) => e.ref),
+            expectedGenerations: validate(fact)
+          },
+          viewIds,
+          access
+        );
+        this.restoreImportedIdentity('verified_facts', fact, saved);
+      }
+    })();
   }
   invalidateView(viewId: string): number {
     return this.invalidate(

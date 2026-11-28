@@ -1,8 +1,13 @@
 import { DB } from '../storage/database.js';
 import crypto from 'crypto';
+import {
+  knowledgeColumns,
+  type KnowledgeWriteContext,
+  type KnowledgeColumns
+} from '../knowledge/write-context.js';
 import { loadConfig } from '../../config/index.js';
 
-export interface KnowledgeFact {
+export interface KnowledgeFact extends KnowledgeColumns {
   id: string;
   fact: string;
   confidence: number;
@@ -20,22 +25,28 @@ export class KnowledgeStore {
 
   constructor(private db: DB) {}
 
-  public learnFact(fact: string, category: string = 'general'): string {
-    const id = crypto.randomUUID();
-    const now = Date.now();
+  public learnFact(
+    fact: string,
+    category: string = 'general',
+    context: KnowledgeWriteContext = {}
+  ): string {
+    return this.db.getInstance().transaction(() => {
+      const id = crypto.randomUUID();
+      const now = Date.now();
+      const metadata = knowledgeColumns(context);
 
-    // Check if a similar fact exists (simple duplicate check for now, can be improved with embeddings)
-    const existing = this.db
-      .getInstance()
-      .prepare('SELECT id, fact FROM knowledge_facts WHERE fact = ?')
-      .get(fact) as { id: string; fact: string } | undefined;
-
-    if (existing) {
-      // Reinforce existing fact
-      this.db
+      // Check if a similar fact exists (simple duplicate check for now, can be improved with embeddings)
+      const existing = this.db
         .getInstance()
-        .prepare(
-          `
+        .prepare('SELECT id, fact FROM knowledge_facts WHERE fact = ?')
+        .get(fact) as { id: string; fact: string } | undefined;
+
+      if (existing) {
+        // Reinforce existing fact
+        this.db
+          .getInstance()
+          .prepare(
+            `
         UPDATE knowledge_facts
         SET confidence = MIN(confidence + 0.1, 1.0),
             updated_at = ?,
@@ -43,21 +54,35 @@ export class KnowledgeStore {
             access_count = access_count + 1
         WHERE id = ?
       `
-        )
-        .run(now, now, existing.id);
-      return existing.id;
-    }
+          )
+          .run(now, now, existing.id);
+        this.writeMetadata(existing.id, metadata);
+        return existing.id;
+      }
 
+      this.db
+        .getInstance()
+        .prepare(
+          `
+      INSERT INTO knowledge_facts (repo_id, id, fact, confidence, category, created_at, updated_at, last_accessed, access_count) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'), ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+        )
+        .run(id, fact, 1.0, category, now, now, now, 1);
+
+      this.writeMetadata(id, metadata);
+      return id;
+    })();
+  }
+
+  private writeMetadata(id: string, metadata: KnowledgeColumns): void {
     this.db
       .getInstance()
       .prepare(
-        `
-      INSERT INTO knowledge_facts (repo_id, id, fact, confidence, category, created_at, updated_at, last_accessed, access_count) VALUES ((SELECT value FROM repository_metadata WHERE key='repo_id'), ?, ?, ?, ?, ?, ?, ?, ?)
-    `
+        `UPDATE knowledge_facts SET ${Object.keys(metadata)
+          .map((key) => `${key}=@${key}`)
+          .join(',')} WHERE id=@id`
       )
-      .run(id, fact, 1.0, category, now, now, now, 1);
-
-    return id;
+      .run({ id, ...metadata });
   }
 
   public forgetFact(id: string): boolean {

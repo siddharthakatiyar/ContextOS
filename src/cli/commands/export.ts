@@ -1,3 +1,5 @@
+import { exportKnowledgeFacts } from '../../core/knowledge/transfer.js';
+import { withTransferGraph } from '../utils/knowledge-transfer.js';
 import { Command } from 'commander';
 import { DB } from '../../core/storage/database.js';
 import fs from 'fs';
@@ -21,6 +23,15 @@ export const exportCommand = new Command('export')
       const relationships = dbInstance.prepare('SELECT * FROM relationships').all();
       const files = dbInstance.prepare('SELECT * FROM files').all();
 
+      const repoId = (
+        dbInstance.prepare("SELECT value FROM repository_metadata WHERE key='repo_id'").get() as
+          { value: string } | undefined
+      )?.value;
+      const knowledge = withTransferGraph(
+        repoId,
+        (graph) => graph.exportKnowledge([repoId!]),
+        dbInstance
+      );
       const exportData = {
         version: getPackageVersion(),
         exportedAt: Date.now(),
@@ -35,7 +46,9 @@ export const exportCommand = new Command('export')
         data: {
           chunks,
           relationships,
-          files
+          files,
+          knowledge_facts: exportKnowledgeFacts(dbInstance),
+          knowledge
         }
       };
 

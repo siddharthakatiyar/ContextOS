@@ -150,52 +150,8 @@ async function main(): Promise<void> {
     }
   }
 
-  const commands = await Promise.all([
-    import('../src/cli/commands/init.js'),
-    import('../src/cli/commands/setup.js'),
-    import('../src/cli/commands/enable.js'),
-    import('../src/cli/commands/serve.js'),
-    import('../src/cli/commands/query.js'),
-    import('../src/cli/commands/workspace.js'),
-    import('../src/cli/commands/watch.js'),
-    import('../src/cli/commands/export.js'),
-    import('../src/cli/commands/import.js'),
-    import('../src/cli/commands/analytics.js'),
-    import('../src/cli/commands/status.js'),
-    import('../src/cli/commands/doctor.js'),
-    import('../src/cli/commands/reindex.js'),
-    import('../src/cli/commands/clean.js'),
-    import('../src/cli/commands/daemon.js'),
-    import('../src/cli/commands/visualize.js'),
-    import('../src/cli/commands/upgrade.js'),
-    import('../src/cli/commands/updates.js'),
-    import('../src/cli/commands/repo.js'),
-    import('../src/cli/commands/group.js'),
-    import('../src/cli/commands/worktree.js')
-  ]);
-  const [
-    init,
-    setup,
-    enable,
-    serve,
-    query,
-    workspace,
-    watch,
-    exportCmd,
-    importCmd,
-    analytics,
-    status,
-    doctor,
-    reindex,
-    clean,
-    daemon,
-    visualize,
-    upgrade,
-    updates,
-    repo,
-    group,
-    worktree
-  ] = commands;
+  const { loadCommands } = await import('../src/cli/command-registry.js');
+  const commands = await loadCommands();
 
   program
     .name('contextos')
@@ -214,31 +170,7 @@ async function main(): Promise<void> {
       }
     });
 
-  for (const command of [
-    init.initCommand,
-    setup.setupCommand,
-    enable.enableCommand,
-    serve.serveCommand,
-    query.queryCommand,
-    workspace.workspaceCommand,
-    watch.watchCommand,
-    exportCmd.exportCommand,
-    importCmd.importCommand,
-    analytics.analyticsCommand,
-    status.statusCommand,
-    doctor.doctorCommand,
-    reindex.reindexCommand,
-    clean.cleanCommand,
-    daemon.daemonCommand,
-    visualize.visualizeCommand,
-    upgrade.upgradeCommand,
-    updates.updatesCommand,
-    repo.repoCommand,
-    group.groupCommand,
-    worktree.worktreeCommand
-  ]) {
-    program.addCommand(command);
-  }
+  for (const command of commands) program.addCommand(command);
 
   try {
     await program.parseAsync(process.argv);

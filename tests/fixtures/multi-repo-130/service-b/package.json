@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/service-b",
+  "type": "module",
+  "dependencies": {
+    "@fixture/service-a": "file:../service-a",
+    "@fixture/shared": "file:../shared"
+  }
+}
