@@ -500,7 +500,10 @@ export function registerWorkspaceTools(
               const tool = definitions(target).find((d) => d.name === definition.name)!;
               const output = await tool.handler({ ...args, paths: [file] });
               owner.assertReadable();
-              output.structuredContent = provenance(target, args, file);
+              output.structuredContent = {
+                ...output.structuredContent,
+                ...provenance(target, args, file)
+              };
               output.content.unshift({
                 type: 'text',
                 text: `Project: ${target.name}; branch: ${target.branch ?? 'detached/non-Git'}; worktree: ${target.worktreeId}; view: ${target.repoId}`
@@ -523,7 +526,10 @@ export function registerWorkspaceTools(
           const tool = definitions(source).find((d) => d.name === definition.name)!;
           const output = await tool.handler(args);
           if (reading) owner.assertReadable();
-          output.structuredContent = provenance(source, args, file);
+          output.structuredContent = {
+            ...output.structuredContent,
+            ...provenance(source, args, file)
+          };
           output.content.unshift({
             type: 'text',
             text: `Project: ${source.name}; branch: ${source.branch ?? 'detached/non-Git'}; worktree: ${source.worktreeId}; view: ${source.repoId}`

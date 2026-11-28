@@ -601,3 +601,81 @@ it('bounds complete retrieval payloads, includes fact text and project attributi
   const verbose = await client.callTool({ name: 'ctx_scope', arguments: { verbose: true } });
   expect(verbose.structuredContent).toHaveProperty('catalog');
 });
+
+it('returns source line ranges, matched windows and command results alongside provenance', async () => {
+  const root = registry.resolve('backend').rootPath;
+  fs.writeFileSync(path.join(root, 'lines.txt'), 'first\nneedle here\nthird\nfourth\n');
+  const read = await client.callTool({
+    name: 'ctx_read_file',
+    arguments: { filePath: 'lines.txt', start_line: 2, end_line: 3 }
+  });
+  expect(read.structuredContent).toMatchObject({
+    text: 'needle here\nthird',
+    startLine: 2,
+    endLine: 3
+  });
+  expect(JSON.stringify(read.content)).toContain('needle here');
+  const expand = await client.callTool({
+    name: 'ctx_expand',
+    arguments: { paths: ['lines.txt'], terms: ['needle'], linesBefore: 0, linesAfter: 0 }
+  });
+  expect(JSON.stringify(expand.structuredContent)).toContain('needle here');
+  expect(JSON.stringify(expand.content)).toContain('needle here');
+  const executed = await client.callTool({
+    name: 'ctx_execute',
+    arguments: { command: 'cat lines.txt' }
+  });
+  expect(executed.structuredContent).toMatchObject({
+    stdout: 'first\nneedle here\nthird\nfourth\n',
+    stderr: '',
+    exitCode: 0
+  });
+  const failed = await client.callTool({
+    name: 'ctx_execute',
+    arguments: { command: 'cat missing.txt' }
+  });
+  expect(failed.isError).toBe(true);
+  expect(failed.structuredContent).toMatchObject({
+    stdout: '',
+    exitCode: 1,
+    stderr: expect.stringContaining('missing.txt')
+  });
+  const denied = await client.callTool({
+    name: 'ctx_read_file',
+    arguments: { filePath: '../secret' }
+  });
+  expect(denied.isError).toBe(true);
+  expect(JSON.stringify(denied.content)).toContain('Access denied');
+});
+
+it('accepts selected repo-relative inspection paths and rejects ambiguous paths across views', async () => {
+  const source = registry.resolve('backend');
+  fs.writeFileSync(path.join(source.rootPath, 'helper.ts'), 'export const helper = 1;\n');
+  fs.appendFileSync(
+    path.join(source.rootPath, 'payment.ts'),
+    '\nimport { helper } from "./helper";\n'
+  );
+  fs.writeFileSync(
+    path.join(source.rootPath, 'api.yaml'),
+    'openapi: 3.1.0\npaths:\n  /hello:\n    get:\n      operationId: hello\n      responses: {}\n'
+  );
+  await runtime.get(source).index(true);
+  const resolved = await client.callTool({
+    name: 'ctx_resolve_import',
+    arguments: { project: 'backend', source: 'payment.ts', specifier: './helper' }
+  });
+  expect(resolved.isError).not.toBe(true);
+  expect(resolved.structuredContent).toMatchObject({ resolved: true });
+  const contract = await client.callTool({
+    name: 'ctx_contract',
+    arguments: { project: 'backend', ref: 'api.yaml' }
+  });
+  expect(contract.isError).not.toBe(true);
+  expect(contract.structuredContent).toMatchObject({ operations: [{ id: 'hello' }] });
+  const ambiguous = await client.callTool({
+    name: 'ctx_resolve_import',
+    arguments: { group: 'default', source: 'payment.ts', specifier: './helper' }
+  });
+  expect(ambiguous.isError).toBe(true);
+  expect(JSON.stringify(ambiguous.content)).toContain('Ambiguous path');
+});

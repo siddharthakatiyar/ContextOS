@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Return file ranges, expansion windows and command output in structured tool results; accept selected repository paths for import and contract inspection.
+
 - Bound MCP retrieval payloads, compact knowledge writes and scope summaries, and paginate unique saved links; include fact text and project attribution.
 
 ## [1.2.4] - 2026-11-26

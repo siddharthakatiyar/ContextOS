@@ -67,6 +67,7 @@ export function registerExpandTool(server: McpServer, _dbs: DB[], rootOverride?:
       try {
         const root = rootOverride ?? getWorkspaceRoot();
         let output = '';
+        const windows: { path: string; text: string }[] = [];
         for (const p of paths) {
           if (estimateTokens(output) >= MAX_EXPAND_RESPONSE_TOKENS) {
             output += RESPONSE_MARKER;
@@ -90,12 +91,14 @@ export function registerExpandTool(server: McpServer, _dbs: DB[], rootOverride?:
             linesAfter,
             maxTokens: Math.max(1, remaining - headerTokens)
           });
+          windows.push({ path: resolved, text: content });
           const appended = appendSection(output, p, content);
           output = appended.output;
           if (appended.truncated) break;
         }
 
         return {
+          structuredContent: { windows },
           content: [
             {
               type: 'text',
