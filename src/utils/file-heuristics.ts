@@ -6,20 +6,23 @@ import path from 'path';
  * in the first 8000 bytes. This avoids loading massive files into memory.
  */
 export function isBinaryFile(filePath: string): boolean {
+  let fd: number | undefined;
   try {
-    const fd = fs.openSync(filePath, 'r');
+    fd = fs.openSync(filePath, 'r');
     const buffer = Buffer.alloc(8000);
     const bytesRead = fs.readSync(fd, buffer, 0, 8000, 0);
-    fs.closeSync(fd);
 
     for (let i = 0; i < bytesRead; i++) {
       if (buffer[i] === 0) {
         return true;
       }
     }
-  } catch {
-    // If we can't read it, it's safer to skip it
-    return true;
+  } catch (error) {
+    // A disappearing file can be skipped; unreadable files are indexing failures.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true;
+    throw error;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
   return false;
 }

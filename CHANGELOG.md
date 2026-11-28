@@ -10,6 +10,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+- Record unreadable source files as indexing failures with partial coverage and failed-file retry support; keep genuine binary files skipped.
+
 - Fail pending tool calls promptly when a daemon connection closes, and reconnect through a fresh MCP session on retry.
 
 - Return file ranges, expansion windows and command output in structured tool results; accept selected repository paths for import and contract inspection.
