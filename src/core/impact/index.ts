@@ -32,6 +32,7 @@ export interface ImpactOptions {
   viewId?: string;
   depth?: number;
   includeProposed?: boolean;
+  includeStale?: boolean;
   verbose?: boolean;
   maxResults?: number;
 }
@@ -265,7 +266,8 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactResul
       return false;
     }
     if (
-      (!options.includeProposed && link.status && link.status !== 'verified') ||
+      (link.status === 'proposed' && !options.includeProposed) ||
+      (link.status === 'stale' && !options.includeStale) ||
       (link.expiresAt != null && link.expiresAt <= Date.now())
     ) {
       excluded++;

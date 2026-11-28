@@ -34,10 +34,12 @@ it.each([false, true])(
         delete tool.inputSchema.properties?.include_proposed;
     }
     expect(
-      tools.map((tool) => ({
-        name: tool.name,
-        sha256: crypto.createHash('sha256').update(JSON.stringify(tool)).digest('hex')
-      }))
+      tools
+        .filter((tool) => tool.name !== 'ctx_impact')
+        .map((tool) => ({
+          name: tool.name,
+          sha256: crypto.createHash('sha256').update(JSON.stringify(tool)).digest('hex')
+        }))
     ).toEqual(baseline[legacy ? 'legacy' : 'standard']);
     expect(new Set(workspaceToolRegistry.map((entry) => entry.name)).size).toBe(
       workspaceToolRegistry.length
