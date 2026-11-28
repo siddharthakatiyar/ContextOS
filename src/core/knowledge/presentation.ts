@@ -7,11 +7,15 @@ interface FactPresentation {
   author?: string | null;
   task_id?: string | null;
   status?: KnowledgeStatus;
+  namespace?: string;
+  expires_at?: number | null;
 }
 function metadata(fact?: FactPresentation) {
   return compactKnowledgeMetadata({
     author: fact?.author ?? undefined,
     taskId: fact?.task_id ?? undefined,
+    namespace: fact?.namespace,
+    expiresAt: fact?.expires_at,
     status: fact?.status
   });
 }

@@ -29,6 +29,7 @@ export default function register(c: WorkspaceToolContext): void {
     'Retrieve engineering context from the active repository, explicit repositories, or the entire workspace. Use repo/workspace/all_repos to select scope.',
     {
       prompt: z.string(),
+      task_id: z.string().optional(),
       include_proposed: z.boolean().optional(),
       include_stale: z.boolean().optional(),
       group: z.string().optional(),
@@ -70,6 +71,7 @@ export default function register(c: WorkspaceToolContext): void {
         }
         const key = JSON.stringify([
           graphRevision,
+          args.task_id ?? process.env.CONTEXTOS_TASK_ID,
           args,
           scope.repoIds,
           scope.activeRepoId,
@@ -77,7 +79,12 @@ export default function register(c: WorkspaceToolContext): void {
           scope.sources.map((s) => s.generation)
         ]);
         const cached = cache.get(key);
-        if (cached && Date.now() - cached.at < 30_000) {
+        if (
+          cached &&
+          !args.layers.includes('session') &&
+          (cached.expiresAt === undefined || Date.now() < cached.expiresAt) &&
+          Date.now() - cached.at < 30_000
+        ) {
           try {
             for (const source of scope.sources) runtime.get(source).assertReadable();
             if (!cached.result.structuredContent?.partial) return cached.result;
@@ -89,6 +96,7 @@ export default function register(c: WorkspaceToolContext): void {
         const result = await retrieveWorkspace(runtime, scope, args.prompt, {
           includeProposed: !!args.include_proposed,
           includeStale: args.include_stale,
+          taskId: args.task_id,
           layers: args.layers,
           explain: args.explain
         });
@@ -110,13 +118,14 @@ export default function register(c: WorkspaceToolContext): void {
             const repo = runtime.get(source);
             const state = session(source);
             const sessionChunks = args.layers.includes('session')
-              ? await state.manager.getSessionContext()
+              ? await state.manager.getSessionContext(args.task_id)
               : [];
             repo.assertReadable();
             const facts =
               args.layers.includes('repo') && repo.config.memoryInjection !== 'off'
-                ? new KnowledgeStore(repo.db)
+                ? new KnowledgeStore(repo.db, args.task_id)
                     .getAllFacts(Number.MAX_SAFE_INTEGER)
+                    // Stale facts pass through so ranking can hide them and report the hint.
                     .filter((fact) => args.include_proposed || fact.status !== 'proposed')
                     .map(prepareFactForContext)
                 : [];
@@ -179,6 +188,7 @@ export default function register(c: WorkspaceToolContext): void {
           );
         if (args.layers.includes('repo')) {
           const rankingGraph = graph();
+          rankingGraph.setTaskContext(args.task_id);
           try {
             rankSavedKnowledge(result, runtime, rankingGraph, legacyFacts, {
               includeProposed: !!args.include_proposed,
@@ -306,7 +316,15 @@ export default function register(c: WorkspaceToolContext): void {
           }
         };
         if (args.max_tokens !== undefined) boundResponse(output, args.max_tokens);
-        cache.set(key, { at: Date.now(), result: output });
+        const expiries = [...result.chunks, ...(result.knowledgeLinks ?? [])].flatMap((r) => {
+          const expiry = (r as { expiresAt?: number | null }).expiresAt;
+          return expiry == null ? [] : [expiry];
+        });
+        cache.set(key, {
+          at: Date.now(),
+          result: output,
+          expiresAt: Math.min(Infinity, ...expiries)
+        });
         while (cache.size > 8) cache.delete(cache.keys().next().value!);
         return output;
       } catch (error) {

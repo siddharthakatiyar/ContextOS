@@ -1,5 +1,8 @@
 import { listKnowledge } from '../../core/knowledge/review.js';
-import { compactKnowledgeMetadata } from '../../core/knowledge/write-context.js';
+import {
+  compactKnowledgeMetadata,
+  knowledgeIsVisible
+} from '../../core/knowledge/write-context.js';
 import { z } from 'zod';
 
 import { getErrorMessage } from '../../utils/errors.js';
@@ -14,7 +17,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
     async (args) => {
       try {
         const scope = scopeFor(args);
-        const records = listKnowledge({ scope });
+        const records = listKnowledge({ scope }).filter((r) => knowledgeIsVisible(r));
         const knowledgeSummary = {
           stale: records.filter((r) => r.status === 'stale').length,
           proposed: records.filter((r) => r.status === 'proposed').length

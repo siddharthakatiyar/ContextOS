@@ -6,7 +6,10 @@
   "properties": {
     "knowledge": {
       "type": "object",
-      "properties": { "review": { "type": "boolean", "default": false } },
+      "properties": {
+        "review": { "type": "boolean", "default": false },
+        "sessionTtlHours": { "type": "number", "exclusiveMinimum": 0, "default": 24 }
+      },
       "additionalProperties": false
     },
     "indexing": {

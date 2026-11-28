@@ -80,7 +80,7 @@ export function createWorkspaceToolContext(
     { manager: SessionManager; store: SessionStore; prompts: PromptsRepo; db: object }
   >();
   const recent = new Map<string, { ids: string[]; at: number }>();
-  const cache = new Map<string, { at: number; result: CallToolResult }>();
+  const cache = new Map<string, { at: number; result: CallToolResult; expiresAt?: number }>();
   const session = (source: RepositorySource) => {
     let value = sessions.get(source.repoId);
     const repo = runtime.get(source);

@@ -57,7 +57,7 @@ export class SessionManager {
     return null;
   }
 
-  public async getSessionContext(): Promise<SessionChunk[]> {
+  public async getSessionContext(taskId?: string): Promise<SessionChunk[]> {
     const chunks: SessionChunk[] = [];
 
     // 1. Git branch context (cached)
@@ -74,13 +74,25 @@ export class SessionManager {
     }
 
     // 2. Recent session events (only actionable ones, ignore prompt/retrieval echo)
-    const recentEvents = this.sessionStore.getRecentEvents(this.sessionId, 10);
+    const recentEvents = [
+      ...new Map(
+        [
+          ...this.sessionStore.getRecentEvents(this.sessionId, 10, taskId),
+          ...this.sessionStore.getKnowledgeNotes(10, taskId)
+        ].map((e) => [`${e.sessionId}:${e.id}`, e])
+      ).values()
+    ].sort((a, b) => a.createdAt - b.createdAt);
     if (recentEvents && recentEvents.length > 0) {
       const filteredEvents = recentEvents.filter(
         (e) => e.eventType === 'system_response' || e.eventType === 'error'
       );
       if (filteredEvents.length > 0) {
-        const eventContent = filteredEvents.map((e) => `[${e.eventType}]: ${e.content}`).join('\n');
+        const eventContent = filteredEvents
+          .map(
+            (e) =>
+              `[${e.eventType}${e.namespace ? '; namespace=' + e.namespace : ''}]: ${e.content}`
+          )
+          .join('\n');
         chunks.push({
           id: `session:events:${this.sessionId}`,
           content: `Recent session context:\n${eventContent}`,

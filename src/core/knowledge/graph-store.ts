@@ -2,6 +2,7 @@ import { backupBeforeMigration } from '../backup/pre-migration.js';
 import { recordKnowledgeOperation } from './audit.js';
 import Database from 'better-sqlite3';
 import {
+  knowledgeIsVisible,
   migrateKnowledgeColumns,
   knowledgeColumns,
   transitionStatus,
@@ -103,22 +104,28 @@ export interface FactInput extends KnowledgeMetadata {
 type StoredRow = { id: string; payload: string };
 
 export function linkIdentity(
-  input: Pick<LinkInput, 'source' | 'target' | 'type' | 'author' | 'identityKey'>
+  input: Pick<LinkInput, 'source' | 'target' | 'type' | 'author' | 'identityKey' | 'namespace'>
 ): string {
+  const ns = input.namespace && input.namespace !== 'project' ? [input.namespace] : [];
   return input.identityKey
     ? JSON.stringify([
         'named-link',
         input.author,
         [...new Set([parseRef(input.source)?.repoId, parseRef(input.target)?.repoId])].sort(),
         input.type,
-        input.identityKey
+        input.identityKey,
+        ...ns
       ])
-    : JSON.stringify([input.source, input.target, input.type]);
+    : JSON.stringify([input.source, input.target, input.type, ...ns]);
 }
 
 /** Persistent knowledge metadata; existing evidence freshness checks still govern reads. */
 export class GraphStore {
   private db: Database.Database;
+  private taskId: string | undefined;
+  setTaskContext(taskId?: string): void {
+    this.taskId = taskId;
+  }
   private fileHashes = new Map<string, { stamp: string; hash: string }>();
   constructor(private options: GraphOptions) {
     const file = preparePrivateStateFile(path.join(options.home ?? getContextOSHome(), 'graph.db'));
@@ -326,6 +333,7 @@ export class GraphStore {
     record: VerifiedLink | VerifiedFact,
     includeStale = false
   ): boolean {
+    if (!knowledgeIsVisible(record, this.taskId)) return false;
     const status = this.evidenceStatus(record.evidence, (reason) =>
       this.markStale(table, record, reason)
     );
@@ -526,7 +534,7 @@ export class GraphStore {
   getLink(id: string, permittedViewIds: string[]): VerifiedLink | undefined {
     const link = this.records<VerifiedLink>('verified_links').find((item) => item.id === id);
     link?.evidence.forEach((item) => this.assertScope(item.ref, permittedViewIds));
-    return link;
+    return link && knowledgeIsVisible(link, this.taskId) ? link : undefined;
   }
   unlink(id: string, permittedViewIds: string[], context: KnowledgeWriteContext = {}): boolean {
     if (!this.getLink(id, permittedViewIds)) return false;
@@ -593,6 +601,7 @@ export class GraphStore {
         const links: VerifiedLink[] = [];
         for (const row of rows) {
           const link = this.decode<VerifiedLink>(row as StoredRow);
+          if (!knowledgeIsVisible(link, this.taskId)) continue;
           if (!link.evidence.every((item) => permittedViewIds.includes(item.viewId))) continue;
           if (
             link.status !== 'verified' &&
@@ -686,7 +695,8 @@ export class GraphStore {
       input.scopeId,
       ...(input.identityKey
         ? ['named-fact', input.author, input.identityKey]
-        : [input.content.trim().toLocaleLowerCase()])
+        : [input.content.trim().toLocaleLowerCase()]),
+      ...(input.namespace && input.namespace !== 'project' ? [input.namespace] : [])
     ]);
     const old = this.db.prepare('SELECT * FROM verified_facts WHERE identity=?').get(identity) as
       { payload: string } | undefined;
@@ -812,6 +822,33 @@ export class GraphStore {
       createdAt: imported.createdAt,
       updatedAt: imported.updatedAt
     };
+    // Historical archives may omit namespace metadata while retaining the same ID.
+    // Reconcile only the exact same claim, after normal import validation, in the
+    // caller's transaction; never let an ID overwrite a different claim.
+    if (imported.id !== saved.id) {
+      const existingRow = this.db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(imported.id) as
+        StoredRow | undefined;
+      if (existingRow) {
+        const existing = this.decode<VerifiedLink | VerifiedFact>(existingRow);
+        const same =
+          'source' in existing && 'source' in saved
+            ? existing.source === saved.source &&
+              existing.target === saved.target &&
+              existing.type === saved.type
+            : 'content' in existing &&
+              'content' in saved &&
+              existing.content.trim().toLocaleLowerCase() ===
+                saved.content.trim().toLocaleLowerCase() &&
+              existing.scope === saved.scope &&
+              existing.scopeId === saved.scopeId;
+        if (
+          !same ||
+          existing.evidence.some((e) => !saved.evidence.some((s) => s.viewId === e.viewId))
+        )
+          throw new Error('Imported knowledge ID conflicts with an existing claim.');
+        this.db.prepare(`DELETE FROM ${table} WHERE id=?`).run(imported.id);
+      }
+    }
     this.db
       .prepare(`UPDATE ${table} SET id=?, payload=? WHERE id=?`)
       .run(record.id, JSON.stringify(record), saved.id);

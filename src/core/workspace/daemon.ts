@@ -1,3 +1,4 @@
+import { startExpiryScheduler } from '../knowledge/expiry-scheduler.js';
 import { startVerificationScheduler } from '../verify/scheduler.js';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -52,6 +53,7 @@ export class WorkspaceDaemon {
   private refreshing = false;
   private token = crypto.randomUUID();
   private started = false;
+  private expiryScheduler?: { stop: () => Promise<void> };
   private verificationScheduler?: { stop: () => Promise<void> };
   constructor(readonly name: string) {
     const root = workspaceStateDirectory(name);
@@ -118,6 +120,7 @@ export class WorkspaceDaemon {
       this.refresh = setInterval(() => void refresh(), 5000);
       this.refresh.unref();
       this.scheduleIdleStop();
+      this.expiryScheduler = startExpiryScheduler(this.registry.home);
       this.verificationScheduler = startVerificationScheduler(this.registry.home);
     } catch (error) {
       if (this.server.listening) {
@@ -310,6 +313,7 @@ export class WorkspaceDaemon {
   stop(): Promise<void> {
     return (this.closing ??= (async () => {
       try {
+        await this.expiryScheduler?.stop();
         await this.verificationScheduler?.stop();
         if (this.refresh) clearInterval(this.refresh);
         if (this.idleTimer) clearTimeout(this.idleTimer);

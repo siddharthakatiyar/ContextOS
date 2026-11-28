@@ -3,6 +3,8 @@ import type { Command } from 'commander';
 export const commandRegistry: readonly (() => Promise<Command>)[] = [
   () => import('./commands/impact.js').then((m) => m.impactCommand),
   () => import('./commands/infra.js').then((m) => m.infraCommand),
+  () => import('./commands/review.js').then((m) => m.reviewCommand),
+  () => import('./commands/task.js').then((m) => m.taskCommand),
   () => import('./commands/backup.js').then((m) => m.backupCommand),
   () => import('./commands/init.js').then((m) => m.initCommand),
   () => import('./commands/setup.js').then((m) => m.setupCommand),

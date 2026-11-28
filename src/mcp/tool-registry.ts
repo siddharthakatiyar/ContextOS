@@ -1,3 +1,4 @@
+import ctx_review from './registered/ctx-review.js';
 import type { WorkspaceToolContext } from './workspace-tools.js';
 import type { WorkspaceKnowledgeContext } from './tools/knowledge.js';
 import get_context from './registered/get-context.js';
@@ -34,6 +35,7 @@ type Entry =
   | { name: string; kind: 'knowledge'; register: (context: WorkspaceKnowledgeContext) => void };
 /** Add a tool module and one entry here. Both serving and catalog generation use this list. */
 export const workspaceToolRegistry: readonly Entry[] = [
+  { name: 'ctx_review', kind: 'knowledge', register: ctx_review },
   { name: 'get_context', kind: 'workspace', register: get_context },
   { name: 'ctx_read_file', kind: 'workspace', register: ctx_read_file },
   { name: 'ctx_expand', kind: 'workspace', register: ctx_expand },

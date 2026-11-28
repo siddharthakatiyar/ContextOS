@@ -234,8 +234,12 @@ it('constructs and indexes the reusable three-repository group and round-trips k
       const row = fixture.runtime
         .get(source)
         .db.getInstance()
-        .prepare("SELECT id FROM chunks WHERE source_file LIKE '%/src/%' ORDER BY id LIMIT 1")
-        .get() as { id: string };
+        .prepare(
+          "SELECT id FROM chunks WHERE source_file=? AND section_title='File Structure' LIMIT 1"
+        )
+        .get(
+          path.join(source.rootPath, 'src', source.repoId === a.repoId ? 'client.ts' : 'worker.ts')
+        ) as { id: string };
       return entityRef(source.repoId, 'chunk', row.id);
     });
     const context = {
@@ -244,7 +248,7 @@ it('constructs and indexes the reusable three-repository group and round-trips k
       model: 'test',
       status: 'proposed' as const,
       namespace: 'task',
-      expiresAt: 123456789
+      expiresAt: Date.now() + 60_000
     };
     const link = graph.link(
       {

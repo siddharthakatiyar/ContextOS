@@ -150,6 +150,7 @@ export async function retrieveWorkspace(
         return { source, db: runtime.get(source).db.getInstance() };
       }
     });
+    graph.setTaskContext(opts.taskId);
     try {
       const permitted = scope.sources
         .filter((source) => !unavailableSources.some((failed) => failed.repoId === source.repoId))

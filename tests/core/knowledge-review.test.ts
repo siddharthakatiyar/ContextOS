@@ -191,7 +191,12 @@ describe('persisted review operations', () => {
         .trim()
         .split('\n')
         .map((s) => JSON.parse(s));
-      expect(audits.map((a) => a.id).sort()).toEqual(ids.sort());
+      expect(
+        audits
+          .filter((a) => a.operation === 'rollback')
+          .map((a) => a.id)
+          .sort()
+      ).toEqual(ids.sort());
     } finally {
       await f.cleanup();
     }

@@ -17,6 +17,7 @@ export interface GetContextOpts {
   includeStale?: boolean;
   includeProposed?: boolean;
   maxTokens?: number;
+  taskId?: string;
   layers?: string[];
   outputFormat?: 'markdown' | 'xml';
   repoRoot?: string;
@@ -65,7 +66,8 @@ export async function executeGetContext(
     repoRoot
   });
 
-  const sessionChunks = await sessionManager.getSessionContext();
+  const sessionChunks = await sessionManager.getSessionContext(opts.taskId);
+  knowledgeStore.setTaskContext(opts.taskId);
   const matches = layers.includes('repo')
     ? knowledgeStore.searchFacts(prompt, Number.MAX_SAFE_INTEGER)
     : [];
