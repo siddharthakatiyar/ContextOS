@@ -66,6 +66,7 @@ export async function initializeProject(
     index?: boolean;
     integrations?: boolean;
     json?: boolean;
+    explicitPath?: boolean;
   } = {}
 ): Promise<void> {
   const registry = new WorkspaceRegistry();
@@ -80,6 +81,12 @@ export async function initializeProject(
         )
         .sort((a, b) => b.rootPath.length - a.rootPath.length)[0]?.rootPath ?? discovered.rootPath;
     const boundaryWarning = nestedProjectWarning(cwd, registry);
+    if (
+      boundaryWarning &&
+      options.explicitPath === false &&
+      !registry.listAll().some((source) => source.rootPath === cwd)
+    )
+      throw new Error(`Skipping automatic project registration. ${boundaryWarning}`);
     if (boundaryWarning && !options.json) console.warn(boundaryWarning);
     const plan = projectSetupPlan(cwd, options);
     const source = registry.register(cwd, {
@@ -144,7 +151,7 @@ export async function initializeProject(
 
 export const initCommand = new Command('init')
   .description('Initialize global project storage and discover local Git worktrees')
-  .argument('[path]', 'Project or worktree path', '.')
+  .argument('[path]', 'Project or worktree path')
   .option('--name <name>', 'Unique project name')
   .option('--group <name>', 'Add this project to a group', 'default')
   .option('--no-index', 'Register without indexing')
@@ -152,7 +159,7 @@ export const initCommand = new Command('init')
   .option('--json', 'Output a structured result')
   .action(
     async (
-      input: string,
+      input: string | undefined,
       options: {
         name?: string;
         group: string;
@@ -160,5 +167,9 @@ export const initCommand = new Command('init')
         integrations: boolean;
         json?: boolean;
       }
-    ) => initializeProject(path.resolve(input), options)
+    ) =>
+      initializeProject(path.resolve(input ?? '.'), {
+        ...options,
+        explicitPath: input !== undefined
+      })
   );

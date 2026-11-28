@@ -15,7 +15,7 @@ vi.mock('../../src/core/updater/auto-patch-policy.js', () => ({
 vi.mock('../../src/cli/utils/installation-setup.js', () => ({ upgradeExistingProjects: vi.fn() }));
 
 import { serveCommand } from '../../src/cli/commands/serve.js';
-import { initializeProject } from '../../src/cli/commands/init.js';
+import { initializeProject, initCommand } from '../../src/cli/commands/init.js';
 import { runDaemonClient } from '../../src/core/daemon/client.js';
 import { WorkspaceRegistry } from '../../src/core/workspace/registry.js';
 import { nestedProjectWarning } from '../../src/core/workspace/project-boundary.js';
@@ -152,4 +152,29 @@ describe('nested registered project boundaries', () => {
     registry.register(nested, { name: 'worktree-child' });
     expect(nestedProjectWarning(worktree, registry)).toBeNull();
   });
+});
+
+it('refuses no-path init in an unregistered non-Git parent but permits explicit and previously registered parents', async () => {
+  child();
+  process.chdir(root);
+  const output = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  await expect(
+    initCommand.parseAsync(['node', 'contextos', '--json', '--no-index', '--no-integrations'])
+  ).rejects.toThrow('Select --group');
+  expect(registry.projects()).toHaveLength(1);
+  await initCommand.parseAsync([
+    'node',
+    'contextos',
+    root,
+    '--json',
+    '--no-index',
+    '--no-integrations'
+  ]);
+  expect(registry.projects()).toHaveLength(2);
+  expect(JSON.parse(String(output.mock.calls.at(-1)![0])).integrationWarnings.join(' ')).toContain(
+    'Select --group'
+  );
+  await expect(
+    initializeProject(root, { explicitPath: false, index: false, integrations: false, json: true })
+  ).resolves.toBeUndefined();
 });
