@@ -1,3 +1,4 @@
+import { getStalenessSummary } from '../../core/verify/index.js';
 import { Command } from 'commander';
 import { formatIndexWarning } from '../../core/daemon/index-status.js';
 import { WorkspaceRegistry } from '../../core/workspace/registry.js';
@@ -31,8 +32,16 @@ export const statusCommand = new Command('status')
             return { ...source, state: 'unavailable', error: (error as Error).message };
           }
         });
-        if (opts.json) console.log(JSON.stringify({ views: statuses }, null, 2));
-        else
+        const knowledgeFreshness = getStalenessSummary({
+          home: registry.home,
+          viewIds: views.map((s) => s.repoId)
+        });
+        if (opts.json)
+          console.log(JSON.stringify({ views: statuses, knowledgeFreshness }, null, 2));
+        else {
+          console.log(
+            `Knowledge freshness: ${knowledgeFreshness.byStatus.stale} stale, ${knowledgeFreshness.byStatus.proposed} proposed; last sweep: ${knowledgeFreshness.lastSweepAt === null ? 'never' : new Date(knowledgeFreshness.lastSweepAt).toISOString()}`
+          );
           for (const source of statuses) {
             console.log(
               `${source.name}\t${source.branch ?? 'working/detached'}\t${source.state}\t${source.rootPath}\t${source.dbPath}`
@@ -41,6 +50,7 @@ export const statusCommand = new Command('status')
             const warning = formatIndexWarning(progress);
             if (warning) console.log(warning);
           }
+        }
       } finally {
         await runtime.close();
         registry.close();

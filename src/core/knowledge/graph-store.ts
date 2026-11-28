@@ -512,7 +512,21 @@ export class GraphStore {
     return traceVerifiedGraph(options, {
       inspect: (ref) => {
         const view = this.assertScope(ref, permittedViewIds);
-        const evidence = this.captureEvidence(ref);
+        let evidence: Evidence;
+        let stale = false;
+        try {
+          evidence = this.captureEvidence(ref);
+        } catch (error) {
+          const saved = options.includeStale
+            ? this.listLinks({ viewIds: permittedViewIds, refs: [ref], includeStale: true })
+                .filter((link) => link.status === 'stale')
+                .flatMap((link) => link.evidence)
+                .find((e) => e.ref === ref)
+            : undefined;
+          if (!saved) throw error;
+          evidence = saved;
+          stale = true;
+        }
         const { source, db } = this.options.resolve(view);
         const chunk = db
           .prepare('SELECT symbol_name,start_line,end_line FROM chunks WHERE id=?')
@@ -523,6 +537,7 @@ export class GraphStore {
         };
         return {
           ref,
+          ...(stale ? { status: 'stale' as const } : {}),
           viewId: view,
           projectId: source.projectId,
           project: source.name,
@@ -530,9 +545,9 @@ export class GraphStore {
           branch: source.branch ?? null,
           head: source.head ?? null,
           relativePath: path.relative(source.rootPath, evidence.file).split(path.sep).join('/'),
-          symbol: chunk.symbol_name ?? undefined,
-          startLine: chunk.start_line ?? undefined,
-          endLine: chunk.end_line ?? undefined,
+          symbol: chunk?.symbol_name ?? undefined,
+          startLine: chunk?.start_line ?? undefined,
+          endLine: chunk?.end_line ?? undefined,
           evidence
         };
       },
@@ -544,7 +559,9 @@ export class GraphStore {
               ? "json_extract(payload,'$.target')=@ref"
               : "(json_extract(payload,'$.source')=@ref OR json_extract(payload,'$.target')=@ref)";
         const rows = this.db
-          .prepare(`SELECT * FROM verified_links WHERE ${clause} ORDER BY id`)
+          .prepare(
+            `SELECT * FROM verified_links WHERE ${clause} ORDER BY CASE status WHEN 'verified' THEN 0 WHEN 'proposed' THEN 1 ELSE 2 END,id`
+          )
           .iterate({ ref });
         const links: VerifiedLink[] = [];
         for (const row of rows) {
@@ -552,7 +569,8 @@ export class GraphStore {
           if (!link.evidence.every((item) => permittedViewIds.includes(item.viewId))) continue;
           if (
             link.status !== 'verified' &&
-            !(options.includeProposed && link.status === 'proposed')
+            !(options.includeProposed && link.status === 'proposed') &&
+            !(options.includeStale && link.status === 'stale')
           )
             continue;
           if (options.relationships && !options.relationships.includes(link.type)) continue;
@@ -563,7 +581,13 @@ export class GraphStore {
       },
       sameFile: (ref, limit) => {
         const parsed = parseRef(ref)!;
-        const evidence = this.captureEvidence(ref);
+        let evidence: Evidence;
+        try {
+          evidence = this.captureEvidence(ref);
+        } catch (error) {
+          if (options.includeStale) return { refs: [], truncated: false };
+          throw error;
+        }
         const { db } = this.options.resolve(parsed.repoId);
         const rows = db
           .prepare('SELECT id FROM chunks WHERE source_file=? AND id<>? ORDER BY start_line,id')
@@ -698,6 +722,7 @@ export class GraphStore {
       .filter((item) => item.score > 0)
       .sort(
         (a, b) =>
+          Number(a.fact.status === 'stale') - Number(b.fact.status === 'stale') ||
           Number(a.fact.status !== 'verified') - Number(b.fact.status !== 'verified') ||
           b.score - a.score ||
           a.fact.id.localeCompare(b.fact.id)
@@ -728,12 +753,15 @@ export class GraphStore {
     return this.remove('verified_facts', id);
   }
   /** Export only knowledge wholly owned by the selected views, preserving provenance. */
-  exportKnowledge(viewIds: string[]): { links: VerifiedLink[]; facts: VerifiedFact[] } {
+  exportKnowledge(
+    viewIds: string[],
+    includeStale = false
+  ): { links: VerifiedLink[]; facts: VerifiedFact[] } {
     return {
-      links: this.listLinks({ viewIds }),
+      links: this.listLinks({ viewIds, includeStale }),
       facts: this.records<VerifiedFact>('verified_facts')
         .filter((fact) => fact.viewIds.every((id) => viewIds.includes(id)))
-        .filter((fact) => this.visible('verified_facts', fact))
+        .filter((fact) => this.visible('verified_facts', fact, includeStale))
     };
   }
   private restoreImportedIdentity(

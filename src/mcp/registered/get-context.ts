@@ -30,6 +30,7 @@ export default function register(c: WorkspaceToolContext): void {
     {
       prompt: z.string(),
       include_proposed: z.boolean().optional(),
+      include_stale: z.boolean().optional(),
       group: z.string().optional(),
       project: z.union([z.string(), z.array(z.string())]).optional(),
       worktree: z.string().optional(),
@@ -86,7 +87,8 @@ export default function register(c: WorkspaceToolContext): void {
           cache.delete(key);
         }
         const result = await retrieveWorkspace(runtime, scope, args.prompt, {
-          includeProposed: args.include_proposed,
+          includeProposed: !!args.include_proposed,
+          includeStale: args.include_stale,
           layers: args.layers,
           explain: args.explain
         });
@@ -178,7 +180,10 @@ export default function register(c: WorkspaceToolContext): void {
         if (args.layers.includes('repo')) {
           const rankingGraph = graph();
           try {
-            rankSavedKnowledge(result, runtime, rankingGraph, legacyFacts);
+            rankSavedKnowledge(result, runtime, rankingGraph, legacyFacts, {
+              includeProposed: !!args.include_proposed,
+              includeStale: args.include_stale
+            });
           } finally {
             rankingGraph.close();
           }
@@ -236,11 +241,17 @@ export default function register(c: WorkspaceToolContext): void {
           ? `Partial results: ${result.unavailableSources?.map((s) => `${s.name}: ${s.error}`).join('; ')}`
           : '';
         const text =
+          (result.knowledgeHealth
+            ? args.output_format === 'xml'
+              ? `<!-- ${result.knowledgeHealth.replace(/--/g, '—')} -->\n`
+              : result.knowledgeHealth + '\n\n'
+            : '') +
           (warning
             ? args.output_format === 'xml'
               ? `<!-- ${warning.replace(/--/g, '—')} -->\n`
               : warning + '\n\n'
-            : '') + compiled.output;
+            : '') +
+          compiled.output;
         const output: CallToolResult = {
           ...response(text),
           structuredContent: {
@@ -249,6 +260,7 @@ export default function register(c: WorkspaceToolContext): void {
               repoIds: scope.repoIds,
               activeRepoId: scope.activeRepoId
             },
+            ...(result.knowledgeHealth ? { knowledgeHealth: result.knowledgeHealth } : {}),
             partial: result.partial,
             unavailableSources: result.unavailableSources,
             omittedRepositories: omitted,

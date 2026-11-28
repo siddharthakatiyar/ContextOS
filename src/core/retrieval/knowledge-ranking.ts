@@ -49,7 +49,8 @@ export function rankSavedKnowledge(
   result: RetrievalResult,
   runtime: WorkspaceRuntime,
   graph: GraphStore,
-  legacyFacts: Map<string, KnowledgeFact[]> = new Map()
+  legacyFacts: Map<string, KnowledgeFact[]> = new Map(),
+  options: { includeStale?: boolean; includeProposed?: boolean } = {}
 ): void {
   const scope = result.scope;
   if (!scope) return;
@@ -61,6 +62,7 @@ export function rankSavedKnowledge(
   const broad = /\b(what does|overview|responsibilit\w*|purpose|role)\b/i.test(prompt);
   const namedSources = sources.filter((s) => knowledgeTerms(prompt).includes(s.name.toLowerCase()));
   const candidates: Candidate[] = [];
+  const hiddenStale = new Set<string>();
   const make = (
     id: string,
     text: string,
@@ -73,6 +75,11 @@ export function rankSavedKnowledge(
   ) => {
     const source = sources.find((s) => s.repoId === owner);
     if (!source || !relevance) return;
+    if (status === 'stale' && !options.includeStale) {
+      hiddenStale.add(id);
+      return;
+    }
+    if (status === 'proposed' && options.includeProposed === false) return;
     candidates.push({
       status,
       relevance,
@@ -111,13 +118,14 @@ export function rankSavedKnowledge(
     viewIds,
     projectIds: [...new Set(sources.map((s) => s.projectId))],
     groupId: scope.groupId ?? scope.workspaceId,
+    includeStale: true,
     limit: Number.MAX_SAFE_INTEGER
   });
   // Role text need not repeat its repository name. Keep per-repository anchors
   // discoverable by ownership on broad questions without widening the scope.
   if (broad) {
     const seen = new Set(facts.map((fact) => fact.id));
-    for (const fact of graph.exportKnowledge(viewIds).facts) {
+    for (const fact of graph.exportKnowledge(viewIds, true).facts) {
       if (seen.has(fact.id) || !['role', 'overview'].includes(fact.category ?? '')) continue;
       const allowed =
         fact.scope === 'view'
@@ -182,7 +190,7 @@ export function rankSavedKnowledge(
       );
     }
   }
-  const links = graph.listLinks({ viewIds });
+  const links = graph.listLinks({ viewIds, includeStale: true });
   const matchedLinks = [];
   const labels = new Map<string, string>();
   const endpointLabel = (ref: string) => {
@@ -208,7 +216,11 @@ export function rankSavedKnowledge(
     );
     if (!relevance) continue;
     const status = link.status ?? 'verified';
-    matchedLinks.push(link);
+    if (
+      (status !== 'stale' || options.includeStale) &&
+      (status !== 'proposed' || options.includeProposed !== false)
+    )
+      matchedLinks.push(link);
     make(
       entityRef(owner, 'link', link.id),
       `${link.rationale}\n${link.type}: ${link.source} -> ${link.target}`,
@@ -216,9 +228,12 @@ export function rankSavedKnowledge(
       status,
       relevance,
       link.evidence,
-      `${status} relationship`
+      `${status} relationship`,
+      compactKnowledgeMetadata(link)
     );
   }
+  if (hiddenStale.size)
+    result.knowledgeHealth = `${hiddenStale.size} stale knowledge item${hiddenStale.size === 1 ? '' : 's'} hidden; run ctx_links include_stale or contextos verify --fix`;
   const state = (s: string) => (s === 'verified' ? 0 : s === 'proposed' ? 1 : 2);
   candidates.sort(
     (a, b) =>
@@ -243,7 +258,12 @@ export function rankSavedKnowledge(
         : maxRaw * (candidate.status === 'proposed' ? 0.15 : 0.05) + candidate.relevance * 0.01;
   }
   result.chunks = [...candidates.map((c) => c.chunk), ...raw]
-    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+    .sort(
+      (a, b) =>
+        Number(a.status === 'stale') - Number(b.status === 'stale') ||
+        b.score - a.score ||
+        a.id.localeCompare(b.id)
+    )
     .slice(0, runtime.get(sources[0]).config.maxRetrievalResults);
   result.knowledgeLinks = [
     ...new Map([...(result.knowledgeLinks ?? []), ...matchedLinks].map((l) => [l.id, l])).values()

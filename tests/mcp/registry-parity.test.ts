@@ -16,7 +16,8 @@ it.each([false, true])(
     const catalog = await workspaceToolCatalog(legacy);
     const tools = JSON.parse(JSON.stringify(catalog.tools)) as typeof catalog.tools;
     for (const tool of tools) {
-      if (tool.name === 'ctx_links') delete tool.inputSchema.properties?.include_stale;
+      if (['ctx_links', 'get_context', 'ctx_trace'].includes(tool.name))
+        delete tool.inputSchema.properties?.include_stale;
       if (
         [
           'ctx_remember',

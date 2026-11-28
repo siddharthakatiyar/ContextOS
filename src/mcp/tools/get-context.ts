@@ -71,6 +71,7 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
       'stubs with path:line ranges, expand with ctx_expand, ctx_symbol, or read_file.',
     {
       include_proposed: z.boolean().optional(),
+      include_stale: z.boolean().optional(),
       prompt: z.string().describe("The user's coding question or task description"),
       max_tokens: z
         .number()
@@ -101,9 +102,17 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
           'Output format. Markdown is the default; XML is useful for clients that parse tags.'
         )
     },
-    async ({ prompt, max_tokens, layers, tier, output_format }) => {
+    async ({
+      prompt,
+      max_tokens,
+      layers,
+      tier,
+      output_format,
+      include_proposed,
+      include_stale
+    }) => {
       try {
-        const cacheKey = `${output_format}|${max_tokens}|${(layers || []).join(',')}|${prompt}`;
+        const cacheKey = `${include_stale}|${include_proposed}|${output_format}|${max_tokens}|${(layers || []).join(',')}|${prompt}`;
         const cached = cacheGet(promptCache, cacheKey);
         if (cached) {
           return {
@@ -114,6 +123,8 @@ export function registerGetContextTool(server: McpServer, dbs: DB[]) {
         const { text } = await executeGetContext(
           prompt,
           {
+            includeStale: include_stale,
+            includeProposed: include_proposed,
             maxTokens: max_tokens,
             layers: layers as string[],
             outputFormat: output_format === 'xml' ? 'xml' : 'markdown',

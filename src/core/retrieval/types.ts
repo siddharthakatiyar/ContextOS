@@ -11,6 +11,7 @@ export interface DetectedIntent {
 
 export interface RetrievalOptions {
   includeProposed?: boolean;
+  includeStale?: boolean;
   selectedRepo?: boolean;
   limit?: number;
   maxChunks?: number;
@@ -90,6 +91,7 @@ export interface ScoredChunk extends Chunk {
 }
 
 export interface RetrievalResult {
+  knowledgeHealth?: string;
   knowledgeLinks?: import('../knowledge/graph-store.js').VerifiedLink[];
   learnedLinks?: import('../knowledge/graph-store.js').VerifiedLink[];
   linkSuggestions?: import('../knowledge/import-learning.js').LinkSuggestion[];
