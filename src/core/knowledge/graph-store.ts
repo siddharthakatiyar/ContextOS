@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import {
   migrateKnowledgeColumns,
   knowledgeColumns,
+  transitionStatus,
   type KnowledgeMetadata,
   type KnowledgeColumns
 } from './write-context.js';
@@ -216,7 +217,14 @@ export class GraphStore {
       generation: source.generation
     };
   }
-  private evidenceStatus(evidence: Evidence[]): 'valid' | 'invalid' | 'unavailable' {
+  private evidenceStatus(
+    evidence: Evidence[],
+    invalid?: (reason: string) => void
+  ): 'valid' | 'invalid' | 'unavailable' {
+    const fail = (reason: string) => {
+      invalid?.(reason);
+      return 'invalid' as const;
+    };
     let unavailable = false;
     for (const item of evidence) {
       try {
@@ -235,7 +243,7 @@ export class GraphStore {
           current.chunkHash !== item.chunkHash ||
           current.file !== item.file
         )
-          return 'invalid';
+          return fail('content changed');
       } catch (error) {
         const message = error instanceof Error ? error.message : '';
         if (
@@ -243,10 +251,13 @@ export class GraphStore {
           message.includes('changed since indexing') ||
           message.includes('escapes its registered')
         )
-          return 'invalid';
+          return fail(
+            message.includes('chunk does not exist') ? 'chunk removed' : 'content changed'
+          );
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
           try {
-            if (fs.existsSync(this.options.resolve(item.viewId).source.rootPath)) return 'invalid';
+            if (fs.existsSync(this.options.resolve(item.viewId).source.rootPath))
+              return fail('file deleted');
           } catch {
             /* temporarily unavailable source */
           }
@@ -256,12 +267,36 @@ export class GraphStore {
     }
     return unavailable ? 'unavailable' : 'valid';
   }
+  private markStale(
+    table: 'verified_links' | 'verified_facts',
+    record: VerifiedLink | VerifiedFact,
+    reason: string
+  ): boolean {
+    // Evidence-free user decisions are not code claims, even on view removal.
+    if ('provenance' in record && record.provenance === 'user' && !record.evidence.length)
+      return false;
+    if (record.status === 'stale' && record.staleReason === reason) return false;
+    if (record.status !== 'stale') transitionStatus(record.status ?? 'verified', 'stale');
+    return this.db.transaction(() => {
+      record.status = 'stale';
+      record.staleReason = reason;
+      const changed =
+        this.db
+          .prepare(`UPDATE ${table} SET status='stale',stale_reason=?,payload=? WHERE id=?`)
+          .run(reason, JSON.stringify(record), record.id).changes > 0;
+      if (changed) this.touch();
+      return changed;
+    })();
+  }
   private visible(
     table: 'verified_links' | 'verified_facts',
-    record: VerifiedLink | VerifiedFact
+    record: VerifiedLink | VerifiedFact,
+    includeStale = false
   ): boolean {
-    const status = this.evidenceStatus(record.evidence);
-    if (status === 'invalid') this.remove(table, record.id);
+    const status = this.evidenceStatus(record.evidence, (reason) =>
+      this.markStale(table, record, reason)
+    );
+    if (record.status === 'stale') return includeStale;
     return status === 'valid';
   }
   private records<T>(table: 'verified_links' | 'verified_facts'): T[] {
@@ -325,7 +360,9 @@ export class GraphStore {
           ? record.evidence.filter((item) => options.affectedViewIds!.includes(item.viewId))
           : record.evidence;
         if (options.affectedViewIds && !evidence.length) continue;
-        if (this.evidenceStatus(evidence) === 'invalid' && this.remove(table, record.id)) count++;
+        this.evidenceStatus(evidence, (reason) => {
+          if (this.markStale(table, record, reason)) count++;
+        });
       }
     }
     return count;
@@ -394,7 +431,7 @@ export class GraphStore {
     return this.db.transaction(() => {
       const change = this.db
         .prepare(
-          insertOnly
+          insertOnly && !previous
             ? 'INSERT INTO verified_links (id,identity,payload) VALUES (?,?,?) ON CONFLICT(identity) DO NOTHING'
             : 'INSERT INTO verified_links (id,identity,payload) VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload'
         )
@@ -411,7 +448,12 @@ export class GraphStore {
     })();
   }
   listLinks(
-    options: { viewIds?: string[]; refs?: string[]; excludeIds?: Set<string> } = {}
+    options: {
+      viewIds?: string[];
+      refs?: string[];
+      excludeIds?: Set<string>;
+      includeStale?: boolean;
+    } = {}
   ): VerifiedLink[] {
     return this.records<VerifiedLink>('verified_links')
       .filter(
@@ -422,7 +464,7 @@ export class GraphStore {
             options.refs.includes(link.source) ||
             options.refs.includes(link.target))
       )
-      .filter((link) => this.visible('verified_links', link));
+      .filter((link) => this.visible('verified_links', link, options.includeStale));
   }
   expand(
     refs: string[],
@@ -494,6 +536,7 @@ export class GraphStore {
         for (const row of rows) {
           const link = this.decode<VerifiedLink>(row as StoredRow);
           if (!link.evidence.every((item) => permittedViewIds.includes(item.viewId))) continue;
+          if (link.status === 'stale') continue;
           if (options.relationships && !options.relationships.includes(link.type)) continue;
           links.push(link);
           if (links.length > limit) break;
@@ -530,9 +573,10 @@ export class GraphStore {
         return { refs: refs.slice(0, limit), truncated: refs.length > limit };
       },
       status: (link) => {
-        const status = this.evidenceStatus(link.evidence);
-        if (status === 'invalid') this.remove('verified_links', link.id);
-        return status;
+        const status = this.evidenceStatus(link.evidence, (reason) =>
+          this.markStale('verified_links', link, reason)
+        );
+        return link.status === 'stale' ? 'invalid' : status;
       }
     });
   }
@@ -601,7 +645,13 @@ export class GraphStore {
   }
   searchFacts(
     prompt: string,
-    options: { viewIds: string[]; projectIds?: string[]; groupId?: string; limit?: number }
+    options: {
+      viewIds: string[];
+      projectIds?: string[];
+      groupId?: string;
+      limit?: number;
+      includeStale?: boolean;
+    }
   ): VerifiedFact[] {
     const terms = prompt.toLowerCase().match(/[\p{L}\p{N}_]{3,}/gu) ?? [];
     return this.records<VerifiedFact>('verified_facts')
@@ -617,7 +667,7 @@ export class GraphStore {
             ? options.projectIds?.includes(fact.scopeId)
             : options.groupId === fact.scopeId;
       })
-      .filter((fact) => this.visible('verified_facts', fact))
+      .filter((fact) => this.visible('verified_facts', fact, options.includeStale))
       .map((fact) => ({
         fact,
         score: terms.reduce(
@@ -751,15 +801,22 @@ export class GraphStore {
     );
   }
   invalidateFile(viewId: string, file: string): number {
-    return this.invalidate((item) =>
-      item.evidence.some((e) => e.viewId === viewId && path.resolve(e.file) === path.resolve(file))
+    return this.invalidate(
+      (item) =>
+        item.evidence.some(
+          (e) => e.viewId === viewId && path.resolve(e.file) === path.resolve(file)
+        ),
+      fs.existsSync(file) ? 'content changed' : 'file deleted'
     );
   }
-  private invalidate(matches: (item: VerifiedLink | VerifiedFact) => boolean): number {
+  private invalidate(
+    matches: (item: VerifiedLink | VerifiedFact) => boolean,
+    reason = 'view missing'
+  ): number {
     let count = 0;
     for (const table of ['verified_links', 'verified_facts'] as const)
       for (const item of this.records<VerifiedLink | VerifiedFact>(table))
-        if (matches(item) && this.remove(table, item.id)) count++;
+        if (matches(item) && this.markStale(table, item, reason)) count++;
     return count;
   }
 }

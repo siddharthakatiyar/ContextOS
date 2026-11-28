@@ -15,11 +15,13 @@ it.each([false, true])(
   async (legacy) => {
     const catalog = await workspaceToolCatalog(legacy);
     const tools = JSON.parse(JSON.stringify(catalog.tools)) as typeof catalog.tools;
-    for (const tool of tools)
+    for (const tool of tools) {
+      if (tool.name === 'ctx_links') delete tool.inputSchema.properties?.include_stale;
       if (['ctx_remember', 'ctx_link', 'learn_fact'].includes(tool.name)) {
         for (const field of ['author', 'task_id', 'model', 'status', 'namespace', 'expires_at'])
           delete tool.inputSchema.properties?.[field];
       }
+    }
     expect(
       tools.map((tool) => ({
         name: tool.name,
@@ -47,6 +49,7 @@ it('loads the existing CLI commands in their original order', async () => {
     'import',
     'analytics',
     'status',
+    'verify',
     'doctor',
     'reindex',
     'clean',

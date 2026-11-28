@@ -178,7 +178,8 @@ describe('verified agent knowledge', () => {
     expect(graph.searchFacts('payment', { viewIds: ['a'] })).toHaveLength(1);
     expect(graph.searchFacts('payment', { viewIds: ['b'] })).toHaveLength(0);
     expect(() => graph.forget(fact.id, ['b'])).toThrow('outside');
-    expect(graph.invalidateView('a')).toBe(1);
+    expect(graph.invalidateView('a')).toBe(0);
+    expect(graph.searchFacts('payment', { viewIds: ['a'] })).toHaveLength(1);
   });
   it('cleans both endpoint edges when a view or supporting file is deleted', () => {
     link();
@@ -375,11 +376,11 @@ it('keeps broader user decisions across view changes and authorizes removal by s
   ).toThrow('outside');
   expect(() => graph.forget(groupFact.id, ['b'], { groupId: 'outside' })).toThrow('outside');
   expect(graph.forget(projectFact.id, ['b'], { projectIds: ['project-a'] })).toBe(true);
-  expect(graph.invalidateView('a')).toBe(2);
+  expect(graph.invalidateView('a')).toBe(1);
   expect(
     graph.searchFacts('Payment', { viewIds: ['b'], groupId: 'payments' }).map((fact) => fact.id)
   ).toEqual([groupFact.id]);
-  expect(graph.invalidateGroup('payments')).toBe(1);
+  expect(graph.invalidateGroup('payments')).toBe(0);
 });
 
 it('prunes evidence affected by one view without resolving unrelated endpoints', () => {

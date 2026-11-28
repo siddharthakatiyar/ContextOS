@@ -9,6 +9,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
     {
       ...selectors,
       ...verbose,
+      include_stale: z.boolean().optional(),
       refs: z.array(z.string()).optional(),
       limit: z.number().int().min(1).max(500).default(20),
       offset: z.number().int().nonnegative().default(0)
@@ -18,16 +19,27 @@ export default function register(c: WorkspaceKnowledgeContext): void {
       const links = [
         ...new Map(
           graph
-            .listLinks({ viewIds: scope.repoIds, refs: args.refs as string[] | undefined })
+            .listLinks({
+              viewIds: scope.repoIds,
+              refs: args.refs as string[] | undefined,
+              includeStale: args.include_stale as boolean | undefined
+            })
             .map((link) => [link.id, link])
         ).values()
       ].sort((a, b) => a.id.localeCompare(b.id));
       const offset = (args.offset as number) ?? 0,
         limit = (args.limit as number) ?? 20;
       return {
-        links: links
-          .slice(offset, offset + limit)
-          .map((link) => (args.verbose ? link : compactLink(link))),
+        links: links.slice(offset, offset + limit).map((link) =>
+          args.verbose
+            ? link
+            : {
+                ...compactLink(link),
+                ...(link.status === 'stale'
+                  ? { status: link.status, staleReason: link.staleReason }
+                  : {})
+              }
+        ),
         next_offset: offset + limit < links.length ? offset + limit : null,
         total: links.length,
         offset,
