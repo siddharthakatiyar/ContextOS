@@ -102,7 +102,7 @@ it('persists MCP/environment and deterministic contexts, then round-trips the CL
     expect(learned.learnedLinks.length).toBeGreaterThan(0);
     expect(
       learned.learnedLinks.every(
-        (link) => link.taskId === 'resolver-task' && link.author === 'resolver-author'
+        (link) => link.taskId === 'resolver-task' && link.author === 'contextos:deterministic'
       )
     ).toBe(true);
     // A later deterministic pass must preserve an existing author's context.

@@ -1,8 +1,10 @@
+import { recordKnowledgeOperation } from './audit.js';
 import Database from 'better-sqlite3';
 import {
   migrateKnowledgeColumns,
   knowledgeColumns,
   type KnowledgeMetadata,
+  type KnowledgeWriteContext,
   type KnowledgeColumns
 } from './write-context.js';
 import crypto from 'node:crypto';
@@ -333,14 +335,14 @@ export class GraphStore {
   link(input: LinkInput, permittedViewIds: string[]): VerifiedLink {
     return this.saveLink(input, permittedViewIds, { kind: 'agent' }).link;
   }
-  /** Internal resolver entrypoint: never overwrite a live agent-authored connection. */
+  /** Internal resolver entrypoint: never overwrite a live verified agent-authored connection. */
   linkResolvedImport(
     input: LinkInput,
     permittedViewIds: string[]
   ): { link: VerifiedLink; created: boolean } {
     if (input.type !== 'imports') throw new Error('The import resolver can only save imports.');
     return this.saveLink(
-      input,
+      { ...input, author: 'contextos:deterministic', status: 'verified' },
       permittedViewIds,
       {
         kind: 'deterministic',
@@ -372,6 +374,7 @@ export class GraphStore {
       insertOnly &&
       previous &&
       previous.evidence.every((item) => permittedViewIds.includes(item.viewId)) &&
+      previous.status === 'verified' &&
       this.visible('verified_links', previous)
     )
       return { link: previous, created: false };
@@ -395,7 +398,7 @@ export class GraphStore {
       const change = this.db
         .prepare(
           insertOnly
-            ? 'INSERT INTO verified_links (id,identity,payload) VALUES (?,?,?) ON CONFLICT(identity) DO NOTHING'
+            ? "INSERT INTO verified_links (id,identity,payload) VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload WHERE verified_links.status='proposed'"
             : 'INSERT INTO verified_links (id,identity,payload) VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET payload=excluded.payload'
         )
         .run(result.id, identity, JSON.stringify(result));
@@ -428,12 +431,15 @@ export class GraphStore {
     refs: string[],
     permittedViewIds: string[],
     limit = 12,
-    excludeIds?: Set<string>
+    excludeIds?: Set<string>,
+    includeProposed = false
   ): { links: VerifiedLink[]; refs: string[] } {
-    const links = this.listLinks({ viewIds: permittedViewIds, refs, excludeIds }).slice(
-      0,
-      Math.max(0, Math.min(limit, 100))
-    );
+    const links = this.listLinks({ viewIds: permittedViewIds, refs, excludeIds })
+      .filter(
+        (link) => link.status === 'verified' || (includeProposed && link.status === 'proposed')
+      )
+      .sort((a, b) => Number(a.status !== 'verified') - Number(b.status !== 'verified'))
+      .slice(0, Math.max(0, Math.min(limit, 100)));
     return {
       links,
       refs: [...new Set(links.flatMap((link) => [link.source, link.target]))].filter(
@@ -446,8 +452,9 @@ export class GraphStore {
     link?.evidence.forEach((item) => this.assertScope(item.ref, permittedViewIds));
     return link;
   }
-  unlink(id: string, permittedViewIds: string[]): boolean {
+  unlink(id: string, permittedViewIds: string[], context: KnowledgeWriteContext = {}): boolean {
     if (!this.getLink(id, permittedViewIds)) return false;
+    recordKnowledgeOperation('unlink', id, context, this.options.home);
     return this.remove('verified_links', id);
   }
   trace(options: TraceOptions, permittedViewIds: string[]): TraceResult {
@@ -494,6 +501,11 @@ export class GraphStore {
         for (const row of rows) {
           const link = this.decode<VerifiedLink>(row as StoredRow);
           if (!link.evidence.every((item) => permittedViewIds.includes(item.viewId))) continue;
+          if (
+            link.status !== 'verified' &&
+            !(options.includeProposed && link.status === 'proposed')
+          )
+            continue;
           if (options.relationships && !options.relationships.includes(link.type)) continue;
           links.push(link);
           if (links.length > limit) break;
@@ -515,6 +527,8 @@ export class GraphStore {
           if (
             !connections.some(
               (link) =>
+                (link.status === 'verified' ||
+                  (options.includeProposed && link.status === 'proposed')) &&
                 (!options.relationships || options.relationships.includes(link.type)) &&
                 (options.direction === 'incoming'
                   ? link.target === candidate
@@ -576,7 +590,7 @@ export class GraphStore {
     const previous = old ? this.decode<VerifiedFact>(old) : undefined;
     const now = Date.now();
     const result: VerifiedFact = {
-      ...this.metadata(input),
+      ...this.metadata(input.provenance === 'user' ? { ...input, status: 'verified' } : input),
       id: previous?.id ?? crypto.randomUUID(),
       content: input.content.trim(),
       scope: input.scope,
@@ -626,11 +640,21 @@ export class GraphStore {
         )
       }))
       .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score || a.fact.id.localeCompare(b.fact.id))
+      .sort(
+        (a, b) =>
+          Number(a.fact.status !== 'verified') - Number(b.fact.status !== 'verified') ||
+          b.score - a.score ||
+          a.fact.id.localeCompare(b.fact.id)
+      )
       .slice(0, options.limit ?? 5)
       .map((item) => item.fact);
   }
-  forget(id: string, permittedViewIds: string[], access: FactAccess = {}): boolean {
+  forget(
+    id: string,
+    permittedViewIds: string[],
+    access: FactAccess = {},
+    context: KnowledgeWriteContext = {}
+  ): boolean {
     const fact = this.records<VerifiedFact>('verified_facts').find((item) => item.id === id);
     if (!fact) return false;
     if (fact.provenance === 'user' && fact.scope === 'project') {
@@ -644,6 +668,7 @@ export class GraphStore {
         throw new Error('Fact belongs to a group outside the selected scope.');
     } else if (fact.viewIds.some((view) => !permittedViewIds.includes(view)))
       throw new Error('Fact belongs to views outside the selected scope.');
+    recordKnowledgeOperation('forget', id, context, this.options.home);
     return this.remove('verified_facts', id);
   }
   /** Export only knowledge wholly owned by the selected views, preserving provenance. */

@@ -1,11 +1,11 @@
 import { knowledgeWriteSchema } from '../knowledge-write-schema.js';
-import { resolveKnowledgeWriteContext } from '../../core/knowledge/write-context.js';
 
 import { z } from 'zod';
 
 import type { WorkspaceKnowledgeContext } from '../tools/knowledge.js';
 export default function register(c: WorkspaceKnowledgeContext): void {
-  const { server, context, selectors, verbose, writeResult, scopeFor, wrap } = c;
+  const { server, context, selectors, verbose, writeResult, scopeFor, wrap, resolveWriteContext } =
+    c;
   server.tool(
     'ctx_link',
     'Save a verified relationship after inspecting both endpoints and necessary dependency/routing/contract evidence. Matching names alone are insufficient. Save no guesses or ambiguous candidates. Writes validate source freshness, not semantic correctness.',
@@ -32,7 +32,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
       const scope = scopeFor(args);
       const link = graph.link(
         {
-          ...resolveKnowledgeWriteContext(args),
+          ...resolveWriteContext(args),
           source: args.source as string,
           target: args.target as string,
           type: args.relationship as import('../../core/knowledge/graph-store.js').LinkType,

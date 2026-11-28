@@ -15,6 +15,7 @@ export interface TraceNode {
   evidence: Evidence;
 }
 export interface TraceOptions {
+  includeProposed?: boolean;
   start: string;
   target?: string;
   direction?: 'outgoing' | 'incoming' | 'both';
@@ -48,7 +49,10 @@ export interface TraceResult {
   start: string;
   target?: string;
   direction: NonNullable<TraceOptions['direction']>;
-  coverage: 'recorded_verified_links_only' | 'recorded_links_and_inferred_same_file_adjacency';
+  coverage:
+    | 'recorded_verified_links_only'
+    | 'recorded_links_including_proposed'
+    | 'recorded_links_and_inferred_same_file_adjacency';
   found: boolean | null;
   nodes: TraceNode[];
   links: VerifiedLink[];
@@ -94,7 +98,9 @@ export function traceVerifiedGraph(options: TraceOptions, access: TraceAccess): 
     direction,
     coverage: options.bridgeSameFile
       ? 'recorded_links_and_inferred_same_file_adjacency'
-      : 'recorded_verified_links_only',
+      : options.includeProposed
+        ? 'recorded_links_including_proposed'
+        : 'recorded_verified_links_only',
     found: options.target ? false : null,
     nodes: [],
     links: [],

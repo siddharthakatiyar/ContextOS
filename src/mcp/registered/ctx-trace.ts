@@ -9,6 +9,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
     {
       ...selectors,
       ...verbose,
+      include_proposed: z.boolean().optional(),
       start: z.string(),
       target: z.string().optional(),
       direction: z.enum(['outgoing', 'incoming', 'both']).default('both'),
@@ -41,6 +42,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
       const scope = scopeFor(args);
       const trace = graph.trace(
         {
+          includeProposed: args.include_proposed as boolean | undefined,
           start: args.start as string,
           target: args.target as string | undefined,
           direction: args.direction as 'outgoing' | 'incoming' | 'both',

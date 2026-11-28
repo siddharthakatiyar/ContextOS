@@ -1,3 +1,4 @@
+import { prepareFactForContext, applyFactMetadata } from '../../core/knowledge/presentation.js';
 import crypto from 'crypto';
 import { RetrievalEngine } from '../../core/retrieval/index.js';
 import { compile } from '../../core/compiler/index.js';
@@ -63,8 +64,10 @@ export async function executeGetContext(
   });
 
   const sessionChunks = await sessionManager.getSessionContext();
-  const knowledgeFacts = knowledgeStore.searchFacts(prompt, 2);
-  result.chunks = mergeMemoryPipeline(result.chunks, sessionChunks, knowledgeFacts, result.intent);
+  const knowledgeFacts = knowledgeStore.searchFacts(prompt, 2).map(prepareFactForContext);
+  result.chunks = mergeMemoryPipeline(result.chunks, sessionChunks, knowledgeFacts, result.intent)
+    .map((chunk) => applyFactMetadata(chunk, knowledgeFacts))
+    .sort((a, b) => b.score - a.score);
 
   const config = loadConfig();
   if (config.sentDedupEnabled !== false && result.chunks.length > 0) {

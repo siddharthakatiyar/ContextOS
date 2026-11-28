@@ -1,5 +1,5 @@
+import { recordKnowledgeOperation } from '../../core/knowledge/audit.js';
 import { knowledgeWriteSchema } from '../knowledge-write-schema.js';
-import { resolveKnowledgeWriteContext } from '../../core/knowledge/write-context.js';
 
 import { z } from 'zod';
 
@@ -7,7 +7,17 @@ import { entityRef } from '../../core/workspace/identity.js';
 
 import type { WorkspaceKnowledgeContext } from '../tools/knowledge.js';
 export default function register(c: WorkspaceKnowledgeContext): void {
-  const { server, context, selectors, verbose, writeResult, scopeFor, wrap } = c;
+  const {
+    server,
+    context,
+    selectors,
+    verbose,
+    writeResult,
+    scopeFor,
+    wrap,
+    resolveWriteContext,
+    forgetSession
+  } = c;
   server.tool(
     'ctx_remember',
     'Save useful durable verified facts with explicit provenance. Code facts require indexed evidence and current generations. User provenance is only for an explicit user decision or preference. Defaults to the active view. Session notes remain temporary.',
@@ -36,6 +46,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
       if (!source) throw new Error('No selected view.');
       if (args.type === 'session_note') {
         const id = context.saveSession(source, args.content as string);
+        recordKnowledgeOperation('remember_session', id, resolveWriteContext(args));
         context.clearCache();
         return writeResult(
           args,
@@ -51,11 +62,16 @@ export default function register(c: WorkspaceKnowledgeContext): void {
       }
       if (args.type === 'forget_fact') {
         const removed =
-          context.forgetSession?.(args.content as string, scope.sources) ||
-          graph.forget(args.content as string, scope.repoIds, {
-            projectIds: scope.sources.map((source) => source.projectId),
-            groupId: scope.groupId ?? scope.workspaceId
-          });
+          forgetSession(args.content as string, scope, args) ||
+          graph.forget(
+            args.content as string,
+            scope.repoIds,
+            {
+              projectIds: scope.sources.map((source) => source.projectId),
+              groupId: scope.groupId ?? scope.workspaceId
+            },
+            resolveWriteContext(args)
+          );
         context.clearCache();
         return writeResult(
           args,
@@ -86,7 +102,7 @@ export default function register(c: WorkspaceKnowledgeContext): void {
             : scope.repoIds;
       const fact = graph.remember(
         {
-          ...resolveKnowledgeWriteContext(args),
+          ...resolveWriteContext(args),
           content: args.content as string,
           scope: kind,
           scopeId: kind === 'view' ? source.repoId : kind === 'project' ? projectId : groupId!,

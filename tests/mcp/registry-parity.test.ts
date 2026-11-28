@@ -16,10 +16,22 @@ it.each([false, true])(
     const catalog = await workspaceToolCatalog(legacy);
     const tools = JSON.parse(JSON.stringify(catalog.tools)) as typeof catalog.tools;
     for (const tool of tools)
-      if (['ctx_remember', 'ctx_link', 'learn_fact'].includes(tool.name)) {
+      if (
+        [
+          'ctx_remember',
+          'ctx_link',
+          'learn_fact',
+          'ctx_forget',
+          'ctx_unlink',
+          'forget_fact'
+        ].includes(tool.name)
+      ) {
         for (const field of ['author', 'task_id', 'model', 'status', 'namespace', 'expires_at'])
           delete tool.inputSchema.properties?.[field];
       }
+    for (const tool of tools)
+      if (['get_context', 'ctx_links', 'ctx_trace'].includes(tool.name))
+        delete tool.inputSchema.properties?.include_proposed;
     expect(
       tools.map((tool) => ({
         name: tool.name,
